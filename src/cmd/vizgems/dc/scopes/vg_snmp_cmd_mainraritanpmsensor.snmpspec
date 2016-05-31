@@ -1,0 +1,88 @@
+rec=(
+    keys=INDEX
+    walk0=(
+        name='.1.3.6.1.4.1.13742.4.3.3.1.40.${INDEX}' # externalSensorState
+        type=INTEGER
+        value='${STATE}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.13742.4.3.3.1.41.${INDEX}' # externalSensorValue
+        type=INTEGER
+        value='${VALUE}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.13742.4.3.3.1.2.${INDEX}' # externalSensorType
+        type=INTEGER
+        value='${TYPE}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.13742.4.3.3.1.4.${INDEX}' # externalSensorName
+        type=INTEGER
+        value='${NAME}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.13742.4.3.3.1.16.${INDEX}' # externalSensorUnits
+        type=INTEGER
+        value='${UNITS}'
+    )
+    walk5=(
+        name='.1.3.6.1.4.1.13742.4.3.3.1.17.${INDEX}' # externalSensorDecimalDigits
+        type=INTEGER
+        value='${DECDIGITS}'
+    )
+    outkey=INDEX
+    output='${INDEX}|${STATE}|${VALUE}|${TYPE}|${NAME}|${UNITS}|${DECDIGITS}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r index state value type name units decdigits; do
+                index=${index//./_}
+                name=${name//[\"\|]/}; name=${name##+(" ")}; name=${name%%+(" ")}
+                case $units in
+                7)
+                    key=temp
+                    ;;
+                9)
+                    key=humi
+                    ;;
+                *)
+                    continue
+                    ;;
+                esac
+                if [[ $state == 4 ]] then
+                    print "node|o|$INV_TARGET|si_${key}id$index|$index"
+                    print "node|o|$INV_TARGET|si_${key}label$index|$name"
+                fi
+            done
+            ;;
+        *)
+            while read -r index state value type name units decdigits; do
+                index=${index//./_}
+                name=${name//[\"\|]/}; name=${name##+(" ")}; name=${name%%+(" ")}
+                if [[ $state == 4 && $value == +([0-9]) ]] then
+                    v=$value
+                    if [[ $decdigits != 0 ]] then
+                        for (( i = 0; i < decdigits; i++ )) do
+                            (( v /= 10.0 ))
+                        done
+                    fi
+                    case $units in
+                    7)
+                        (( v = v * 1.8 + 32.0 ))
+                        unit=F key=temp label=Temperature
+                        ;;
+                    9)
+                        unit=% key=humi label=Humidity
+                        ;;
+                    *)
+                        continue
+                        ;;
+                    esac
+                    print "rt=STAT name=sensor_$key.${index} type=number num=$v unit=$unit label=\"$label ($name)\""
+                fi
+            done
+            ;;
+        esac
+    }'
+)

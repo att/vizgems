@@ -1,0 +1,58 @@
+VARS{
+#include <cdt.h>
+#include "vg_hdr.h"
+
+typedef struct ccid_t {
+    Dtlink_t link;
+    /* begin key */
+    char *s;
+    /* end key */
+    VG_alarm_t s_alarm;
+    int seen;
+} ccid_t;
+
+static Dt_t *cciddict;
+static Dtdisc_t cciddisc = {
+    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+}
+BEGIN{
+    if (!(cciddict = dtopen (&cciddisc, Dtset)))
+        SUerror ("vg_alarm_aggr", "ccid dtopen failed");
+}
+{
+    ccid_t *ccidp;
+    int keepflag;
+
+    keepflag = TRUE;
+    if (!ccid[0])
+        ;
+    else if (sortorder == VG_ALARM_N_SO_OVERRIDE) {
+        if (!(ccidp = dtmatch (cciddict, ccid))) {
+            if (!(ccidp = vmalloc (Vmheap, sizeof (ccid_t))))
+                SUwarning (0, "vg_alarm_aggr", "malloc failed");
+            memset (ccidp, 0, sizeof (ccid_t));
+            if (!(ccidp->s = vmstrdup (Vmheap, ccid)))
+                SUwarning (0, "vg_alarm_aggr", "strdup failed");
+            if (dtinsert (cciddict, ccidp) != ccidp)
+                SUwarning (0, "vg_alarm_aggr", "dtinsert failed");
+        }
+        memcpy (&ccidp->s_alarm, __recp, sizeof (VG_alarm_t));
+        sortorder = VG_ALARM_N_SO_NORMAL;
+    } else if ((ccidp = dtmatch (cciddict, ccid))) {
+        if (
+            !ccidp->seen &&
+            ccidp->s_alarm.s_timeissued == timeissued &&
+            ccidp->s_alarm.s_severity == severity &&
+            ccidp->s_alarm.s_state == state &&
+            ccidp->s_alarm.s_type == type &&
+            strcmp (ccidp->s_alarm.s_text, text) == 0
+        )
+            keepflag = FALSE, ccidp->seen = TRUE;
+    }
+
+    if (!keepflag)
+        DROP;
+    else
+        KEEP;
+}

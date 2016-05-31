@@ -1,0 +1,93 @@
+#!/bin/ksh
+
+export TZ=SWIFT_CFG_SYSTZ
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSCOPESDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VG_SYSNAME=SWIFT_CFG_SYSNAME
+export VG_SYSMODE=SWIFT_CFG_SYSMODE
+
+export VG_SSYSTEMDIR=SWIFT_CFG_SSYSTEMDIR
+export VG_SSCOPESDIR=SWIFT_CFG_SSCOPESDIR
+export VG_SWWWDIR=SWIFT_CFG_SWWWDIR
+export VG_SSNMPDIR=SWIFT_CFG_SSNMPDIR
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+export VG_DSCOPESDIR=SWIFT_CFG_DSCOPESDIR
+export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
+export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
+
+export LC_ALL=C LANG=C
+
+PATH=$PATH:/usr/sbin:/sbin
+
+mkdir -p SWIFT_CFG_DSCOPESDIR/tmp
+lockfile=SWIFT_CFG_DSCOPESDIR/tmp/inuse.upload
+set -o noclobber
+if ! command exec 3> $lockfile; then
+    if kill -0 $(< $lockfile); then
+        exit 0
+    elif [[ $(fuser $lockfile) != '' ]] then
+        exit 0
+    else
+        rm $lockfile
+        exit 0
+    fi
+fi 2> /dev/null
+print -u3 $$
+trap 'rm -f $lockfile' HUP QUIT TERM KILL EXIT
+set +o noclobber
+
+SECONDS=0
+(( tival = 60 * 60 ))
+tsec=0
+(( iival = 7 * 24 * 60 * 60 ))
+isec=$iival
+
+while [[
+    ! -f SWIFT_CFG_DSCOPESDIR/exit.upload &&
+    ! -f SWIFT_CFG_DSCOPESDIR/lock.upload
+]] do
+    (( tsec += SECONDS ))
+    (( isec += SECONDS ))
+    SECONDS=0
+    if (( tsec >= tival )) then
+        $SHELL SWIFT_CFG_DSCOPESDIR/etc/timediff
+        tsec=0
+        (
+            tw -i -d SWIFT_CFG_DSCOPESDIR/logs -e "mtime < \"7 days ago\"" rm
+            tw -i -d SWIFT_CFG_DSCOPESDIR/data -e "mtime < \"7 days ago\"" rm
+            cd SWIFT_CFG_DSCOPESDIR/data && tw -i -e type==DIR rmdir
+        ) > /dev/null 2>&1
+    fi
+    if (( isec >= iival )) then
+        $SHELL SWIFT_CFG_DSCOPESDIR/etc/updateinvtimes
+        isec=0
+    fi
+    $SHELL SWIFT_CFG_DSCOPESDIR/etc/upload data
+    if [[ $1 == once ]] then
+        exit
+    fi
+    sleep 1
+    touch $lockfile
+done
+
+if [[ -f SWIFT_CFG_DSCOPESDIR/lock.upload ]] then
+    if ! kill -0 $(< SWIFT_CFG_DSCOPESDIR/lock.upload) > /dev/null 2>&1; then
+        rm -f SWIFT_CFG_DSCOPESDIR/lock.upload
+    fi
+fi

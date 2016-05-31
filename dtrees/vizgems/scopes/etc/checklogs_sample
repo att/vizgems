@@ -1,0 +1,212 @@
+#!/bin/ksh
+
+# added code from Jeff Fellin to optionally save the results in a log file
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSCOPESDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export LC_ALL=C LANG=C
+
+function nonemptyemail {
+    if [[ -s $tmpfile ]] then
+        [[ $lfile != '' ]] && cat $tmpfile >> $lfile
+        [[ $list != ''  ]] && mailx -s "VG $label" $list < $tmpfile
+    fi
+}
+
+tmpfile=/tmp/checklogs.$$
+exec > $tmpfile 2>&1
+trap 'rm -f $tmpfile' HUP QUIT TERM KILL EXIT
+CRITICALLIST=''
+IMPORTANTLIST=''
+ALLLIST=''
+list=$ALLLIST
+label="error report for scope $(uname -n)"
+
+if [[ ! -f SWIFT_CFG_DSCOPESDIR/etc/checklogs.info ]] then
+    print -u2 SWIFT ERROR cannot find log checking config file
+    nonemptyemail
+    exit 1
+fi
+. SWIFT_CFG_DSCOPESDIR/etc/checklogs.info
+list=$ALLLIST
+
+level=$1
+if [[ $level != critical && $level != important && $level != all ]] then
+    print -u2 SWIFT ERROR bad reporting level $level
+    nonemptyemail
+    exit 1
+fi
+
+span=$2
+if [[ $span != fifteen && $span != hourly && $span != daily ]] then
+    print -u2 SWIFT ERROR bad span parameter $level
+    nonemptyemail
+    exit 1
+fi
+
+case $level in
+critical)
+    list=$CRITICALLIST
+    label="Critical-$label"
+    gaptime=''
+    ;;
+important)
+    list=$IMPORTANTLIST
+    label="Important-$label"
+    gaptime=''
+    ;;
+all)
+    list=$ALLLIST
+    label="All-$label"
+    gaptime='24 hour'
+    ;;
+esac
+list=",${list//' '/,},"
+list=${list//+(,)/,}
+list=${list#,}
+list=${list%,}
+[[ $list == '' ]] && exit 0
+if [[ ,${list}, == *,log,* ]] then
+    lfile=SWIFT_CFG_DSCOPESDIR/logs/checklogs_$level.$(printf '%(%Y%m%d)T').log
+    list=",${list},"
+    while [[ ,${list}, == *,log,* ]] do
+        list=${list//,log,/,}
+    done
+    list=${list#,}
+    list=${list%,}
+fi
+
+case $span in
+fifteen)
+    tl=$(printf '%(%#)T')
+    (( tf = tl - (15 * 60 + 5) ))
+    label="$label for last 15 mins"
+    fts=$(printf '%(%Y/%m/%d %H:%M:%S)T' \#$tf)
+    lts=$(printf '%(%Y/%m/%d %H:%M:%S)T' \#$tl)
+
+    sf=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tf)
+    sl=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tl)
+    ;;
+hourly)
+    tl=$(printf '%(%#)T')
+    (( tf = tl - (60 * 60 + 5) ))
+    label="$label for last 60 mins"
+    fts=$(printf '%(%Y/%m/%d %H:%M:%S)T' \#$tf)
+    lts=$(printf '%(%Y/%m/%d %H:%M:%S)T' \#$tl)
+
+    sf=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tf)
+    sl=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tl)
+    ;;
+daily)
+    tl=$(printf '%(%#)T')
+    (( tf = tl - (24 * 60 * 60 + 5) ))
+    label="$label for last 24 hrs"
+    fts=$(printf '%(%Y/%m/%d %H:%M:%S)T' \#$tf)
+    lts=$(printf '%(%Y/%m/%d %H:%M:%S)T' \#$tl)
+
+    sf=$(printf '%(%a %b %d ..:..:.. %Y)T' \#$tf)
+    sl=$(printf '%(%a %b %d ..:..:.. %Y)T' \#$tl)
+    ;;
+esac
+
+tw -i -d SWIFT_CFG_DSCOPESDIR/logs \
+    -e 'sort: name' \
+    -e "type==REG && mtime > $tf && name != \"*-day*|checklogs*\"" \
+2> /dev/null \
+| while read file; do
+    case $file in
+    */schedule*)
+        egrep -v ' [0-9][0-9]:[0-9][0-9]:[0-9][0-9] (exec|reap) |MESSAGE' $file
+        ;;
+    */upload*)
+        egrep -v ' succeeded' $file
+        ;;
+    *)
+        cat $file
+        ;;
+    esac
+done \
+| while read -r line; do
+    set -f
+    set -A ls -- $line
+    set +f
+    if [[ ${ls[0]} == SWIFT ]] then
+        print -r -- "${line}"
+        continue
+    fi
+    ts="${ls[0]} ${ls[1]}"
+    if [[ $fts > $ts || $ts > $lts ]] then
+        continue
+    fi
+    line=${line#*' '}
+    line=${line#*' '}
+    [[ $line == *'loading schedule file'* ]] && continue
+    [[ $line == *'loaded schedule file'* ]] && continue
+    [[ $line == 'exiting' ]] && continue
+    [[ $line == 'running' ]] && continue
+    [[ $line == *'vg_snmp_cmd_cooked: snmpwalk failed'* ]] && continue
+    [[ $line == *'vg_snmp_driver: failed to execute helper'* ]] && continue
+    [[ $line == *'Timeout: No Response'* ]] && continue
+    [[ $line == *': Alarm call'* ]] && continue
+    [[ $line == *'sed: writing standard output [Broken pipe]'* ]] && continue
+    print -r -- "${line}"
+done \
+| case $level in
+critical)
+    egrep 'ERROR|ALARM'
+    ;;
+important)
+    egrep 'failed|ERROR|ALARM'
+    ;;
+all)
+    cat
+    ;;
+esac \
+| sed \
+    -e 's/SWIFT WARNING:.*[0-9])/WARNING/' -e 's/SWIFT ERROR:.*[0-9])/ERROR/' \
+| sort | uniq -c | sort -rn 1>&2
+
+for i in SWIFT_CFG_DSCOPESDIR/lock.*; do
+    [[ ! -f $i ]] && continue
+    [[ $i == */lock.schedule ]] && continue
+    ls -l $i 2> /dev/null | read j1 j2 j3 j4 j5 M D HM j6
+    [[ $M == '' || $D == '' || $HM == '' ]] && continue
+    ft=$(printf '%(%#)T' "$M $D $HM")
+    ct=$(printf '%(%#)T')
+    if (( ct - ft > 4 * 60 * 60 )) then
+        print "Old lock file $i"
+    fi
+done
+
+if [[ $level == all ]] then
+    {
+        cd SWIFT_CFG_DSCOPESDIR/data
+        egrep 'REMOTE HOST IDENTIFICATION HAS CHANGED' */ssh.err 2> /dev/null \
+        | while read line; do
+            print SSH key errors
+            print -r $line
+            cat
+        done
+    }
+fi
+
+[[ $gaptime != '' ]] && SWIFT_CFG_DSCOPESDIR/etc/showgaps "$gaptime"
+
+exec 2>&-
+
+nonemptyemail

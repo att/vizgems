@@ -1,0 +1,34 @@
+rec=(
+    keys='DOTMAC DOTID DOTIFACE'
+    walk0=(
+        name='.1.3.6.1.2.1.17.1.4.1.2.${DOTID}' # dot1dBasePortIfIndex
+        type=INTEGER
+        value='${DOTIFACE}'
+    )
+    walk1=(
+        name='.1.3.6.1.2.1.17.4.3.1.2.${DOTMAC}' # dot1dTpFdbPort
+        type=INTEGER
+        value='${DOTID}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.9.9.46.1.6.1.1.6.${DOTIFACE}' # vlanTrunkPortRowStatus
+        type=INTEGER
+        value='${VTSTATE}'
+    )
+    outkey=DOTMAC
+    output='${DOTMAC}|${DOTIFACE}'
+    outfilter='(
+        IFS="|"
+        while read -r dotmac dotiface vtstate; do
+            [[ $vtstate != "" ]] && continue
+            set -A ls ${dotmac//./"|"}
+            dotmac=$(
+                printf "%02..16d:%02..16d:%02..16d:%02..16d:%02..16d:%02..16d" \
+                ${ls[0]} ${ls[1]} ${ls[2]} \
+                ${ls[3]} ${ls[4]} ${ls[5]} \
+            )
+            print "mac2riface[$dotmac]+=\" $SNMPIP:$dotiface\""
+            print "riface2mac[$SNMPIP:$dotiface]+=\" $dotmac\""
+        done
+    )'
+)

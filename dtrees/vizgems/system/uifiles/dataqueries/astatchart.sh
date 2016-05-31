@@ -1,0 +1,39 @@
+querydata=(
+    args=(
+        dtools='inv alarm stat alarmstat'
+        vtools='statchart alarmstatchart alarmtab'
+    )
+    dt_inv=(
+        poutlevel=o
+        soutlevel=o
+        runinparallel=y
+    )
+    dt_alarm=(
+        inlevels=o
+    )
+    dt_stat=(
+        inlevels=o
+        alarmedstats=y
+    )
+    dt_alarmstat=(
+        inlevels=o
+    )
+    vt_alarmstyle=(
+        rendermode=embed
+        alarmstyleattr=(
+            flags=map_filtered_deferred
+        )
+    )
+    vt_statchart=(
+        statchartnextqid='_str_stattab'
+    )
+    vt_alarmstatchart=(
+        statchartnextqid='_str_alarmstattab'
+    )
+    vt_alarmtab=(
+        pnodeattr=(
+            label='%(c.name)%'
+        )
+        pnodenextqid='nextqid/_str_detailed'
+    )
+)

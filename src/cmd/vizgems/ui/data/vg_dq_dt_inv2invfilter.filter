@@ -1,0 +1,9 @@
+VARS{
+#include "vg_hdr.h"
+}
+{
+    DROP;
+
+    if (cat == VG_QUERY_N_CAT_ACTUAL && type == VG_QUERY_N_TYPE_NONE)
+        sfprintf (sfstdout, "I|%s|%s\n", level1, id1);
+}

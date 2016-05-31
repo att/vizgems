@@ -1,0 +1,40 @@
+#
+# SWIFTPL
+#
+#     this file implements the upgrading of out of date diagrams
+#     the 'version' graph attribute is used to determine if a graph
+#     needs to be updated
+#
+spl.upgrade.upgrade = function (t) {
+    local rtn, v, s;
+
+    rtn = 0;
+    if (~t.graph.version)
+        v = 0.9;
+    else
+        v = ston (t.graph.version);
+    if (v < 1.0)
+        rtn = spl.upgrade.funcs['to1.0'] (t);
+    if (v < 1.1)
+        rtn = rtn + spl.upgrade.funcs['1.0to1.1'] (t);
+    if (v < 1.2)
+        rtn = rtn + spl.upgrade.funcs['1.1to1.2'] (t);
+    if (rtn == 0)
+        return 0; # no changes
+    t.gt.graph.graphattr.version = spl.version;
+    s = ask ('diagram modified, save to disk?', 'choice', 'yes|no');
+    if (s == 'yes')
+        spl.view.saveview (t, 0);
+    return 1;
+};
+spl.upgrade.funcs = [
+    '1.0to1.1' = function (t) {
+        spl.view.resetview (t);
+        return 1;
+    };
+    '1.1to1.2' = function (t) {
+        t.gt.graph.graphattr.ordering = 'out';
+        spl.view.layoutgraph (t.gt);
+        return 1;
+    };
+];

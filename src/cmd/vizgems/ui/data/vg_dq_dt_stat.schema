@@ -1,0 +1,16 @@
+name dq_dt_stat
+field scope char 32
+field dateissued char 12
+field hourissued char 4
+field timeissued int
+field level char 4
+field id char 64
+field key char 64
+field unit char 8
+field frame int
+field val float
+field label char 40
+field ilevel char 4
+field iid char 64
+field iclass short
+field pad short

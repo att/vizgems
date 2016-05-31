@@ -1,0 +1,5 @@
+swift-vg :PACKAGE: swift-base vizgems
+
+:DESCRIPTION:
+	The AT&T Labs Research swift package contains all of the swift source
+	and is for internal distribution and testing.

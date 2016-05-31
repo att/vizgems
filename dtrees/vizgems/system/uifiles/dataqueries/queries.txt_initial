@@ -1,0 +1,48 @@
+#levels|users|groups|qid|name|description|home page info
+
+||vg_att_*|business|Businesses|Show alarm info at the business level|yes:b:n:n
+
+EMPTY||vg_att_*|location2|Geography/States|Show alarm info by state or country|yes:l2:n:n
+EMPTY||vg_cus_*|location2|Geography/States|Show alarm info by state or country|no
+
+EMPTY||vg_att_*|location|Geography/Cities|Show alarm info by city|yes:l:y:n
+EMPTY||vg_cus_*|location|Geography/Cities|Show alarm info by city|yes:l:n:n
+
+b:c||vg_att_*|customer|Customers|Show alarm info by customer|yes:c:n:n
+EMPTY||vg_cus_*|customer|Customers|Show alarm info by customer|no
+
+b:c:s:g||vg_att_*|abstract|Groups|Show alarm info by group/zone|no
+EMPTY||vg_cus_*|abstract|Groups|Show alarm info by group/zone|yes:g:n:n
+
+b:c:s:g||vg_att_*|abstractestat|Essential Group Stats|Show alarm and stat info by group/zone|no
+EMPTY||vg_cus_*|abstractestat|Essential Group Stats|Show alarm and stat info by group/zone|yes:g:n:n
+
+b:c:s:g:o||vg_att_*|relationship|Asset Diagram|Show asset alarm and stat info in diagram form|no
+EMPTY||vg_cus_*|relationship|Asset Diagram|Show asset alarm and stat info in diagram form|no
+
+EMPTY||vg_att_*|element|Asset Grid|Show asset alarm and stat info in grid form|no
+EMPTY||vg_cus_*|element|Asset Grid|Show asset alarm and stat info in grid form|no
+
+c:s:g:o||vg_att_*|edetailed|Essential Info|Show asset alarms, essential stats, and inventory info|yes:o:y:n
+EMPTY||vg_cus_*|edetailed|Essential Info|Show asset alarms, essential stats, and inventory info|yes:o:y:n
+
+c:s:g:o||vg_att_*|detailed|All Info|Show asset alarms, stats, and inventory info|yes:o:y:n
+EMPTY||vg_cus_*|detailed|All Info|Show asset alarms, stats, and inventory info|yes:o:y:n
+
+EMPTY|||alarmtab|Alarm Table|Show alarms in tabular form|no
+c:s:g:o|||alarmstatchart|Alarm Volume Graphs|Show alarm volumes in chart form|no
+c:s:g:o|||alarmstattab|Alarm Volume Tables|Show alarm volumes in tabular form|no
+
+c:s:g:o|||statchart|Statistics Graphs|Show stats in chart form|no
+c:s:g:o|||stattab|Statistics Tables|Show stats in tabular form|no
+c:s:g:o|||estatchart|Essential Stat Graphs|Show essential stats in chart form|no
+c:s:g:o|||astatchart|Alarmed Stat Graphs|Show stats that are in alarm state in chart form|no
+
+c:s:g:o:r:t||vg_att_*|autoinvtab|Inventory Resources|Show inventory resources (eg. memory, filesystems)|no
+EMPTY||vg_cus_*|autoinvtab|Inventory Resources|Show inventory resources (eg. memory, filesystems)|no
+
+|||resource|Virtual Resources|Show the virtual resources for an asset|no
+
+|||rdetailed|Virtual Resource Details|Show all the info on the virtual resources of an asset|no
+
+||vg_att_admin|unknown|Unknown Asset Data|Show asset alarms and stats for unknown assets|no

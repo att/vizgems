@@ -1,0 +1,23 @@
+name alarm
+field scope char 32
+field alarmid char 32
+field ccid char 32
+field state int
+field smode int
+field variables char 320
+field dateissued char 12
+field hourissued char 4
+field timecleared int
+field timeissued int
+field type int
+field sortorder int
+field pmode int
+field level1 char 4
+field id1 char 64
+field level2 char 4
+field id2 char 64
+field tmode int
+field severity int
+field text char 896
+field comment char 128
+field origmsg char 128

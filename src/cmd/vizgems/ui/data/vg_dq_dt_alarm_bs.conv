@@ -1,0 +1,441 @@
+VARS{
+#include <regex.h>
+#include <vmalloc.h>
+#include <cdt.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_map3.c"
+#include "sl_dq_dt_inv.c"
+#include "sl_alarm.c"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+#include "vg_timeranges.c"
+
+#define SZ_id1 DDSSZ_outrec_dq_dt_alarm_iid1
+#define SZ_id2 DDSSZ_outrec_dq_dt_alarm_iid2
+#define SZ_level1 DDSSZ_outrec_dq_dt_alarm_ilevel1
+#define SZ_level2 DDSSZ_outrec_dq_dt_alarm_ilevel2
+
+#include "vg_dq_dt_attrs.c"
+
+static char *tmodemaps[] = {
+    "none",
+    VG_ALARM_S_MODE_KEEP,
+    VG_ALARM_S_MODE_DEFER,
+    VG_ALARM_S_MODE_DROP
+};
+
+typedef struct alarm_t {
+    int s_param;
+    char *s_text;
+    regex_t s_code;
+} alarm_t;
+
+#define CCIDPARAM     1
+#define SEVERITYPARAM 2
+#define TICKETPARAM   3
+#define MSGTXTPARAM   4
+#define COMMENTPARAM  5
+
+static alarm_t *alarms;
+static int alarmn;
+
+#define ACMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define ACMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, ACMPFLAGS) == 0)
+#define ACMPFLAGSI (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT | REG_ICASE)
+#define ACMPI(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, ACMPFLAGSI) == 0)
+
+typedef struct file_t {
+    int offset;
+    char *name;
+} file_t;
+
+static file_t *files;
+static int filen;
+
+static char poutlevel[SZ_level1];
+static char soutlevel[SZ_level1];
+static int sameoutlevels;
+static char *inlevels;
+static regex_t inlevelscode;
+#define ILCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define ILCMP(s) (regexec (&inlevelscode, s, 0, NULL, ILCMPFLAGS) == 0)
+
+static int ft, lt;
+
+static int haveinv, alwaysreruninv;
+
+static short qc1 = VG_QUERY_N_CAT_ACTUAL;
+static short qt1 = VG_QUERY_N_TYPE_NONE;
+static short qc2 = VG_QUERY_N_CAT_RESULT;
+static short qt2 = VG_QUERY_N_TYPE_NODE;
+
+static Sfio_t *fp3;
+
+typedef struct li_t {
+    char l1[SZ_level1], i1[SZ_id1], l2[SZ_level2], i2[SZ_id2];
+    char pl1[SZ_level1], pi1[SZ_id1], pl2[SZ_level2], pi2[SZ_id2];
+    int pcl1, pcl2;
+} li_t;
+
+static li_t *lis;
+static int lin, lim;
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+
+#define KEEPN(pf1, ilv1, iid1) { \
+    if (!haveinv || alwaysreruninv) { \
+        sfprintf (fp3, "I|%s|%s\n", ilv1, iid1); \
+    } \
+    if (lim >= lin) { \
+        if (!(lis = vmresize ( \
+            Vmheap, lis, 2 * (lim + 1) * sizeof (li_t), VM_RSCOPY \
+        ))) \
+            SUerror ("vg_dq_dt_alarm_bs", "cannot grow li array"); \
+        lin = 2 * (lim + 1); \
+    } \
+    lip = &lis[lim++]; \
+    memset (lip, 0, sizeof (li_t)); \
+    memcpy (lip->l1, IN->level1, SZ_level1); \
+    memcpy (lip->i1, IN->id1, SZ_id1); \
+    memcpy (lip->l2, IN->level2, SZ_level2); \
+    memcpy (lip->i2, IN->id2, SZ_id2); \
+    memcpy (lip->pl1, ilv1, SZ_level1); \
+    memcpy (lip->pi1, iid1, SZ_id1); \
+    lip->pcl1 = ( \
+        pf1 \
+    ) ? VG_QUERY_N_CLASS_PRIMARY : VG_QUERY_N_CLASS_SECONDARY; \
+}
+#define KEEPE(pf1, ilv1, iid1, pf2, ilv2, iid2) { \
+    if (!haveinv || alwaysreruninv) { \
+        sfprintf (fp3, "I|%s|%s\n", ilv1, iid1); \
+        sfprintf (fp3, "I|%s|%s\n", ilv2, iid2); \
+    } \
+    if (lim >= lin) { \
+        if (!(lis = vmresize ( \
+            Vmheap, lis, 2 * (lim + 1) * sizeof (li_t), VM_RSCOPY \
+        ))) \
+            SUerror ("vg_dq_dt_alarm_bs", "cannot grow li array"); \
+        lin = 2 * (lim + 1); \
+    } \
+    lip = &lis[lim++]; \
+    memset (lip, 0, sizeof (li_t)); \
+    memcpy (lip->l1, IN->level1, SZ_level1); \
+    memcpy (lip->i1, IN->id1, SZ_id1); \
+    memcpy (lip->l2, IN->level2, SZ_level2); \
+    memcpy (lip->i2, IN->id2, SZ_id2); \
+    memcpy (lip->pl1, ilv1, SZ_level1); \
+    memcpy (lip->pi1, iid1, SZ_id1); \
+    memcpy (lip->pl2, ilv2, SZ_level2); \
+    memcpy (lip->pi2, iid2, SZ_id2); \
+    lip->pcl1 = ( \
+        pf1 \
+    ) ? VG_QUERY_N_CLASS_PRIMARY : VG_QUERY_N_CLASS_SECONDARY; \
+    lip->pcl2 = ( \
+        pf2 \
+    ) ? VG_QUERY_N_CLASS_PRIMARY : VG_QUERY_N_CLASS_SECONDARY; \
+}
+}
+BEGIN{
+    Sfio_t *fp;
+    char *line, *s1, *s2;
+    int alarmm, filem;
+
+    alarmm = 0, alarmn = atoi (getenv ("ALARMFILTERSIZE"));
+    if (alarmn > 0) {
+        if (!(alarms = vmalloc (Vmheap, sizeof (alarm_t) * alarmn)))
+            SUerror ("vg_dq_dt_alarm_bs", "cannot allocate alarms");
+        memset (alarms, 0, sizeof (alarm_t) * alarmn);
+        if (!(fp = sfopen (NULL, getenv ("ALARMFILTERFILE"), "r")))
+            SUerror ("vg_dq_dt_alarm_bs", "cannot open alarm filter file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (0, "vg_dq_dt_alarm_bs", "bad line: %s", line);
+                break;
+            }
+            *s1++ = 0;
+            if (!(s2 = strchr (s1, '|'))) {
+                SUwarning (0, "vg_dq_dt_alarm_bs", "bad line: %s", s1);
+                break;
+            }
+            *s2++ = 0;
+            if (strcmp (s1, "ccid") == 0)
+                alarms[alarmm].s_param = CCIDPARAM;
+            else if (strcmp (s1, "severity") == 0)
+                alarms[alarmm].s_param = SEVERITYPARAM;
+            else if (strcmp (s1, "tmode") == 0)
+                alarms[alarmm].s_param = TICKETPARAM;
+            else if (strcmp (s1, "msgtxt") == 0)
+                alarms[alarmm].s_param = MSGTXTPARAM;
+            else if (strcmp (s1, "comment") == 0)
+                alarms[alarmm].s_param = COMMENTPARAM;
+            else {
+                SUwarning (0, "vg_dq_dt_alarm_bs", "unknown param: %s", s1);
+                break;
+            }
+            if (!(alarms[alarmm].s_text = vmstrdup (Vmheap, s2))) {
+                SUwarning (0, "vg_dq_dt_alarm_bs", "cannot copy text: %s", s2);
+                break;
+            }
+            if (regcomp (
+                &alarms[alarmm].s_code, alarms[alarmm].s_text, ACMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_dt_alarm_bs",
+                    "cannot compile regex: %s", alarms[alarmm].s_text
+                );
+                break;
+            }
+            alarmm++;
+        }
+        sfclose (fp);
+    }
+    if (alarmm != alarmn)
+        alarmn = -1;
+
+    filem = 0, filen = atoi (getenv ("ALARMFILESIZE"));
+    if (filen > 0) {
+        if (!(files = vmalloc (Vmheap, sizeof (file_t) * filen)))
+            SUerror ("vg_dq_dt_alarm_bs", "cannot allocate files");
+        memset (files, 0, sizeof (file_t) * filen);
+        if (!(fp = sfopen (NULL, getenv ("ALARMFILEFILE"), "r")))
+            SUerror ("vg_dq_dt_alarm_bs", "cannot open alarm file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, ':')))
+                s1 = line, files[filem].offset = 0;
+            else
+                *s1++ = 0, files[filem].offset = atoi (line);
+            if (!(files[filem].name = vmstrdup (Vmheap, s1))) {
+                SUwarning (
+                    0, "vg_dq_dt_alarm_bs", "cannot copy file: %s", line
+                );
+                break;
+            }
+            filem++;
+        }
+        sfclose (fp);
+    }
+
+    if (attrload (getenv ("ALARMATTRFILE")) == -1)
+        SUerror ("vg_dq_dt_alarm_bs", "cannot load attributes file");
+
+    if (!attrs[ATTR_POUTLEVEL])
+        SUerror ("vg_dq_dt_alarm_bs", "cannot find primary outlevel");
+    strcpy (poutlevel, attrs[ATTR_POUTLEVEL]);
+    if (!attrs[ATTR_SOUTLEVEL])
+        SUerror ("vg_dq_dt_alarm_bs", "cannot find secondary outlevel");
+    strcpy (soutlevel, attrs[ATTR_SOUTLEVEL]);
+    sameoutlevels = (strcmp (poutlevel, soutlevel) == 0) ? TRUE : FALSE;
+    if (attrs[ATTR_INLEVELS]) {
+        inlevels = attrs[ATTR_INLEVELS];
+        if (regcomp (&inlevelscode, inlevels, ILCMPFLAGS) != 0)
+            SUerror ("vg_dq_dt_alarm_bs", "cannot compile regex: %s", inlevels);
+    }
+    if (!attrs[ATTR_FTIME])
+        SUerror ("vg_dq_dt_alarm_bs", "cannot find ftime");
+    ft = atoi (attrs[ATTR_FTIME]);
+    if (!attrs[ATTR_LTIME])
+        SUerror ("vg_dq_dt_alarm_bs", "cannot find ltime");
+    lt = atoi (attrs[ATTR_LTIME]);
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    sl_inv_map3open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+    M3I (TRUE);
+
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_dq_dt_alarm_bs", "cannot load sevmap file");
+
+    if ((s1 = getenv ("INVOUTFILE")))
+        haveinv = TRUE, sl_dq_dt_invopen (s1);
+    else
+        haveinv = FALSE;
+    if ((s1 = getenv ("ALARMALWAYSRERUNINV")))
+        alwaysreruninv = TRUE;
+
+    if ((s1 = getenv ("TIMERANGESFILE")) && (s2 = getenv ("TIMERANGESSIZE")))
+        timerangesload (s1, atoi (s2));
+
+    if (!(fp3 = sfnew (NULL, NULL, 4096, 3, SF_WRITE)))
+        SUerror ("vg_dq_dt_alarm_bs", "cannot write to fd 3");
+}
+{
+    sl_dq_dt_inv_t *dqi1p, *dqi2p;
+    li_t *lip;
+    char *m1p, *m2p, *m3p;
+
+    DROP;
+    OUT->severity = 0;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (alarmn < 0)
+        return __result;
+
+    if (inlevels && !ILCMP (IN->level1))
+        return __result;
+
+    if (haveinv) {
+        if (!sl_dq_dt_invfind (&qc1, &qt1, IN->level1, IN->id1))
+            return __result;
+
+        if (!IN->id2[0]) {
+            for (
+                m1p = M1F (IN->level1, IN->id1, poutlevel); m1p;
+                m1p = M1N (IN->level1, IN->id1, poutlevel)
+            ) {
+                dqi1p = sl_dq_dt_invfind (&qc2, &qt2, poutlevel, m1p);
+                if (!dqi1p || dqi1p->sl_class1 != VG_QUERY_N_CLASS_PRIMARY) {
+                    for (
+                        m3p = M3F (IN->level1, IN->id1, soutlevel); m3p;
+                        m3p = M3N (IN->level1, IN->id1, soutlevel)
+                    ) {
+                        KEEPN (FALSE, soutlevel, m3p);
+                    }
+                } else {
+                    KEEPN (TRUE, poutlevel, m1p);
+                }
+            }
+        } else {
+            for (
+                m1p = M1F (IN->level1, IN->id1, poutlevel); m1p;
+                m1p = M1N (IN->level1, IN->id1, poutlevel)
+            ) {
+                dqi1p = sl_dq_dt_invfind (&qc2, &qt2, poutlevel, m1p);
+                for (
+                    m2p = M2F (IN->level2, IN->id2, poutlevel); m2p;
+                    m2p = M2N (IN->level2, IN->id2, poutlevel)
+                ) {
+                    dqi2p = sl_dq_dt_invfind (&qc2, &qt2, poutlevel, m2p);
+                    if (!dqi1p && !dqi2p)
+                        continue;
+
+                    if (sameoutlevels) {
+                        if (dqi1p->sl_class1 != VG_QUERY_N_CLASS_PRIMARY) {
+                            KEEPE (FALSE, poutlevel, m1p, TRUE, poutlevel, m2p);
+                        } else if (
+                            dqi2p->sl_class1 != VG_QUERY_N_CLASS_PRIMARY
+                        ) {
+                            KEEPE (TRUE, poutlevel, m1p, FALSE, poutlevel, m2p);
+                        } else {
+                            KEEPE (TRUE, poutlevel, m1p, TRUE, poutlevel, m2p);
+                        }
+                        continue;
+                    }
+
+                    if (!dqi1p) {
+                        for (
+                            m3p = M3F (IN->level1, IN->id1, soutlevel); m3p;
+                            m3p = M3N (IN->level1, IN->id1, soutlevel)
+                        )
+                            KEEPE (FALSE, soutlevel, m3p, TRUE, poutlevel, m2p);
+                    } else if (!dqi2p) {
+                        for (
+                            m3p = M3F (IN->level2, IN->id2, soutlevel); m3p;
+                            m3p = M3N (IN->level2, IN->id2, soutlevel)
+                        )
+                            KEEPE (TRUE, poutlevel, m1p, FALSE, soutlevel, m3p);
+                    } else {
+                        KEEPE (TRUE, poutlevel, m1p, TRUE, poutlevel, m2p);
+                    }
+                }
+            }
+        }
+    } else {
+        for (
+            m1p = M1F (IN->level1, IN->id1, poutlevel); m1p;
+            m1p = M1N (IN->level1, IN->id1, poutlevel)
+        ) {
+            if (!IN->id2[0]) {
+                KEEPN (TRUE, poutlevel, m1p);
+                continue;
+            }
+
+            for (
+                m2p = M2F (IN->level2, IN->id2, poutlevel); m2p;
+                m2p = M2N (IN->level2, IN->id2, poutlevel)
+            ) {
+                KEEPE (TRUE, poutlevel, m1p, TRUE, poutlevel, m2p);
+            }
+        }
+    }
+}
+END{
+    sl_alarm_t *sp;
+    int filei;
+    li_t *lip;
+    int lii;
+    int alarmi, alarmm, res;
+    struct __outrec_dq_dt_alarm_t rec;
+
+    for (filei = 0; filei < filen; filei++) {
+        if (lim > 0)
+            if (sl_alarmopen (files[filei].name) != 0)
+                continue;
+        for (lii = 0; lii < lim; lii++) {
+            lip = &lis[lii];
+            for (sp = sl_alarmfindfirst (
+                lip->l1, lip->i1, lip->l2, lip->i2
+            ); sp; sp = sl_alarmfindnext (
+                lip->l1, lip->i1, lip->l2, lip->i2
+            )) {
+                if (sp->sl_timeissued < ft || sp->sl_timeissued > lt)
+                    continue;
+                if (trn > 0 && !timerangesinrange (sp->sl_timeissued))
+                    continue;
+
+                for (alarmi = alarmm = 0; alarmi < alarmn; alarmi++) {
+                    switch (alarms[alarmi].s_param) {
+                    case CCIDPARAM:
+                        res = ACMP (alarms, alarmi, sp->sl_ccid);
+                        break;
+                    case SEVERITYPARAM:
+                        res = ACMPI (
+                            alarms, alarmi, sevmaps[sp->sl_severity].name
+                        );
+                        break;
+                    case TICKETPARAM:
+                        res = ACMP (alarms, alarmi, tmodemaps[sp->sl_tmode]);
+                        break;
+                    case MSGTXTPARAM:
+                        res = ACMP (alarms, alarmi, sp->sl_text);
+                        break;
+                    case COMMENTPARAM:
+                        res = ACMP (alarms, alarmi, sp->sl_comment);
+                        break;
+                    }
+                    if (!res)
+                        break;
+                    alarmm++;
+                }
+                if (alarmm != alarmn)
+                    continue;
+
+                memset (&rec, 0, sizeof (struct __outrec_dq_dt_alarm_t));
+                memcpy (&rec, sp, sizeof (sl_alarm_t));
+                rec.iclass1 = lip->pcl1;
+                memcpy (rec.ilevel1, lip->pl1, SZ_level1);
+                memcpy (rec.iid1, lip->pi1, SZ_id1);
+                rec.iclass2 = lip->pcl2;
+                memcpy (rec.ilevel2, lip->pl2, SZ_level2);
+                memcpy (rec.iid2, lip->pi2, SZ_id2);
+
+                (*wfunc) (
+                    wfp, &rec, wschemap, sizeof (struct __outrec_dq_dt_alarm_t)
+                );
+            }
+        }
+        if (lim > 0)
+            sl_alarmclose ();
+    }
+}

@@ -1,0 +1,280 @@
+VARS{
+#include <regex.h>
+#include <vmalloc.h>
+#include <cdt.h>
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_nodenameattr.c"
+
+#define SZ_id1 DDSSZ_outrec_dq_dt_inv_id1
+#define SZ_id2 DDSSZ_outrec_dq_dt_inv_id2
+#define SZ_level1 DDSSZ_outrec_dq_dt_inv_level1
+#define SZ_level2 DDSSZ_outrec_dq_dt_inv_level2
+#define SZ_key DDSSZ_inrec_inv_node_key
+
+#include "vg_dq_dt_attrs.c"
+
+#define INVKIND_I 1
+#define INVKIND_N 2
+typedef struct inv_t {
+    int s_kind, s_forceflag;
+    char s_level[SZ_level1], *s_id;
+    regex_t s_code;
+} inv_t;
+static inv_t *ins;
+static int inn;
+
+typedef struct kv_t {
+    char s_key[SZ_key], *s_valre;
+    regex_t s_code;
+} kv_t;
+
+static kv_t *kvs;
+static int kvn;
+
+static sl_inv_nodeattr_t ina;
+static sl_inv_nodenameattr_t inna;
+
+#define ICMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define ICMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, ICMPFLAGS) == 0)
+#define NCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT | REG_ICASE)
+#define NCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, NCMPFLAGS) == 0)
+#define KVCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define KVCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, KVCMPFLAGS) == 0)
+
+static char poutlevel[SZ_level1];
+static int exactlevelmode, parallelmode;
+static int preci, precn;
+
+#define OUTN(pf1, l1, i1) { \
+    memset (OUT, 0, sizeof (struct __outrec_dq_dt_inv_t)); \
+    OUT->cat = VG_QUERY_N_CAT_RESULT; \
+    OUT->type = VG_QUERY_N_TYPE_NODE; \
+    OUT->class1 = ( \
+        pf1 \
+    ) ? VG_QUERY_N_CLASS_PRIMARY : VG_QUERY_N_CLASS_SECONDARY; \
+    memcpy (OUT->level1, l1, SZ_level1); \
+    memcpy (OUT->id1, i1, SZ_id1); \
+    EMIT; \
+    memset (OUT, 0, sizeof (struct __outrec_dq_dt_inv_t)); \
+    OUT->cat = VG_QUERY_N_CAT_ACTUAL; \
+    OUT->type = VG_QUERY_N_TYPE_NONE; \
+    OUT->class1 = ( \
+        pf1 \
+    ) ? VG_QUERY_N_CLASS_PRIMARY : VG_QUERY_N_CLASS_SECONDARY; \
+    memcpy (OUT->level1, IN->level, SZ_level1); \
+    memcpy (OUT->id1, IN->id, SZ_id1); \
+    EMIT; \
+}
+}
+BEGIN{
+    Sfio_t *fp;
+    char *line, *s1, *s2;
+    int inm, kvm;
+
+    exactlevelmode = atoi (getenv ("INVEXACTLEVELMODE"));
+    parallelmode = atoi (getenv ("PARALLELMODE"));
+    if (parallelmode == 1) {
+        preci = atoi (getenv ("RECI"));
+        precn = atoi (getenv ("RECN"));
+    }
+
+    inm = 0, inn = atoi (getenv ("INVNODEFILTERSIZE"));
+    if (inn > 0) {
+        if (!(ins = vmalloc (Vmheap, sizeof (inv_t) * inn)))
+            SUerror ("vg_dq_dt_inv_node", "cannot allocate ins");
+        memset (ins, 0, sizeof (inv_t) * inn);
+        if (!(fp = sfopen (NULL, getenv ("INVNODEFILTERFILE"), "r")))
+            SUerror ("vg_dq_dt_inv_node", "cannot open inv filter file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (0, "vg_dq_dt_inv_node", "bad line: %s", line);
+                break;
+            }
+            *s1++ = 0;
+            if (line[0] == 'I')
+                ins[inm].s_kind = INVKIND_I;
+            else if (line[0] == 'F')
+                ins[inm].s_kind = INVKIND_I, ins[inm].s_forceflag = TRUE;
+            else if (line[0] == 'N')
+                ins[inm].s_kind = INVKIND_N;
+            else {
+                SUwarning (0, "vg_dq_dt_inv_node", "bad line: %s", line);
+                break;
+            }
+            if (!(s2 = strchr (s1, '|'))) {
+                SUwarning (0, "vg_dq_dt_inv_node", "bad line: %s", s1);
+                break;
+            }
+            *s2++ = 0;
+            strcpy (ins[inm].s_level, s1);
+            if (!(ins[inm].s_id = vmstrdup (Vmheap, s2))) {
+                SUwarning (0, "vg_dq_dt_inv_node", "cannot copy id: %s", s2);
+                break;
+            }
+            if (regcomp (
+                &ins[inm].s_code, ins[inm].s_id,
+                (ins[inm].s_kind == INVKIND_I) ? ICMPFLAGS : NCMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_dt_inv_node",
+                    "cannot compile regex: %s", ins[inm].s_id
+                );
+                break;
+            }
+            inm++;
+        }
+        sfclose (fp);
+    }
+    if (inm != inn)
+        inn = -1;
+
+    kvm = 0, kvn = atoi (getenv ("KEYVALUEFILTERSIZE"));
+    if (kvn > 0) {
+        if (!(kvs = vmalloc (Vmheap, sizeof (kv_t) * kvn)))
+            SUerror ("vg_dq_dt_inv_node", "cannot allocate kvs");
+        memset (kvs, 0, sizeof (kv_t) * kvn);
+        if (!(fp = sfopen (NULL, getenv ("KEYVALUEFILTERFILE"), "r")))
+            SUerror (
+                "vg_dq_dt_inv_node", "cannot open key value filter file"
+            );
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (0, "vg_dq_dt_inv_node", "bad line: %s", line);
+                break;
+            }
+            *s1++ = 0;
+            strncpy (kvs[kvm].s_key, line, SZ_key);
+            if (!(kvs[kvm].s_valre = vmstrdup (Vmheap, s1))) {
+                SUwarning (
+                    0, "vg_dq_dt_inv_node", "cannot allocate val: %s", s1
+                );
+                break;
+            }
+            if (regcomp (
+                &kvs[kvm].s_code, kvs[kvm].s_valre, KVCMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_dt_inv_node",
+                    "cannot compile regex %s", kvs[kvm].s_valre
+                );
+                break;
+            }
+            kvm++;
+        }
+        sfclose (fp);
+    }
+    if (kvm != kvn)
+        kvn = -1;
+
+    if (attrload (getenv ("INVATTRFILE")) == -1)
+        SUerror ("vg_dq_dt_inv_node", "cannot load attributes file");
+
+    if (!attrs[ATTR_POUTLEVEL])
+        SUerror ("vg_dq_dt_inv_node", "cannot find primary outlevel");
+    strcpy (poutlevel, attrs[ATTR_POUTLEVEL]);
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_nodenameattropen (getenv ("INVNODENAMEATTRFILE"));
+    strcpy (inna.sl_key, "name");
+}
+{
+    sl_inv_nodeattr_t *inap;
+    sl_inv_nodenameattr_t *innap;
+    int ini, inm, kvi, kvm;
+    char *m1p, *name;
+
+    DROP;
+
+    if (inn < 0)
+        return __result;
+
+    if (parallelmode == 1) {
+        if (INDEX < preci) {
+            INDEX = preci;
+            return __result;
+        } else if (INDEX >= preci + precn) {
+            INDEX = NREC;
+            return __result;
+        }
+        INDEX++;
+    }
+
+    inm = 0;
+    for (ini = 0; ini < inn; ini++) {
+        if (!ins[ini].s_forceflag && exactlevelmode) {
+            if (strcmp (ins[ini].s_level, IN->level) == 0) {
+                if (ins[ini].s_kind == INVKIND_I) {
+                    if (ICMP (ins, ini, IN->id)) {
+                        inm = inn;
+                    }
+                } else {
+                    name = ((innap = sl_inv_nodenameattrfind (
+                        IN->level, IN->id, inna.sl_key
+                    ))) ? innap->sl_val : m1p;
+                    if (NCMP (ins, ini, name)) {
+                        inm = inn;
+                    }
+                }
+            }
+        } else {
+            for (
+                m1p = M1F (IN->level, IN->id, ins[ini].s_level); m1p;
+                m1p = M1N (IN->level, IN->id, ins[ini].s_level)
+            ) {
+                if (ins[ini].s_kind == INVKIND_I) {
+                    if (ICMP (ins, ini, m1p)) {
+                        inm++;
+                        break;
+                    }
+                } else {
+                    name = ((innap = sl_inv_nodenameattrfind (
+                        ins[ini].s_level, m1p, inna.sl_key
+                    ))) ? innap->sl_val : m1p;
+                    if (NCMP (ins, ini, name)) {
+                        inm++;
+                        break;
+                    }
+                }
+            }
+            if (ini + 1 != inm)
+                break;
+        }
+    }
+    if (inm != inn)
+        return __result;
+
+    kvm = 0;
+    for (kvi = 0; kvi < kvn; kvi++) {
+        memcpy (ina.sl_key, kvs[kvi].s_key, SZ_key);
+        if (!(inap = sl_inv_nodeattrfind (IN->level, IN->id, ina.sl_key)))
+            continue;
+        if (KVCMP (kvs, kvi, inap->sl_val))
+            kvm++;
+        else
+            break;
+    }
+    if (kvm != kvn)
+        return __result;
+
+    if (inm == inn) {
+        if (exactlevelmode) {
+            OUTN (TRUE, IN->level, IN->id);
+        } else {
+            for (
+                m1p = M1F (IN->level, IN->id, poutlevel); m1p;
+                m1p = M1N (IN->level, IN->id, poutlevel)
+            ) {
+                OUTN (TRUE, poutlevel, m1p);
+            }
+        }
+    }
+}
+END{
+}

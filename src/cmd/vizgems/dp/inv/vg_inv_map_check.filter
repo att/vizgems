@@ -1,0 +1,69 @@
+VARS{
+#include <vmalloc.h>
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+
+#define SZ_id DDSSZ_rec_inv_node_id
+#define SZ_level DDSSZ_rec_inv_node_level
+
+typedef struct map_t {
+    char level1[SZ_level], level2[SZ_level];
+} map_t;
+
+static map_t *maps;
+static int mapn;
+}
+BEGIN{
+    sl_level_map_t *lmp;
+    int lmi;
+    map_t *mapp;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    M1I (FALSE);
+    if (!(maps = vmalloc (Vmheap, sizeof (map_t) * sl_level_maprecn)))
+        SUerror ("vg_inv_map_check", "cannot allocate maps");
+    mapn = 0;
+
+    for (lmi = 0; lmi < sl_level_maprecn; lmi++) {
+        GETRECORDlevel_map (lmi);
+        lmp = sl_level_mapp;
+        if (!lmp->sl_orig)
+            continue;
+        mapp = &maps[mapn++];
+        memcpy (mapp->level1, lmp->sl_id1, SZ_level);
+        memcpy (mapp->level2, lmp->sl_id2, SZ_level);
+    }
+}
+{
+    map_t *mapp;
+    int mapi;
+    int n;
+    char *m1p;
+
+    DROP;
+
+    for (mapi = 0; mapi < mapn; mapi++) {
+        mapp = &maps[mapi];
+        if (strcmp (level, mapp->level1) != 0)
+            continue;
+
+        n = 0;
+        for (
+            m1p = M1F (level, id, mapp->level2); m1p;
+            m1p = M1N (level, id, mapp->level2)
+        )
+            n++;
+        if (n == 0)
+            sfprintf (
+                sfstdout, "no %s to %s mapping for item %s\n",
+                mapp->level1, mapp->level2, id
+            );
+        else if (n > 1)
+            sfprintf (
+                sfstdout, "multiple (%d) %s to %s mappings for item %s\n",
+                n, mapp->level1, mapp->level2, id
+            );
+    }
+}

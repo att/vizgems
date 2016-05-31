@@ -1,0 +1,152 @@
+#!/bin/ksh
+
+usage=$'
+[-1p1?
+@(#)$Id: removestats (AT&T) 2007-03-25 $
+]
+[+NAME?removestats - drop stats for a specific asset / metric]
+[+DESCRIPTION?\bremovestats\b deletes stat records for the specific
+asset / metrics from the \blatest\b datasets.
+At least one of the \bavg\b and \bnew\b options must be specified.
+At least the asset ID must be specified on the command line.
+If no metric ids are specified, all metrics for that asset ID will be removed.
+]
+[200:avg?indicates that the profile (avg) data are to be removed.
+]
+[201:new?indicates that the current (new) data are to be removed.
+]
+[202:iprefix?indicates that the asset ID argument should be treated as
+a prefix e.g. should match any assets that start with that string.
+]
+[203:mprefix?indicates that the metric id argument(s) should be treated as
+a prefix e.g. should match any metric ids that start with that string.
+]
+[204:maxvalue?indicates that the selected metric records should only be
+removed when their values exceeds the one specified.
+]:[maxvalue]
+[999:v?increases the verbosity level. May be specified multiple times.]
+
+asset_id [ metric_id1 [ metric_id2 ... ] ]
+
+'
+
+function showusage {
+    OPTIND=0
+    getopts -a removestats "$usage" opt '-?'
+}
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+doavg=n docur=n doall=n maxv=
+while getopts -a removestats "$usage" opt; do
+    case $opt in
+    200) doavg=y ;;
+    201) docur=y ;;
+    202) ipref=y ;;
+    203) mpref=y ;;
+    204) maxv=$OPTARG ;;
+    999) (( SWIFTWARNLEVEL++ )) ;;
+    *) showusage; exit 1 ;;
+    esac
+done
+shift $OPTIND-1
+
+if [[ $doavg != y && $docur != y ]] then
+    print -u2 "ERROR: must specify at least one of the -avg, -new options"
+    showusage
+    exit 1
+fi
+
+aid=$1
+
+if [[ $aid == '' ]] then
+    print -u2 "ERROR: must specify an asset id"
+    showusage
+    exit 1
+fi
+
+shift
+mids="$@"
+
+if [[ $ipref == y ]] && (( ${#aid} < 6 )) then
+    print -u2 "ERROR: asset id must be at least 6 chars when using prefix mode"
+    showusage
+    exit 1
+fi
+
+if [[ $mids == '' ]] then
+    doall=y
+fi
+
+if [[ $ipref == y ]] then
+    s1="strstr (id, \"$aid\") != NULL"
+else
+    s1="strcmp (id, \"$aid\") == 0"
+fi
+
+if [[ $doall == y ]] then
+    s2=''
+elif [[ $mpref == y ]] then
+    s2=''
+    for mid in $mids; do
+        [[ $s2 != '' ]] && s2+=" || "
+        s2+="strstr (key, \"$mid\") != NULL"
+    done
+else
+    s2=''
+    for mid in $mids; do
+        [[ $s2 != '' ]] && s2+=" || "
+        s2+="strcmp (key, \"$mid\") == 0"
+    done
+fi
+
+if [[ $doall == y ]] then
+    s="($s1)"
+else
+    s="($s1) && ($s2)"
+fi
+if [[ $maxv != '' ]] then
+    s+=" && (val > $maxv)"
+fi
+
+cd "SWIFT_CFG_DSYSTEMDIR" || exit 1
+
+trap "rm -f exit.proc.stat" HUP QUIT TERM KILL EXIT
+touch exit.proc.stat
+while [[ -f lock.proc.stat ]] do
+    sleep 1
+done
+
+(
+    cd data/main/latest/processed || exit 1
+    for i in \
+        total/all.*.stats.dds total/uniq*stats.dds avg/total/mean.*.stats.dds \
+    ; do
+        [[ ! -f $i ]] && continue
+        [[ $doavg != y && $i == avg/* ]] && continue
+        [[ $docur != y && $i == total/* ]] && continue
+
+        print -u2 processing file ${i##*/}
+        ddsfilter -fe "{
+            KEEP;
+            if ($s)
+                DROP;
+        }" < $i > $i.new && mv $i.new $i
+    done
+    wait
+)
+
+rm exit.proc.stat

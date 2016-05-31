@@ -1,0 +1,521 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+#define STATE_NONE   0
+#define STATE_PNODE  1
+#define STATE_SNODE  2
+#define STATE_PPEDGE 3
+#define STATE_PSEDGE 4
+#define STATE_SPEDGE 5
+#define STATE_SSEDGE 6
+static int cstate, nstate;
+
+static char *fprefix, *iprefix;
+static int findex;
+static char *rendermode, *pagemode;
+static char *sortorder, *sorturl, *grouporder;
+
+static struct __rec_dq_dt_alarm_t *alarmp;
+static char alarmbuf[10240];
+static Sfio_t *strfp;
+
+static char *alarmstatemap[VG_ALARM_N_STATE_MAX + 1] = {
+    VG_ALARM_S_STATE_NONE, // VG_ALARM_N_STATE_NONE
+    VG_ALARM_S_STATE_INFO, // VG_ALARM_N_STATE_INFO
+    VG_ALARM_S_STATE_DEG,  // VG_ALARM_N_STATE_DEG
+    VG_ALARM_S_STATE_DOWN, // VG_ALARM_N_STATE_DOWN
+    VG_ALARM_S_STATE_UP,   // VG_ALARM_N_STATE_UP
+};
+
+static char *alarmmodemap[VG_ALARM_N_MODE_MAX + 1] = {
+    VG_ALARM_S_MODE_NONE,  // VG_ALARM_N_MODE_NONE
+    VG_ALARM_S_MODE_KEEP,  // VG_ALARM_N_MODE_KEEP
+    VG_ALARM_S_MODE_DEFER, // VG_ALARM_N_MODE_DEFER
+    VG_ALARM_S_MODE_DROP,  // VG_ALARM_N_MODE_DROP
+};
+
+typedef struct var_s {
+    char *key, *val;
+} var_t;
+
+static var_t *vars;
+static int varn, varm;
+static int varsunpacked = FALSE;
+
+static void mytmfmt1 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+static void mytmfmt2 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+
+static unpackvars (char *varstr) {
+    char *s1, *s2, *s3;
+
+    varsunpacked = TRUE; // even if this fails, we don't want to run it again
+    varm = 0;
+    if (varstr)
+        for (s1 = varstr; s1; )
+            varm++, s1 = strstr (s1, "\t\t"), s1 = (s1 ? s1 + 2 : NULL);
+    if (varm > varn) {
+        if (!(vars = vmresize (
+            Vmheap, vars, sizeof (var_t) * varm, VM_RSMOVE
+        ))) {
+            SUwarning (0, "vg_dq_vt_alarmtab", "cannot grow vars array");
+            varm = 0;
+            return -1;
+        }
+        varn = varm;
+    }
+    varm = 0;
+    if (varstr) {
+        for (varm = 0, s1 = varstr; s1; ) {
+            if ((s2 = strstr (s1, "\t\t")))
+                *s2 = 0;
+            if (!(s3 = strchr (s1, '='))) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot find key-val pair");
+                varm = 0;
+                return -1;
+            }
+            *s3++ = 0;
+            vars[varm].key = s1;
+            vars[varm++].val = s3;
+            if (s2)
+                s2 += 2;
+            s1 = s2;
+        }
+    }
+    return 0;
+}
+
+static char *alarmattr (
+    char *level1, char *id1, char *level2, char *id2, char *key
+) {
+    time_t t;
+    char *s1, *s2, *s3, *s4;
+    int vari;
+    ssize_t offs[10];
+
+    if (strcmp (key, "alarm_scope") == 0) {
+        return &alarmp->scope[0];
+    }
+    if (strcmp (key, "alarm_alarmid") == 0) {
+        return &alarmp->alarmid[0];
+    }
+    if (strcmp (key, "alarm_ccid") == 0) {
+        return &alarmp->ccid[0];
+    }
+    if (strcmp (key, "alarm_state") == 0) {
+        if (alarmp->state >= 0 && alarmp->state <= VG_ALARM_N_STATE_MAX)
+            sfsprintf (alarmbuf, 10240, "%s", alarmstatemap[alarmp->state]);
+        else
+            sfsprintf (alarmbuf, 10240, "%d", alarmp->state);
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_smode") == 0) {
+        if (alarmp->smode >= 0 && alarmp->smode <= VG_ALARM_N_MODE_MAX)
+            sfsprintf (alarmbuf, 10240, "%s", alarmmodemap[alarmp->smode]);
+        else
+            sfsprintf (alarmbuf, 10240, "%d", alarmp->smode);
+        return &alarmbuf[0];
+    }
+    if (strncmp (key, "alarm_variables_", 16) == 0) {
+        if (!varsunpacked)
+            unpackvars (&alarmp->variables[0]);
+        for (vari = 0; vari < varm; vari++)
+            if (strcmp (vars[vari].key, key + 16) == 0)
+                return vars[vari].val;
+        return NULL;
+    }
+    if (strcmp (key, "alarm_groupcount") == 0) {
+        sfsprintf (alarmbuf, 10240, "XGC_GC_GCX");
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_dateissued") == 0) {
+        return &alarmp->dateissued[0];
+    }
+    if (strcmp (key, "alarm_hourissued") == 0) {
+        return &alarmp->hourissued[0];
+    }
+    if (strcmp (key, "alarm_timecleared") == 0) {
+        t = alarmp->timecleared;
+        if (alarmp->timecleared > 0)
+            mytmfmt1 (alarmbuf, 10240, "%Y/%m/%d %H:%M:%S %Z", &t);
+        else
+            sfsprintf (alarmbuf, 10240, " ");
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_timeissued") == 0) {
+        t = alarmp->timeissued;
+        if (alarmp->timeissued > 0)
+            mytmfmt2 (alarmbuf, 10240, "%Y/%m/%d %H:%M:%S %Z", &t);
+        else
+            sfsprintf (alarmbuf, 10240, " ");
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_time2clear") == 0) {
+        t = alarmp->timeissued;
+        if (alarmp->timeissued > 0)
+            sfsprintf (alarmbuf, 10240, "%d", alarmp->timeissued);
+        else
+            sfsprintf (alarmbuf, 10240, "");
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_type") == 0) {
+        if (alarmp->type == VG_ALARM_N_TYPE_ALARM)
+            sfsprintf (alarmbuf, 10240, "%s", VG_ALARM_S_TYPE_ALARM);
+        else if (alarmp->type == VG_ALARM_N_TYPE_CLEAR)
+            sfsprintf (alarmbuf, 10240, "%s", VG_ALARM_S_TYPE_CLEAR);
+        else
+            sfsprintf (alarmbuf, 10240, "%d", alarmp->type);
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_sortorder") == 0) {
+        sfsprintf (alarmbuf, 10240, "%d", alarmp->sortorder);
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_pmode") == 0) {
+        sfsprintf (alarmbuf, 10240, "%d", alarmp->pmode);
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_level1") == 0) {
+        return (alarmp->level1[0]) ? &alarmp->level1[0] : " ";
+    }
+    if (strcmp (key, "alarm_id1") == 0) {
+        return (alarmp->id1[0]) ? &alarmp->id1[0] : " ";
+    }
+    if (strcmp (key, "alarm_level2") == 0) {
+        return (alarmp->level2[0]) ? &alarmp->level2[0] : " ";
+    }
+    if (strcmp (key, "alarm_id2") == 0) {
+        return (alarmp->id2[0]) ? &alarmp->id2[0] : " ";
+    }
+    if (strcmp (key, "alarm_tmode") == 0) {
+        if (alarmp->tmode >= 0 && alarmp->tmode <= VG_ALARM_N_MODE_MAX)
+            sfsprintf (alarmbuf, 10240, "%s", alarmmodemap[alarmp->tmode]);
+        else
+            sfsprintf (alarmbuf, 10240, "%d", alarmp->tmode);
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_severity") == 0) {
+        if (alarmp->severity >= 0 && alarmp->severity < sevmapn) {
+            if (alarmp->type == VG_ALARM_N_TYPE_CLEAR)
+                sfsprintf (alarmbuf, 10240, "clear");
+            else
+                sfsprintf (
+                    alarmbuf, 10240, "%s", sevmaps[alarmp->severity].name
+                );
+        } else
+            sfsprintf (alarmbuf, 10240, "%d", alarmp->severity);
+        return &alarmbuf[0];
+    }
+    if (strcmp (key, "alarm_text") == 0) {
+        sfstruse (strfp);
+        if ((s1 = strstr (alarmp->text, ":DOWN")))
+            s1 += 6;
+        else if ((s1 = strstr (alarmp->text, ":UP")))
+            s1 += 4;
+        else
+            s1 = alarmp->text;
+        if (strgrpmatch (s1, "http?(s):", offs, 10, STR_ICASE) == 0)
+            return s1;
+        for (s2 = s1, s3 = s2 + offs[0]; s2; ) {
+            if (s3) {
+                sfwrite (strfp, s2, (s3 - s2));
+                if (
+                    !(s4 = strchr (s3, ' ')) && !(s4 = strchr (s3, '"')) &&
+                    !(s4 = strchr (s3, ')')) && !(s4 = strchr (s3, '('))
+                )
+                    s4 = s3 + strlen (s3);
+                sfprintf (strfp, "\2<a class=_INHERIT_TR_CLASS_ href=");
+                sfwrite (strfp, s3, s4 - s3);
+                sfprintf (strfp, "\2>");
+                sfwrite (strfp, s3, s4 - s3);
+                sfprintf (strfp, "\2</a\2>");
+                s2 = s4;
+                if (strgrpmatch (s2, "http?(s):", offs, 10, STR_ICASE) > 0)
+                    s3 = s2 + offs[0];
+                else
+                    s3 = NULL;
+            } else {
+                sfwrite (strfp, s2, strlen (s2));
+                s2 = NULL;
+            }
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "alarm_comment") == 0) {
+        return &alarmp->comment[0];
+    }
+    if (strcmp (key, "alarm_origmsg") == 0) {
+        return &alarmp->origmsg[0];
+    }
+    if (
+        strcmp (key, "alarmclear") == 0 &&
+        alarmp->type != VG_ALARM_N_TYPE_CLEAR && alarmp->timecleared == 0
+    ) {
+        sfstruse (strfp);
+        sfprintf (strfp, "CLEAR:one:%s:%s:%d", level1, id1, alarmp->timeissued);
+        if (alarmp->alarmid[0])
+            sfprintf (
+                strfp, ":CLEAR:aid:%s:%s:%s", level1, id1, alarmp->alarmid
+            );
+        if (alarmp->ccid[0])
+            sfprintf (strfp, ":CLEAR:ccid:%s:%s:%s", level1, id1, alarmp->ccid);
+        sfprintf (strfp, ":CLEAR:all:%s:%s", level1, id1);
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "alarm_level1") == 0) {
+        return &alarmp->level1[0];
+    }
+    if (strcmp (key, "alarm_id1") == 0) {
+        return &alarmp->id1[0];
+    }
+    if (strcmp (key, "alarm_level2") == 0) {
+        return &alarmp->level2[0];
+    }
+    if (strcmp (key, "alarm_id2") == 0) {
+        return &alarmp->id2[0];
+    }
+    return NULL;
+}
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("ALARMTABATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot load attr file");
+    attrsetfunc (alarmattr);
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_alarmtab", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_alarmtab", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_alarmtab", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_SORTORDER].str)
+        SUerror ("vg_dq_vt_alarmtab", "cannot find sortorder");
+    sortorder = attrs[ATTR_SORTORDER].str;
+    if (!attrs[ATTR_SORTURL].str)
+        SUerror ("vg_dq_vt_alarmtab", "cannot find sorturl");
+    sorturl = attrs[ATTR_SORTURL].str;
+    if (!attrs[ATTR_GROUPORDER].str)
+        SUerror ("vg_dq_vt_alarmtab", "cannot find grouporder");
+    grouporder = attrs[ATTR_GROUPORDER].str;
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_alarmtab", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot load sevmap file");
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot init UT");
+    if (RIinit (fprefix, iprefix, 0) == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot init RI");
+    if (EMinit (getenv ("ALARMTABEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot init EM");
+    if (ATBinit (sevmapn, pagemode, grouporder) == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot init ATB");
+
+    strfp = sfstropen ();
+}
+{
+    char url[ATTRBUFLEN], color[1024];
+    char *s1, *s2;
+
+    DROP;
+
+    alarmp = __recp;
+    varsunpacked = FALSE;
+    color[0] = 0;
+    if ((s1 = strstr (comment, "color="))) {
+        s1 += 6;
+        if (!(s2 = strchr (s1, ' ')))
+            s2 = comment + strlen (comment);
+        memcpy (color, s1, s2 - s1);
+        color[s2 - s1] = 0;
+    }
+    if (!level2[0] && !id2[0]) {
+        if (attreval (
+            level1, id1, NULL, NULL, (
+                iclass1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEURL : ATTR_SNODEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmtab", "cannot get node url");
+        strncpy (url, attrstr, ATTRBUFLEN);
+        if (attreval (
+            level1, id1, NULL, NULL, (
+                iclass1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEATTR : ATTR_SNODEATTR, ATTRENC_HTML
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmtab", "cannot get node attr");
+        if (!strstr (attrstr, "_SKIP_") && !ATBinsertnd (
+            level1, id1, iclass1, type, tmode, severity, attrstr, color, url
+        ))
+            SUerror ("vg_dq_vt_alarmtab", "cannot insert nd");
+    } else {
+        if (attreval (
+            level1, id1, level2, id2, (
+                iclass1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ((
+                iclass2 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PPEDGEURL : ATTR_PSEDGEURL) : ((
+                iclass2 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_SPEDGEURL : ATTR_SSEDGEURL), ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmtab", "cannot get edge url");
+        strncpy (url, attrstr, ATTRBUFLEN);
+        if (attreval (
+            level1, id1, level2, id2, (
+                iclass1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ((
+                iclass2 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PPEDGEATTR : ATTR_PSEDGEATTR) : ((
+                iclass2 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_SPEDGEATTR : ATTR_SSEDGEATTR), ATTRENC_HTML
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmtab", "cannot get edge attr");
+        if (!strstr (attrstr, "_SKIP_") && !ATBinserted (
+            level1, id1, level2, id2, iclass1, iclass2, type, tmode, severity,
+            attrstr, color, url
+        ))
+            SUerror ("vg_dq_vt_alarmtab", "cannot insert ed");
+    }
+}
+END{
+    ATBnd_t *ndp;
+    int ndi;
+    ATBed_t *edp;
+    int edi;
+    int hdrflag;
+
+    if (ATBflatten (sortorder, sorturl) == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot flatten");
+
+    if (ATBsetupprint (rendermode, attrs[ATTR_ALARMTABATTR].str) == -1)
+        SUerror ("vg_dq_vt_alarmtab", "cannot setup printing");
+
+    cstate = STATE_NONE;
+
+    for (ndi = 0; ndi < ATBndn; ndi++) {
+        ndp = ATBnds[ndi];
+        sfsprintf (objstr, OBJLEN, "n|%s|%s", ndp->ilevel, ndp->iid);
+        nstate = (
+            ndp->nclass == VG_QUERY_N_CLASS_PRIMARY
+        ) ?  STATE_PNODE : STATE_SNODE;
+        hdrflag = FALSE;
+        if (cstate != nstate) {
+            if (cstate != STATE_NONE && ATBendnd (fprefix) == -1) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot end nd file");
+                return -1;
+            }
+            cstate = nstate;
+            if (ATBbeginnd (fprefix, findex++) == -1) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot begin nd file");
+                return -1;
+            }
+            hdrflag = TRUE;
+        }
+        if (ATBprintnd (hdrflag, ndp, objstr) == -1)
+            SUerror ("vg_dq_vt_alarmtab", "cannot print nd");
+        if (ndi == ATBndn - 1) {
+            if (ATBendnd (fprefix) == -1) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot end nd file");
+                return -1;
+            }
+        }
+    }
+
+    cstate = STATE_NONE;
+
+    for (edi = 0; edi < ATBedn; edi++) {
+        edp = ATBeds[edi];
+        sfsprintf (
+            objstr, OBJLEN, "e|%s|%s|%s|%s",
+            edp->ilevel1, edp->iid1, edp->ilevel2, edp->iid2
+        );
+        nstate = (
+            edp->nclass1 == VG_QUERY_N_CLASS_PRIMARY
+        ) ? ((
+            edp->nclass2 == VG_QUERY_N_CLASS_PRIMARY
+        ) ? STATE_PPEDGE : STATE_PSEDGE) : ((
+            edp->nclass2 == VG_QUERY_N_CLASS_PRIMARY
+        ) ? STATE_SPEDGE : STATE_SSEDGE);
+        hdrflag = FALSE;
+        if (cstate != nstate) {
+            if (cstate != STATE_NONE && ATBended (fprefix) == -1) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot end ed file");
+                return -1;
+            }
+            cstate = nstate;
+            if (ATBbegined (fprefix, findex++) == -1) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot begin ed file");
+                return -1;
+            }
+            hdrflag = TRUE;
+        }
+        if (ATBprinted (hdrflag, edp, objstr) == -1)
+            SUerror ("vg_dq_vt_alarmtab", "cannot print edge");
+        if (edi == ATBedn - 1) {
+            if (ATBended (fprefix) == -1) {
+                SUwarning (0, "vg_dq_vt_alarmtab", "cannot end ed file");
+                return -1;
+            }
+        }
+    }
+}

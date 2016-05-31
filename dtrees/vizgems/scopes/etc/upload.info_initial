@@ -1,0 +1,33 @@
+# this shell script specifies the list of locations to upload
+# data to. it must set the variables ALARMSYS CLEARSYS STATSYS
+# to either 'NONE' for no propagation or to a QUOTED, SPACE-SEPARATED
+# line of the form:
+#     "user1@server1:dir1 user2@server2:dir2 ..."
+# where:
+#     'user' is the user name on the remote system
+#     'server' is the name or ip address of the remote system
+#     'dir' is the directory name to upload to
+# example:
+#     ALARMSYS="alpweb1:/export/home/swift/vizgems/data/system/incoming"
+#     CLEARSYS="swift@alpweb2:/export/home/swift/vizgems/data/system/incoming"
+# NOTE: this mechanism uses SSH to copy data, so SSH to these remote
+# systems must be enabled
+# POLLING: if the EMS is supposed to poll this scope, use HOLD4POLL as the
+# user name. the server name must be exactly the official name of the EMS
+
+# systems to send alarm records to
+ALARMSYS=NONE
+# systems to send stat records to
+STATSYS=NONE
+# systems to send health messages to
+HEALTHSYS=NONE
+# systems to send autoinv messages to
+AUTOINVSYS=NONE
+
+SLEEPTIME=15
+
+# network speed in bits per second of this system
+TRANSRATE=1000000
+
+# max number of parallel transfer jobs
+TRANSJOBS=8

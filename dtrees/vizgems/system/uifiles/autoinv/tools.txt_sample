@@ -1,0 +1,9 @@
+#users|groups|tool|scope classes reg-ex
+||mainserver|@(mainlinux*|linux.scope|mainsolaris*|maindarwin*|mainwin32*|win32.scope)
+||mainswitch|@(maincisco*|mainarista*|maindell*)
+||mainstorage|@(maininfortrend*|mainsmee)
+||mainpdu|@(mainraritan*)
+||mainila|mainila
+||mainhadoop|mainhadoop
+||mainopenstack|mainopenstack
+||mainsmartctl|mainsmartctl

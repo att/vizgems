@@ -1,0 +1,309 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+#define VG_STATMAP_MAIN
+#include "vg_statmap.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, framen;
+static char *metricorder, *sortorder, *grouporder;
+static char *rendermode, *pagemode;
+
+static STBmetric_t **attrms;
+static int attrmn;
+static int attrmmode;
+static char statbuf[10240];
+static Sfio_t *strfp;
+
+static char *statattr (
+    char *level1, char *id1, char *level2, char *id2, char *key
+) {
+    STBmetric_t *mp;
+    int mi;
+    int framei, havedeflabel, haveinvlabel;
+    char *s1, *s2, *sep;
+
+    if (strcmp (key, "stat_key") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mi > 0)
+                sfprintf (strfp, "|");
+            sfprintf (strfp, "%s", mp->key);
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_unit") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            sfprintf (strfp, "%s", mp->unit);
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_deflabel") == 0) {
+        havedeflabel = FALSE;
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mp->deflabel[0])
+                havedeflabel = TRUE;
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            sfprintf (strfp, "%s", mp->deflabel);
+        }
+        return havedeflabel ? sfstruse (strfp) : (
+            sfstruse (strfp), (char *) NULL
+        );
+    }
+    if (strcmp (key, "stat_invlabel") == 0) {
+        haveinvlabel = FALSE;
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mp->invlabel[0])
+                haveinvlabel = TRUE;
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            sfprintf (strfp, "%s", mp->invlabel);
+        }
+        return haveinvlabel ? sfstruse (strfp) : (
+            sfstruse (strfp), (char *) NULL
+        );
+    }
+    if (strcmp (key, "stat_fulllabel") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            if (!mp->labels) {
+                if (mp->label[0])
+                    sfprintf (strfp, "%s", mp->label);
+                else if (mp->deflabel[0])
+                    sfprintf (strfp, "%s", mp->deflabel);
+                continue;
+            }
+            for (framei = 0; framei < framen; framei++)
+                mp->marks[framei] = (mp->labels[framei]) ? TRUE : FALSE;
+            sfprintf (strfp, "%s (", mp->deflabel);
+            sep = "";
+            for (framei = 0; framei < framen; framei++) {
+                if (!mp->marks[framei])
+                    continue;
+                if (
+                    (s1 = strchr (mp->labels[framei], '(')) &&
+                    (s2 = strchr (s1 + 1, ')'))
+                )
+                    sfprintf (strfp, "%s%.*s", sep, s2 - s1, s1);
+                else
+                    sfprintf (strfp, "%s%s", sep, mp->labels[framei]);
+                sep = " ";
+            }
+            sfprintf (strfp, ")");
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_level") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mi > 0)
+                sfprintf (strfp, "|");
+            sfprintf (strfp, "%s", mp->level);
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_id") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mi > 0)
+                sfprintf (strfp, "|");
+            sfprintf (strfp, "%s", mp->id);
+        }
+        return sfstruse (strfp);
+    }
+    return NULL;
+}
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("STATTABATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot load attr file");
+    attrsetfunc (statattr);
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_stattab", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_FRAMEN].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find framen");
+    framen = atoi (attrs[ATTR_FRAMEN].str);
+    if (!attrs[ATTR_METRICORDER].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find metricorder");
+    metricorder = attrs[ATTR_METRICORDER].str;
+    if (!attrs[ATTR_SORTORDER].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find sortorder");
+    sortorder = attrs[ATTR_SORTORDER].str;
+    if (!attrs[ATTR_GROUPORDER].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find grouporder");
+    grouporder = attrs[ATTR_GROUPORDER].str;
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_stattab", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    if (statmapload (getenv ("STATMAPFILE"), FALSE, TRUE, TRUE) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot load statmap file");
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot init UT");
+    if (RIinit (fprefix, iprefix, 0) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot init RI");
+    if (EMinit (getenv ("STATTABEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot init EM");
+    if (STBinit (
+        framen, atoi (getenv ("STATORDERSIZE")),
+        getenv ("STATORDERFILE"), pagemode
+    ) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot init STB");
+
+    strfp = sfstropen ();
+}
+{
+    STBmetric_t *mp, *ms[1];
+    sl_inv_nodeattr_t ina, *inap;
+    char invlabelbuf[SZ_val], *invlabel, *deflabel, *ip;
+    int smi, nai, havecapv;
+    float capv;
+    char mturl[ATTRBUFLEN];
+
+    DROP;
+
+    if (!(mp = STBinsert (
+        ilevel, iid, level, id, key, frame, val, unit, label, timeissued
+    )))
+        SUerror ("vg_dq_vt_stattab", "cannot insert metric");
+    if (!STBmetricexists) {
+        deflabel = NULL;
+        invlabel = NULL;
+        havecapv = FALSE, capv = 0.0;
+        if ((smi = statmapfind (key)) >= 0)
+            deflabel = statmaps[smi].clabel;
+        if (
+            smi >= 0 && statmaps[smi].flabel && (ip = strchr (key, '.')) &&
+            statmaps[smi].nattrn > 0
+        ) {
+            for (nai = 0; nai < statmaps[smi].nattrn; nai++) {
+                memset (ina.sl_key, 0, sizeof (ina.sl_key));
+                sfsprintf (
+                    ina.sl_key, sizeof (ina.sl_key), "%s%s",
+                    statmaps[smi].nattrs[nai], ip + 1
+                );
+                if ((inap = sl_inv_nodeattrfind (level, id, ina.sl_key))) {
+                    memset (invlabelbuf, 0, SZ_val);
+                    sfsprintf (
+                        invlabelbuf, SZ_val, statmaps[smi].flabel, inap->sl_val
+                    );
+                    invlabel = &invlabelbuf[0];
+                    break;
+                }
+            }
+        }
+        if (smi >= 0 && statmaps[smi].havemaxv)
+            havecapv = TRUE, capv = statmaps[smi].maxv;
+        else {
+            memset (ina.sl_key, 0, sizeof (ina.sl_key));
+            sfsprintf (
+                ina.sl_key, sizeof (ina.sl_key), "si_sz_%s", key
+            );
+            if ((inap = sl_inv_nodeattrfind (level, id, ina.sl_key)))
+                havecapv = TRUE, capv = atof (inap->sl_val);
+            else {
+                memset (ina.sl_key, 0, sizeof (ina.sl_key));
+                sfsprintf (
+                    ina.sl_key, sizeof (ina.sl_key), "scopeinv_size_%s", key
+                );
+                if ((inap = sl_inv_nodeattrfind (level, id, ina.sl_key)))
+                    havecapv = TRUE, capv = atof (inap->sl_val);
+            }
+        }
+        if (STBattachdata (mp, deflabel, invlabel, havecapv, capv))
+            SUerror ("vg_dq_vt_stattab", "cannot attach metric data");
+        ms[0] = mp;
+        attrms = ms, attrmn = 1;
+        attrmmode = FALSE;
+        if (attreval (
+            ilevel, iid, NULL, NULL, ATTR_METRICURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_stattab", "cannot get metric url");
+        strncpy (mturl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            ilevel, iid, NULL, NULL, ATTR_METRICATTR, ATTRENC_HTML
+        ) == -1)
+            SUerror ("vg_dq_vt_stattab", "cannot get title attr");
+        sfsprintf (objstr, OBJLEN, "n|%s|%s", ilevel, iid);
+        if (STBattachattr (mp, attrstr, mturl, objstr))
+            SUerror ("vg_dq_vt_stattab", "cannot attach metric attributes");
+    }
+}
+END{
+    int ti, mi, mj;
+    char tlurl[ATTRBUFLEN];
+
+    if (STBflatten (metricorder, sortorder, grouporder) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot flatten");
+    if (STBsetupprint (rendermode, attrs[ATTR_STATTABATTR].str) == -1)
+        SUerror ("vg_dq_vt_stattab", "cannot setup printing");
+
+    for (ti = 0, mi = 0; ti < STBtabn; ti++) {
+        for (mj = mi; mj < STBmetricn; mj++)
+            if (STBmetrics[mj]->tabid != ti)
+                break;
+
+        attrms = &STBmetrics[mi], attrmn = mj - mi;
+        attrmmode = FALSE;
+        if (attreval (
+            STBmetrics[mi]->ilevel, STBmetrics[mi]->iid, NULL, NULL,
+            ATTR_TITLEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_stattab", "cannot get title url");
+        strncpy (tlurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            STBmetrics[mi]->ilevel, STBmetrics[mi]->iid, NULL, NULL,
+            ATTR_TITLEATTR, ATTRENC_HTML
+        ) == -1)
+            SUerror ("vg_dq_vt_stattab", "cannot get title attr");
+
+        if (mj > mi && STBprinttab (
+            fprefix, findex, ti, STBtabn, &STBmetrics[mi], mj - mi,
+            attrstr, tlurl
+        ) == -1)
+            SUerror ("vg_dq_vt_stattab", "cannot print table %d", ti);
+        mi = mj;
+        findex++;
+    }
+}

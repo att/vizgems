@@ -1,0 +1,986 @@
+
+eval suistyle.query=$(print ${suistyle.default})
+suistyle.query.label="Query Parameters"
+suistyle.query.entrylist="\
+ nodeicons nodecharts legendmode timezone invgraphpage invgridpage invmappage invtabpage alarmgridmode alarmtabpage alarmstatchartpage alarmstatchartsize alarmstattabpage statchartsize statchartpage stattabpage\
+"
+suistyle.query.entries.nodeicons=(
+  type=yesno var=nodeicons
+  val="yes"
+  label="Show icons in graphical displays"
+)
+suistyle.query.entries.nodecharts=(
+  type=yesno var=nodecharts
+  val="yes"
+  label="Show mini charts in graphical displays"
+)
+suistyle.query.entries.legendmode=(
+  type=yesno var=legendmode
+  val="yes"
+  label="Show legends in displays"
+)
+suistyle.query.entries.timezone=(
+  type=timezone var=timezone
+  val="default"
+  label="Timezone to use when displaying data"
+)
+suistyle.query.entries.invgraphpage=(
+  type=choice var=invgraphpage
+  choices="all:all|1:1|4:4|10:10|50:50"
+  val="all"
+  label="Number of diagram images to show in graphical displays"
+)
+suistyle.query.entries.invgridpage=(
+  type=choice var=invgridpage
+  choices="all:all|1:1|4:4|10:10|50:50"
+  val="all"
+  label="Number of grid images to show in graphical displays"
+)
+suistyle.query.entries.invmappage=(
+  type=choice var=invmappage
+  choices="all:all|1:1|4:4|10:10|50:50"
+  val="all"
+  label="Number of map images to show in graphical displays"
+)
+suistyle.query.entries.invtabpage=(
+  type=choice var=invtabpage
+  choices="all:all|10:10|50:50|100:100|200:200"
+  val="all"
+  label="Number of inventory records to show in tabular displays"
+)
+suistyle.query.entries.alarmgridmode=(
+  type=choice var=alarmgridmode
+  choices="0:ticketed alarms only|1:ticketed and unticketed alarms|2:all alarm categories|3:color of highest severity"
+  val="1"
+  label="Categories of alarms to show in graphical displays"
+)
+suistyle.query.entries.alarmtabpage=(
+  type=choice var=alarmtabpage
+  choices="all:all|10:10|50:50|100:100|200:200"
+  val="all"
+  label="Number of alarm records to show in tabular displays"
+)
+suistyle.query.entries.alarmstatchartpage=(
+  type=choice var=alarmstatchartpage
+  choices="all:all|1:1|4:4|10:10|50:50"
+  val="all"
+  label="Number of alarm volume charts to show in graphical displays"
+)
+suistyle.query.entries.alarmstatchartsize=(
+  type=size var=alarmstatchartsize
+  val="400 100"
+  label="Size of alarm volume chart displays"
+)
+suistyle.query.entries.alarmstattabpage=(
+  type=choice var=alarmstattabpage
+  choices="all:all|12:12|24:24|48:48|72:72|144:144"
+  val="all"
+  label="Number of alarm volume records to show in tabular displays"
+)
+suistyle.query.entries.statchartsize=(
+  type=size var=statchartsize
+  val="440 150"
+  label="Size of statistical chart displays"
+)
+suistyle.query.entries.statchartpage=(
+  type=choice var=statchartpage
+  choices="all:all|1:1|4:4|10:10|50:50"
+  val="all"
+  label="Number of charts to show in graphical displays"
+)
+suistyle.query.entries.stattabpage=(
+  type=choice var=stattabpage
+  choices="all:all|12:12|24:24|48:48|72:72|144:144"
+  val="all"
+  label="Number of statistics records to show in tabular displays"
+)
+
+eval suistyle.common=$(print ${suistyle.default})
+suistyle.common.label="Common Parameters"
+suistyle.common.entrylist="\
+ showhelp\
+"
+suistyle.common.entries.showhelp=(
+  type=yesno var=showhelp
+  val="yes"
+  label="Show small help buttons (?) in pages"
+)
+
+eval suistyle.page=$(print ${suistyle.default})
+suistyle.page.label="Page Parameters"
+suistyle.page.entrylist="\
+ fontfamily fontsize fgcolor bgcolor outlinecolor link_fgcolor link_bgcolor link_hover_fgcolor link_hover_bgcolor img_bordercolor\
+"
+suistyle.page.entries.fontfamily=(
+  type=fontfamily var=fontfamily
+  choices="Arial:Arial|Verdana:Verdana|Helvetica:Helvetica|sans-serif:sans-serif"
+  val="Arial"
+  label="Font Family"
+)
+suistyle.page.entries.fontsize=(
+  type=fontsize var=fontsize
+  val="11pt"
+  label="Font Size"
+)
+suistyle.page.entries.fgcolor=(
+  type=color var=fgcolor
+  val="black"
+  label="Page Foreground Color"
+)
+suistyle.page.entries.bgcolor=(
+  type=color var=bgcolor
+  val="white"
+  label="Page Background Color"
+)
+suistyle.page.entries.outlinecolor=(
+  type=color var=outlinecolor
+  val="black"
+  label="Page Border Color"
+)
+suistyle.page.entries.link_fgcolor=(
+  type=color var=link_fgcolor
+  val="white"
+  label="Link Foreground Color"
+)
+suistyle.page.entries.link_bgcolor=(
+  type=color var=link_bgcolor
+  val="#336699"
+  label="Link Background Color"
+)
+suistyle.page.entries.link_hover_fgcolor=(
+  type=color var=link_hover_fgcolor
+  val="white"
+  label="Link Hover Foreground Color"
+)
+suistyle.page.entries.link_hover_bgcolor=(
+  type=color var=link_hover_bgcolor
+  val="#6699CC"
+  label="Link Hover Background Color"
+)
+suistyle.page.entries.img_bordercolor=(
+  type=color var=img_bordercolor
+  val="blue"
+  label="Image Border Color"
+)
+
+eval suistyle.banner=$(print ${suistyle.default})
+suistyle.banner.label="Banner Parameters"
+suistyle.banner.entrylist="\
+ fontfamily fontsize fgcolor bgcolor outlinecolor link_fgcolor link_bgcolor link_hover_fgcolor link_hover_bgcolor\
+"
+suistyle.banner.entries.fontfamily=(
+  type=fontfamily var=fontfamily
+  choices="Arial:Arial|Verdana:Verdana|Helvetica:Helvetica|sans-serif:sans-serif"
+  val="Arial"
+  label="Font Family"
+)
+suistyle.banner.entries.fontsize=(
+  type=fontsize var=fontsize
+  val="11pt"
+  label="Font Size"
+)
+suistyle.banner.entries.fgcolor=(
+  type=color var=fgcolor
+  val="white"
+  label="Banner Foreground Color"
+)
+suistyle.banner.entries.bgcolor=(
+  type=color var=bgcolor
+  val="#336699"
+  label="Banner Background Color"
+)
+suistyle.banner.entries.outlinecolor=(
+  type=color var=outlinecolor
+  val="black"
+  label="Banner Border Color"
+)
+suistyle.banner.entries.link_fgcolor=(
+  type=color var=link_fgcolor
+  val="white"
+  label="Link Foreground Color"
+)
+suistyle.banner.entries.link_bgcolor=(
+  type=color var=link_bgcolor
+  val="#336699"
+  label="Link Background Color"
+)
+suistyle.banner.entries.link_hover_fgcolor=(
+  type=color var=link_hover_fgcolor
+  val="white"
+  label="Link Hover Foreground Color"
+)
+suistyle.banner.entries.link_hover_bgcolor=(
+  type=color var=link_hover_bgcolor
+  val="#6699CC"
+  label="Link Hover Background Color"
+)
+
+eval suistyle.sdiv=$(print ${suistyle.default})
+suistyle.sdiv.label="Container Parameters"
+suistyle.sdiv.entrylist="\
+ fontfamily fontsize fgcolor bgcolor outlinecolor link_fgcolor link_bgcolor link_hover_fgcolor link_hover_bgcolor\
+"
+suistyle.sdiv.entries.fontfamily=(
+  type=fontfamily var=fontfamily
+  choices="Arial:Arial|Verdana:Verdana|Helvetica:Helvetica|sans-serif:sans-serif"
+  val="Arial"
+  label="Font Family"
+)
+suistyle.sdiv.entries.fontsize=(
+  type=fontsize var=fontsize
+  val="9pt"
+  label="Font Size"
+)
+suistyle.sdiv.entries.fgcolor=(
+  type=color var=fgcolor
+  val="white"
+  label="Container Foreground Color"
+)
+suistyle.sdiv.entries.bgcolor=(
+  type=color var=bgcolor
+  val="#336699"
+  label="Container Background Color"
+)
+suistyle.sdiv.entries.outlinecolor=(
+  type=color var=outlinecolor
+  val="black"
+  label="Container Border Color"
+)
+suistyle.sdiv.entries.link_fgcolor=(
+  type=color var=link_fgcolor
+  val="white"
+  label="Link Foreground Color"
+)
+suistyle.sdiv.entries.link_bgcolor=(
+  type=color var=link_bgcolor
+  val="#336699"
+  label="Link Background Color"
+)
+suistyle.sdiv.entries.link_hover_fgcolor=(
+  type=color var=link_hover_fgcolor
+  val="white"
+  label="Link Hover Foreground Color"
+)
+suistyle.sdiv.entries.link_hover_bgcolor=(
+  type=color var=link_hover_bgcolor
+  val="#6699CC"
+  label="Link Hover Background Color"
+)
+
+eval suistyle.mdiv=$(print ${suistyle.default})
+suistyle.mdiv.label="Menu Parameters"
+suistyle.mdiv.entrylist="\
+ fontfamily fontsize fgcolor bgcolor outlinecolor link_fgcolor link_bgcolor link_hover_fgcolor link_hover_bgcolor\
+"
+suistyle.mdiv.entries.fontfamily=(
+  type=fontfamily var=fontfamily
+  choices="Arial:Arial|Verdana:Verdana|Helvetica:Helvetica|sans-serif:sans-serif"
+  val="Arial"
+  label="Font Family"
+)
+suistyle.mdiv.entries.fontsize=(
+  type=fontsize var=fontsize
+  val="11pt"
+  label="Font Size"
+)
+suistyle.mdiv.entries.fgcolor=(
+  type=color var=fgcolor
+  val="white"
+  label="Menu Foreground Color"
+)
+suistyle.mdiv.entries.bgcolor=(
+  type=color var=bgcolor
+  val="#336699"
+  label="Menu Background Color"
+)
+suistyle.mdiv.entries.outlinecolor=(
+  type=color var=outlinecolor
+  val="black"
+  label="Menu Outline Color"
+)
+suistyle.mdiv.entries.link_fgcolor=(
+  type=color var=link_fgcolor
+  val="white"
+  label="Link Foreground Color"
+)
+suistyle.mdiv.entries.link_bgcolor=(
+  type=color var=link_bgcolor
+  val="#336699"
+  label="Link Background Color"
+)
+suistyle.mdiv.entries.link_hover_fgcolor=(
+  type=color var=link_hover_fgcolor
+  val="white"
+  label="Link Hover Foreground Color"
+)
+suistyle.mdiv.entries.link_hover_bgcolor=(
+  type=color var=link_hover_bgcolor
+  val="#6699CC"
+  label="Link Hover Background Color"
+)
+
+suistyle.groups="query common page banner sdiv mdiv"
+
+if [[ -f $SUIPREFGENSYSTEMFILE ]] then
+
+eval suistyle.general=$(print ${suistyle.default})
+suistyle.general.label="General Parameters"
+suistyle.general.entrylist="\
+  insertpageheader appendpageheader insertbodyheader appendbodyheader insertbodyfooter appendbodyfooter insertbanner appendbanner replacebanner replacebannerimage replacesdivtab\
+  append_page_body append_page_div append_page_a append_page_a__active append_page_a__hover append_page_select append_page_option append_page_input append_page_img append_page_table append_page_caption append_page_tr append_page_td\
+  append_page_div_pagemain append_page_div_page append_page_table_page append_page_caption_page append_page_tr_page append_page_td_page append_page_td_pageborder append_page_img_page append_page_a_pageil append_page_a_pageil_active append_page_a_pageil_hover append_page_a_page append_page_a_page_active append_page_a_page_hover append_page_a_pagelabel append_page_a_pagelabel_active append_page_a_pagelabel_hover append_page_select_page append_page_option_page append_page_input_page\
+  append_banner_div_banner append_banner_table_banner append_banner_caption_banner append_banner_tr_banner append_banner_td_banner append_banner_img_banner append_banner_a_banneril append_banner_a_banneril_active append_banner_a_banneril_hover append_banner_a_banner append_banner_a_banner_active append_banner_a_banner_hover\
+  append_bdiv_div_bdivmain append_bdiv_div_bdivlist append_bdiv_div_bdivrev append_bdiv_div_bdiv append_bdiv_table_bdiv append_bdiv_table_bdivform append_bdiv_caption_bdiv append_bdiv_tr_bdivform append_bdiv_tr_bdiv append_bdiv_td_bdivform append_bdiv_td_bdiv append_bdiv_a_bdivil append_bdiv_a_bdivil_active append_bdiv_a_bdivil_hover append_bdiv_a_bdiv append_bdiv_a_bdiv_active append_bdiv_a_bdiv_hover append_bdiv_a_bdivlabel append_bdiv_a_bdivlabel_active append_bdiv_a_bdivlabel_hover append_bdiv_select_bdiv append_bdiv_option_bdiv append_bdiv_input_bdiv\
+  append_sdiv_div_sdiv append_sdiv_table_sdiv append_sdiv_table_sdivmenu append_sdiv_table_sdivline append_sdiv_caption_sdiv append_sdiv_tr_sdiv append_sdiv_td_sdiv append_sdiv_a_sdiv append_sdiv_a_sdiv_active append_sdiv_a_sdiv_hover append_sdiv_a_sdivlabel append_sdiv_a_sdivlabel_active append_sdiv_a_sdivlabel_hover append_sdiv_select_sdivpage append_sdiv_option_sdivpage\
+  append_mdiv_div_mdivmain append_mdiv_div_mdivmenu append_mdiv_div_mdivcurr append_mdiv_div_mdivwork append_mdiv_div_mdivform append_mdiv_div_mdiv append_mdiv_table_mdivform append_mdiv_caption_mdiv append_mdiv_tr_mdivform append_mdiv_tr_mdiv append_mdiv_td_mdivform append_mdiv_td_mdivformnb append_mdiv_td_mdiv append_mdiv_td_mdivborder append_mdiv_a_mdivil append_mdiv_a_mdivil_active append_mdiv_a_mdivil_hover append_mdiv_a_mdivilset append_mdiv_a_mdivilset_active append_mdiv_a_mdivilset_hover append_mdiv_a_mdivilpick append_mdiv_a_mdivilpick_active append_mdiv_a_mdivilpick_hover append_mdiv_a_mdivgo append_mdiv_a_mdivgo_active append_mdiv_a_mdivgo_hover append_mdiv_a_mdiv append_mdiv_a_mdiv_active append_mdiv_a_mdiv_hover append_mdiv_a_mdivlabel append_mdiv_a_mdivlabel_active append_mdiv_a_mdivlabel_hover append_mdiv_select_mdiv append_mdiv_option_mdiv append_mdiv_input_mdiv\
+"
+suistyle.general.entries.insertpageheader=(
+  type=script var=insertpageheader
+  val=""
+  label="Script Override (insertpageheader)"
+)
+suistyle.general.entries.appendpageheader=(
+  type=script var=appendpageheader
+  val=""
+  label="Script Override (appendpageheader)"
+)
+suistyle.general.entries.insertbodyheader=(
+  type=script var=insertbodyheader
+  val=""
+  label="Script Override (insertbodyheader)"
+)
+suistyle.general.entries.appendbodyheader=(
+  type=script var=appendbodyheader
+  val=""
+  label="Script Override (appendbodyheader)"
+)
+suistyle.general.entries.insertbodyfooter=(
+  type=script var=insertbodyfooter
+  val=""
+  label="Script Override (insertbodyfooter)"
+)
+suistyle.general.entries.appendbodyfooter=(
+  type=script var=appendbodyfooter
+  val=""
+  label="Script Override (appendbodyfooter)"
+)
+suistyle.general.entries.insertbanner=(
+  type=script var=insertbanner
+  val=""
+  label="Script Override (insertbanner)"
+)
+suistyle.general.entries.appendbanner=(
+  type=script var=appendbanner
+  val=""
+  label="Script Override (appendbanner)"
+)
+suistyle.general.entries.replacebanner=(
+  type=script var=replacebanner
+  val=""
+  label="Script Override (replacebanner)"
+)
+suistyle.general.entries.replacebannerimage=(
+  type=script var=replacebannerimage
+  val=""
+  label="Script Override (replacebannerimage)"
+)
+suistyle.general.entries.replacesdivtab=(
+  type=script var=replacesdivtab
+  val=""
+  label="Script Override (replacesdivtab)"
+)
+suistyle.general.entries.append_page_body=(
+  type=style var=append_page_body
+  val=""
+  label="Style Append (body)"
+)
+suistyle.general.entries.append_page_div=(
+  type=style var=append_page_div
+  val=""
+  label="Style Append (div)"
+)
+suistyle.general.entries.append_page_a=(
+  type=style var=append_page_a
+  val=""
+  label="Style Append (a)"
+)
+suistyle.general.entries.append_page_a__active=(
+  type=style var=append_page_a__active
+  val=""
+  label="Style Append (a__active)"
+)
+suistyle.general.entries.append_page_a__hover=(
+  type=style var=append_page_a__hover
+  val=""
+  label="Style Append (a__hover)"
+)
+suistyle.general.entries.append_page_select=(
+  type=style var=append_page_select
+  val=""
+  label="Style Append (select)"
+)
+suistyle.general.entries.append_page_option=(
+  type=style var=append_page_option
+  val=""
+  label="Style Append (option)"
+)
+suistyle.general.entries.append_page_input=(
+  type=style var=append_page_input
+  val=""
+  label="Style Append (input)"
+)
+suistyle.general.entries.append_page_img=(
+  type=style var=append_page_img
+  val=""
+  label="Style Append (img)"
+)
+suistyle.general.entries.append_page_table=(
+  type=style var=append_page_table
+  val=""
+  label="Style Append (table)"
+)
+suistyle.general.entries.append_page_caption=(
+  type=style var=append_page_caption
+  val=""
+  label="Style Append (caption)"
+)
+suistyle.general.entries.append_page_tr=(
+  type=style var=append_page_tr
+  val=""
+  label="Style Append (tr)"
+)
+suistyle.general.entries.append_page_td=(
+  type=style var=append_page_td
+  val=""
+  label="Style Append (td)"
+)
+suistyle.general.entries.append_page_div_pagemain=(
+  type=style var=append_page_div_pagemain
+  val=""
+  label="Style Append (div_pagemain)"
+)
+suistyle.general.entries.append_page_div_page=(
+  type=style var=append_page_div_page
+  val=""
+  label="Style Append (div_page)"
+)
+suistyle.general.entries.append_page_table_page=(
+  type=style var=append_page_table_page
+  val=""
+  label="Style Append (table_page)"
+)
+suistyle.general.entries.append_page_caption_page=(
+  type=style var=append_page_caption_page
+  val=""
+  label="Style Append (caption_page)"
+)
+suistyle.general.entries.append_page_tr_page=(
+  type=style var=append_page_tr_page
+  val=""
+  label="Style Append (tr_page)"
+)
+suistyle.general.entries.append_page_td_page=(
+  type=style var=append_page_td_page
+  val=""
+  label="Style Append (td_page)"
+)
+suistyle.general.entries.append_page_td_pageborder=(
+  type=style var=append_page_td_pageborder
+  val=""
+  label="Style Append (td_pageborder)"
+)
+suistyle.general.entries.append_page_img_page=(
+  type=style var=append_page_img_page
+  val=""
+  label="Style Append (img_page)"
+)
+suistyle.general.entries.append_page_a_pageil=(
+  type=style var=append_page_a_pageil
+  val=""
+  label="Style Append (a_pageil)"
+)
+suistyle.general.entries.append_page_a_pageil_active=(
+  type=style var=append_page_a_pageil_active
+  val=""
+  label="Style Append (a_pageil_active)"
+)
+suistyle.general.entries.append_page_a_pageil_hover=(
+  type=style var=append_page_a_pageil_hover
+  val=""
+  label="Style Append (a_pageil_hover)"
+)
+suistyle.general.entries.append_page_a_page=(
+  type=style var=append_page_a_page
+  val=""
+  label="Style Append (a_page)"
+)
+suistyle.general.entries.append_page_a_page_active=(
+  type=style var=append_page_a_page_active
+  val=""
+  label="Style Append (a_page_active)"
+)
+suistyle.general.entries.append_page_a_page_hover=(
+  type=style var=append_page_a_page_hover
+  val=""
+  label="Style Append (a_page_hover)"
+)
+suistyle.general.entries.append_page_a_pagelabel=(
+  type=style var=append_page_a_pagelabel
+  val=""
+  label="Style Append (a_pagelabel)"
+)
+suistyle.general.entries.append_page_a_pagelabel_active=(
+  type=style var=append_page_a_pagelabel_active
+  val=""
+  label="Style Append (a_pagelabel_active)"
+)
+suistyle.general.entries.append_page_a_pagelabel_hover=(
+  type=style var=append_page_a_pagelabel_hover
+  val=""
+  label="Style Append (a_pagelabel_hover)"
+)
+suistyle.general.entries.append_page_select_page=(
+  type=style var=append_page_select_page
+  val=""
+  label="Style Append (select_page)"
+)
+suistyle.general.entries.append_page_option_page=(
+  type=style var=append_page_option_page
+  val=""
+  label="Style Append (option_page)"
+)
+suistyle.general.entries.append_page_input_page=(
+  type=style var=append_page_input_page
+  val=""
+  label="Style Append (input_page)"
+)
+suistyle.general.entries.append_banner_div_banner=(
+  type=style var=append_banner_div_banner
+  val=""
+  label="Style Append (div_banner)"
+)
+suistyle.general.entries.append_banner_table_banner=(
+  type=style var=append_banner_table_banner
+  val=""
+  label="Style Append (table_banner)"
+)
+suistyle.general.entries.append_banner_caption_banner=(
+  type=style var=append_banner_caption_banner
+  val=""
+  label="Style Append (caption_banner)"
+)
+suistyle.general.entries.append_banner_tr_banner=(
+  type=style var=append_banner_tr_banner
+  val=""
+  label="Style Append (tr_banner)"
+)
+suistyle.general.entries.append_banner_td_banner=(
+  type=style var=append_banner_td_banner
+  val=""
+  label="Style Append (td_banner)"
+)
+suistyle.general.entries.append_banner_img_banner=(
+  type=style var=append_banner_img_banner
+  val=""
+  label="Style Append (img_banner)"
+)
+suistyle.general.entries.append_banner_a_banneril=(
+  type=style var=append_banner_a_banneril
+  val=""
+  label="Style Append (a_banneril)"
+)
+suistyle.general.entries.append_banner_a_banneril_active=(
+  type=style var=append_banner_a_banneril_active
+  val=""
+  label="Style Append (a_banneril_active)"
+)
+suistyle.general.entries.append_banner_a_banneril_hover=(
+  type=style var=append_banner_a_banneril_hover
+  val=""
+  label="Style Append (a_banneril_hover)"
+)
+suistyle.general.entries.append_banner_a_banner=(
+  type=style var=append_banner_a_banner
+  val=""
+  label="Style Append (a_banner)"
+)
+suistyle.general.entries.append_banner_a_banner_active=(
+  type=style var=append_banner_a_banner_active
+  val=""
+  label="Style Append (a_banner_active)"
+)
+suistyle.general.entries.append_banner_a_banner_hover=(
+  type=style var=append_banner_a_banner_hover
+  val=""
+  label="Style Append (a_banner_hover)"
+)
+suistyle.general.entries.append_bdiv_div_bdivmain=(
+  type=style var=append_bdiv_div_bdivmain
+  val=""
+  label="Style Append (div_bdivmain)"
+)
+suistyle.general.entries.append_bdiv_div_bdivlist=(
+  type=style var=append_bdiv_div_bdivlist
+  val=""
+  label="Style Append (div_bdivlist)"
+)
+suistyle.general.entries.append_bdiv_div_bdivrev=(
+  type=style var=append_bdiv_div_bdivrev
+  val=""
+  label="Style Append (div_bdivrev)"
+)
+suistyle.general.entries.append_bdiv_div_bdiv=(
+  type=style var=append_bdiv_div_bdiv
+  val=""
+  label="Style Append (div_bdiv)"
+)
+suistyle.general.entries.append_bdiv_table_bdiv=(
+  type=style var=append_bdiv_table_bdiv
+  val=""
+  label="Style Append (table_bdiv)"
+)
+suistyle.general.entries.append_bdiv_table_bdivform=(
+  type=style var=append_bdiv_table_bdivform
+  val=""
+  label="Style Append (table_bdivform)"
+)
+suistyle.general.entries.append_bdiv_caption_bdiv=(
+  type=style var=append_bdiv_caption_bdiv
+  val=""
+  label="Style Append (caption_bdiv)"
+)
+suistyle.general.entries.append_bdiv_tr_bdivform=(
+  type=style var=append_bdiv_tr_bdivform
+  val=""
+  label="Style Append (tr_bdivform)"
+)
+suistyle.general.entries.append_bdiv_tr_bdiv=(
+  type=style var=append_bdiv_tr_bdiv
+  val=""
+  label="Style Append (tr_bdiv)"
+)
+suistyle.general.entries.append_bdiv_td_bdivform=(
+  type=style var=append_bdiv_td_bdivform
+  val=""
+  label="Style Append (td_bdivform)"
+)
+suistyle.general.entries.append_bdiv_td_bdiv=(
+  type=style var=append_bdiv_td_bdiv
+  val=""
+  label="Style Append (td_bdiv)"
+)
+suistyle.general.entries.append_bdiv_a_bdivil=(
+  type=style var=append_bdiv_a_bdivil
+  val=""
+  label="Style Append (a_bdivil)"
+)
+suistyle.general.entries.append_bdiv_a_bdivil_active=(
+  type=style var=append_bdiv_a_bdivil_active
+  val=""
+  label="Style Append (a_bdivil_active)"
+)
+suistyle.general.entries.append_bdiv_a_bdivil_hover=(
+  type=style var=append_bdiv_a_bdivil_hover
+  val=""
+  label="Style Append (a_bdivil_hover)"
+)
+suistyle.general.entries.append_bdiv_a_bdiv=(
+  type=style var=append_bdiv_a_bdiv
+  val=""
+  label="Style Append (a_bdiv)"
+)
+suistyle.general.entries.append_bdiv_a_bdiv_active=(
+  type=style var=append_bdiv_a_bdiv_active
+  val=""
+  label="Style Append (a_bdiv_active)"
+)
+suistyle.general.entries.append_bdiv_a_bdiv_hover=(
+  type=style var=append_bdiv_a_bdiv_hover
+  val=""
+  label="Style Append (a_bdiv_hover)"
+)
+suistyle.general.entries.append_bdiv_a_bdivlabel=(
+  type=style var=append_bdiv_a_bdivlabel
+  val=""
+  label="Style Append (a_bdivlabel)"
+)
+suistyle.general.entries.append_bdiv_a_bdivlabel_active=(
+  type=style var=append_bdiv_a_bdivlabel_active
+  val=""
+  label="Style Append (a_bdivlabel_active)"
+)
+suistyle.general.entries.append_bdiv_a_bdivlabel_hover=(
+  type=style var=append_bdiv_a_bdivlabel_hover
+  val=""
+  label="Style Append (a_bdivlabel_hover)"
+)
+suistyle.general.entries.append_bdiv_select_bdiv=(
+  type=style var=append_bdiv_select_bdiv
+  val=""
+  label="Style Append (select_bdiv)"
+)
+suistyle.general.entries.append_bdiv_option_bdiv=(
+  type=style var=append_bdiv_option_bdiv
+  val=""
+  label="Style Append (option_bdiv)"
+)
+suistyle.general.entries.append_bdiv_input_bdiv=(
+  type=style var=append_bdiv_input_bdiv
+  val=""
+  label="Style Append (input_bdiv)"
+)
+suistyle.general.entries.append_sdiv_div_sdiv=(
+  type=style var=append_sdiv_div_sdiv
+  val=""
+  label="Style Append (div_sdiv)"
+)
+suistyle.general.entries.append_sdiv_table_sdiv=(
+  type=style var=append_sdiv_table_sdiv
+  val=""
+  label="Style Append (table_sdiv)"
+)
+suistyle.general.entries.append_sdiv_table_sdivmenu=(
+  type=style var=append_sdiv_table_sdivmenu
+  val=""
+  label="Style Append (table_sdivmenu)"
+)
+suistyle.general.entries.append_sdiv_table_sdivline=(
+  type=style var=append_sdiv_table_sdivline
+  val=""
+  label="Style Append (table_sdivline)"
+)
+suistyle.general.entries.append_sdiv_caption_sdiv=(
+  type=style var=append_sdiv_caption_sdiv
+  val=""
+  label="Style Append (caption_sdiv)"
+)
+suistyle.general.entries.append_sdiv_tr_sdiv=(
+  type=style var=append_sdiv_tr_sdiv
+  val=""
+  label="Style Append (tr_sdiv)"
+)
+suistyle.general.entries.append_sdiv_td_sdiv=(
+  type=style var=append_sdiv_td_sdiv
+  val=""
+  label="Style Append (td_sdiv)"
+)
+suistyle.general.entries.append_sdiv_a_sdiv=(
+  type=style var=append_sdiv_a_sdiv
+  val=""
+  label="Style Append (a_sdiv)"
+)
+suistyle.general.entries.append_sdiv_a_sdiv_active=(
+  type=style var=append_sdiv_a_sdiv_active
+  val=""
+  label="Style Append (a_sdiv_active)"
+)
+suistyle.general.entries.append_sdiv_a_sdiv_hover=(
+  type=style var=append_sdiv_a_sdiv_hover
+  val=""
+  label="Style Append (a_sdiv_hover)"
+)
+suistyle.general.entries.append_sdiv_a_sdivlabel=(
+  type=style var=append_sdiv_a_sdivlabel
+  val=""
+  label="Style Append (a_sdivlabel)"
+)
+suistyle.general.entries.append_sdiv_a_sdivlabel_active=(
+  type=style var=append_sdiv_a_sdivlabel_active
+  val=""
+  label="Style Append (a_sdivlabel_active)"
+)
+suistyle.general.entries.append_sdiv_a_sdivlabel_hover=(
+  type=style var=append_sdiv_a_sdivlabel_hover
+  val=""
+  label="Style Append (a_sdivlabel_hover)"
+)
+suistyle.general.entries.append_sdiv_select_sdivpage=(
+  type=style var=append_sdiv_select_sdivpage
+  val=""
+  label="Style Append (select_sdivpage)"
+)
+suistyle.general.entries.append_sdiv_option_sdivpage=(
+  type=style var=append_sdiv_option_sdivpage
+  val=""
+  label="Style Append (option_sdivpage)"
+)
+suistyle.general.entries.append_mdiv_div_mdivmain=(
+  type=style var=append_mdiv_div_mdivmain
+  val=""
+  label="Style Append (div_mdivmain)"
+)
+suistyle.general.entries.append_mdiv_div_mdivmenu=(
+  type=style var=append_mdiv_div_mdivmenu
+  val=""
+  label="Style Append (div_mdivmenu)"
+)
+suistyle.general.entries.append_mdiv_div_mdivcurr=(
+  type=style var=append_mdiv_div_mdivcurr
+  val=""
+  label="Style Append (div_mdivcurr)"
+)
+suistyle.general.entries.append_mdiv_div_mdivwork=(
+  type=style var=append_mdiv_div_mdivwork
+  val=""
+  label="Style Append (div_mdivwork)"
+)
+suistyle.general.entries.append_mdiv_div_mdivform=(
+  type=style var=append_mdiv_div_mdivform
+  val=""
+  label="Style Append (div_mdivform)"
+)
+suistyle.general.entries.append_mdiv_div_mdiv=(
+  type=style var=append_mdiv_div_mdiv
+  val=""
+  label="Style Append (div_mdiv)"
+)
+suistyle.general.entries.append_mdiv_table_mdivform=(
+  type=style var=append_mdiv_table_mdivform
+  val=""
+  label="Style Append (table_mdivform)"
+)
+suistyle.general.entries.append_mdiv_caption_mdiv=(
+  type=style var=append_mdiv_caption_mdiv
+  val=""
+  label="Style Append (caption_mdiv)"
+)
+suistyle.general.entries.append_mdiv_tr_mdivform=(
+  type=style var=append_mdiv_tr_mdivform
+  val=""
+  label="Style Append (tr_mdivform)"
+)
+suistyle.general.entries.append_mdiv_tr_mdiv=(
+  type=style var=append_mdiv_tr_mdiv
+  val=""
+  label="Style Append (tr_mdiv)"
+)
+suistyle.general.entries.append_mdiv_td_mdivform=(
+  type=style var=append_mdiv_td_mdivform
+  val=""
+  label="Style Append (td_mdivform)"
+)
+suistyle.general.entries.append_mdiv_td_mdivformnb=(
+  type=style var=append_mdiv_td_mdivformnb
+  val=""
+  label="Style Append (td_mdivformnb)"
+)
+suistyle.general.entries.append_mdiv_td_mdiv=(
+  type=style var=append_mdiv_td_mdiv
+  val=""
+  label="Style Append (td_mdiv)"
+)
+suistyle.general.entries.append_mdiv_td_mdivborder=(
+  type=style var=append_mdiv_td_mdivborder
+  val=""
+  label="Style Append (td_mdivborder)"
+)
+suistyle.general.entries.append_mdiv_a_mdivil=(
+  type=style var=append_mdiv_a_mdivil
+  val=""
+  label="Style Append (a_mdivil)"
+)
+suistyle.general.entries.append_mdiv_a_mdivil_active=(
+  type=style var=append_mdiv_a_mdivil_active
+  val=""
+  label="Style Append (a_mdivil_active)"
+)
+suistyle.general.entries.append_mdiv_a_mdivil_hover=(
+  type=style var=append_mdiv_a_mdivil_hover
+  val=""
+  label="Style Append (a_mdivil_hover)"
+)
+suistyle.general.entries.append_mdiv_a_mdivilset=(
+  type=style var=append_mdiv_a_mdivilset
+  val=""
+  label="Style Append (a_mdivilset)"
+)
+suistyle.general.entries.append_mdiv_a_mdivilset_active=(
+  type=style var=append_mdiv_a_mdivilset_active
+  val=""
+  label="Style Append (a_mdivilset_active)"
+)
+suistyle.general.entries.append_mdiv_a_mdivilset_hover=(
+  type=style var=append_mdiv_a_mdivilset_hover
+  val=""
+  label="Style Append (a_mdivilset_hover)"
+)
+suistyle.general.entries.append_mdiv_a_mdivilpick=(
+  type=style var=append_mdiv_a_mdivilpick
+  val=""
+  label="Style Append (a_mdivilpick)"
+)
+suistyle.general.entries.append_mdiv_a_mdivilpick_active=(
+  type=style var=append_mdiv_a_mdivilpick_active
+  val=""
+  label="Style Append (a_mdivilpick_active)"
+)
+suistyle.general.entries.append_mdiv_a_mdivilpick_hover=(
+  type=style var=append_mdiv_a_mdivilpick_hover
+  val=""
+  label="Style Append (a_mdivilpick_hover)"
+)
+suistyle.general.entries.append_mdiv_a_mdivgo=(
+  type=style var=append_mdiv_a_mdivgo
+  val=""
+  label="Style Append (a_mdivgo)"
+)
+suistyle.general.entries.append_mdiv_a_mdivgo_active=(
+  type=style var=append_mdiv_a_mdivgo_active
+  val=""
+  label="Style Append (a_mdivgo_active)"
+)
+suistyle.general.entries.append_mdiv_a_mdivgo_hover=(
+  type=style var=append_mdiv_a_mdivgo_hover
+  val=""
+  label="Style Append (a_mdivgo_hover)"
+)
+suistyle.general.entries.append_mdiv_a_mdiv=(
+  type=style var=append_mdiv_a_mdiv
+  val=""
+  label="Style Append (a_mdiv)"
+)
+suistyle.general.entries.append_mdiv_a_mdiv_active=(
+  type=style var=append_mdiv_a_mdiv_active
+  val=""
+  label="Style Append (a_mdiv_active)"
+)
+suistyle.general.entries.append_mdiv_a_mdiv_hover=(
+  type=style var=append_mdiv_a_mdiv_hover
+  val=""
+  label="Style Append (a_mdiv_hover)"
+)
+suistyle.general.entries.append_mdiv_a_mdivlabel=(
+  type=style var=append_mdiv_a_mdivlabel
+  val=""
+  label="Style Append (a_mdivlabel)"
+)
+suistyle.general.entries.append_mdiv_a_mdivlabel_active=(
+  type=style var=append_mdiv_a_mdivlabel_active
+  val=""
+  label="Style Append (a_mdivlabel_active)"
+)
+suistyle.general.entries.append_mdiv_a_mdivlabel_hover=(
+  type=style var=append_mdiv_a_mdivlabel_hover
+  val=""
+  label="Style Append (a_mdivlabel_hover)"
+)
+suistyle.general.entries.append_mdiv_select_mdiv=(
+  type=style var=append_mdiv_select_mdiv
+  val=""
+  label="Style Append (select_mdiv)"
+)
+suistyle.general.entries.append_mdiv_option_mdiv=(
+  type=style var=append_mdiv_option_mdiv
+  val=""
+  label="Style Append (option_mdiv)"
+)
+suistyle.general.entries.append_mdiv_input_mdiv=(
+  type=style var=append_mdiv_input_mdiv
+  val=""
+  label="Style Append (input_mdiv)"
+)
+suistyle.groups+=" general"
+
+fi
+
+unset suistyle.default

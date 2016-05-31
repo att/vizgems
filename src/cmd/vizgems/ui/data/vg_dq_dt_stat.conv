@@ -1,0 +1,407 @@
+VARS{
+#include <regex.h>
+#include <vmalloc.h>
+#include <cdt.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_dq_dt_inv.c"
+#include "sl_stat.c"
+#include "vg_timeranges.c"
+
+#define SZ_id1 DDSSZ_outrec_dq_dt_stat_id
+#define SZ_level1 DDSSZ_outrec_dq_dt_stat_level
+#define SZ_key DDSSZ_outrec_dq_dt_stat_key
+#define SZ_unit DDSSZ_outrec_dq_dt_stat_unit
+
+#include "vg_dq_dt_attrs.c"
+
+typedef struct stat_t {
+    int s_param;
+    char *s_textre;
+    regex_t s_code;
+} stat_t;
+#define KEYPARAM   1
+#define LABELPARAM 2
+
+static stat_t *stats;
+static int statn;
+
+#define SKCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define SKCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, SKCMPFLAGS) == 0)
+#define SLCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT | REG_ICASE)
+#define SLCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, SLCMPFLAGS) == 0)
+
+typedef struct is_t {
+    char *s_level, *s_id, *s_snamere;
+    regex_t s_code;
+} is_t;
+
+static is_t *iss;
+static int isn;
+
+#define ISCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define ISCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, ISCMPFLAGS) == 0)
+
+typedef struct file_t {
+    int offset;
+    char *name;
+} file_t;
+
+static file_t *files;
+static int filen;
+
+static char poutlevel[SZ_level1];
+static char *inlevels;
+static regex_t inlevelscode;
+#define ILCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define ILCMP(s) (regexec (&inlevelscode, s, 0, NULL, ILCMPFLAGS) == 0)
+
+static int ffr, lfr;
+
+static int haveinv, alwaysreruninv, unknownmode, runinparallel;
+
+static short qc1 = VG_QUERY_N_CAT_ACTUAL;
+static short qt1 = VG_QUERY_N_TYPE_NONE;
+static short qc2 = VG_QUERY_N_CAT_RESULT;
+static short qt2 = VG_QUERY_N_TYPE_NODE;
+
+static Sfio_t *fp3;
+
+typedef struct liku_t {
+    char l[SZ_level1], i[SZ_id1], k[SZ_key], u[SZ_unit];
+    char pl[SZ_level1], pi[SZ_id1];
+    int pcl;
+} liku_t;
+
+static liku_t *likus;
+static int likun, likum;
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+
+#define KEEPN(pf1, l1, i1) { \
+    if (!haveinv || alwaysreruninv) { \
+        sfprintf (fp3, "I|%s|%s\n", l1, i1); \
+    } \
+    if (likum >= likun) { \
+        if (!(likus = vmresize ( \
+            Vmheap, likus, 2 * (likum + 1) * sizeof (liku_t), VM_RSCOPY \
+        ))) \
+            SUerror ("vg_dq_dt_stat", "cannot grow liku array"); \
+        likun = 2 * (likum + 1); \
+    } \
+    likup = &likus[likum++]; \
+    memset (likup, 0, sizeof (liku_t)); \
+    memcpy (likup->l, IN->level, SZ_level1); \
+    memcpy (likup->i, IN->id, SZ_id1); \
+    memcpy (likup->k, IN->key, SZ_key); \
+    memcpy (likup->u, IN->unit, SZ_unit); \
+    memcpy (likup->pl, l1, SZ_level1); \
+    memcpy (likup->pi, i1, SZ_id1); \
+    likup->pcl = ( \
+        pf1 \
+    ) ? VG_QUERY_N_CLASS_PRIMARY : VG_QUERY_N_CLASS_SECONDARY; \
+}
+}
+BEGIN{
+    Sfio_t *fp;
+    char *line, *s1, *s2;
+    int statm, ism, filem;
+
+    statm = 0, statn = atoi (getenv ("STATFILTERSIZE"));
+    if (statn > 0) {
+        if (!(stats = vmalloc (Vmheap, sizeof (stat_t) * statn)))
+            SUerror ("vg_dq_dt_stat", "cannot allocate stats");
+        memset (stats, 0, sizeof (stat_t) * statn);
+        if (!(fp = sfopen (NULL, getenv ("STATFILTERFILE"), "r")))
+            SUerror ("vg_dq_dt_stat", "cannot open stat filter file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (0, "vg_dq_dt_stat", "bad line: %s", line);
+                break;
+            }
+            *s1++ = 0;
+            if (!(s2 = strchr (s1, '|'))) {
+                SUwarning (0, "vg_dq_dt_stat", "bad line: %s", s1);
+                break;
+            }
+            *s2++ = 0;
+            if (strcmp (s1, "key") == 0)
+                stats[statm].s_param = KEYPARAM;
+            else if (strcmp (s1, "label") == 0)
+                stats[statm].s_param = LABELPARAM;
+            else {
+                SUwarning (0, "vg_dq_dt_stat", "unknown param: %s", s1);
+                break;
+            }
+            if (!(stats[statm].s_textre = vmstrdup (Vmheap, s2))) {
+                SUwarning (0, "vg_dq_dt_stat", "cannot allocate text: %s", s2);
+                break;
+            }
+            if (regcomp (
+                &stats[statm].s_code, stats[statm].s_textre,
+                (stats[statm].s_param == KEYPARAM) ? SKCMPFLAGS : SLCMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_dt_stat",
+                    "cannot compile regex: %s", stats[statm].s_textre
+                );
+                break;
+            }
+            statm++;
+        }
+        sfclose (fp);
+    }
+    if (statm != statn)
+        statn = -1;
+
+    ism = 0, isn = atoi (getenv ("ISFILTERSIZE"));
+    if (isn > 0) {
+        if (!(iss = vmalloc (Vmheap, sizeof (is_t) * isn)))
+            SUerror ("vg_dq_dt_stat", "cannot allocate iss");
+        memset (iss, 0, sizeof (is_t) * isn);
+        if (!(fp = sfopen (NULL, getenv ("ISFILTERFILE"), "r")))
+            SUerror ("vg_dq_dt_stat", "cannot open is filter file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (0, "vg_dq_dt_stat", "bad line: %s", line);
+                break;
+            }
+            *s1++ = 0;
+            if (!(s2 = strchr (s1, '|'))) {
+                SUwarning (0, "vg_dq_dt_stat", "bad line: %s", s1);
+                break;
+            }
+            *s2++ = 0;
+            if (!(iss[ism].s_level = vmstrdup (Vmheap, line))) {
+                SUwarning (0, "vg_dq_dt_stat", "cannot copy level: %s", line);
+                break;
+            }
+            if (!(iss[ism].s_id = vmstrdup (Vmheap, s1))) {
+                SUwarning (0, "vg_dq_dt_stat", "cannot copy id: %s", s1);
+                break;
+            }
+            if (!(iss[ism].s_snamere = vmstrdup (Vmheap, s2))) {
+                SUwarning (0, "vg_dq_dt_stat", "cannot allocate sname: %s", s2);
+                break;
+            }
+            if (regcomp (
+                &iss[ism].s_code, iss[ism].s_snamere, ISCMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_dt_stat",
+                    "cannot compile regex: %s", iss[ism].s_snamere
+                );
+                break;
+            }
+            ism++;
+        }
+        sfclose (fp);
+    }
+    if (ism != isn)
+        isn = -1;
+
+    filem = 0, filen = atoi (getenv ("STATFILESIZE"));
+    if (filen > 0) {
+        if (!(files = vmalloc (Vmheap, sizeof (file_t) * filen)))
+            SUerror ("vg_dq_dt_stat", "cannot allocate files");
+        memset (files, 0, sizeof (file_t) * filen);
+        if (!(fp = sfopen (NULL, getenv ("STATFILEFILE"), "r")))
+            SUerror ("vg_dq_dt_stat", "cannot open stat file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, ':')))
+                s1 = line, files[filem].offset = 0;
+            else
+                *s1++ = 0, files[filem].offset = atoi (line);
+            if (!(files[filem].name = vmstrdup (Vmheap, s1))) {
+                SUwarning (0, "vg_dq_dt_stat", "cannot copy file: %s", line);
+                break;
+            }
+            filem++;
+        }
+        sfclose (fp);
+    }
+
+    if (attrload (getenv ("STATATTRFILE")) == -1)
+        SUerror ("vg_dq_dt_stat", "cannot load attributes file");
+
+    if (!attrs[ATTR_POUTLEVEL])
+        SUerror ("vg_dq_dt_stat", "cannot find primary outlevel");
+    strcpy (poutlevel, attrs[ATTR_POUTLEVEL]);
+    if (attrs[ATTR_INLEVELS]) {
+        inlevels = attrs[ATTR_INLEVELS];
+        if (regcomp (&inlevelscode, inlevels, ILCMPFLAGS) != 0)
+            SUerror ("vg_dq_dt_stat", "cannot compile regex: %s", inlevels);
+    }
+    if (!attrs[ATTR_FFRAME])
+        SUerror ("vg_dq_dt_stat", "cannot find fframe");
+    ffr = atoi (attrs[ATTR_FFRAME]);
+    if (!attrs[ATTR_LFRAME])
+        SUerror ("vg_dq_dt_stat", "cannot find lframe");
+    lfr = atoi (attrs[ATTR_LFRAME]);
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+
+    if ((s1 = getenv ("INVOUTFILE")))
+        haveinv = TRUE, sl_dq_dt_invopen (s1);
+    else
+        haveinv = FALSE;
+    if ((s1 = getenv ("STATALWAYSRERUNINV")))
+        alwaysreruninv = TRUE;
+
+    if ((s1 = getenv ("UNKNOWNMODE")))
+        unknownmode = TRUE;
+
+    runinparallel = atoi (getenv ("RUNINPARALLEL"));
+
+    if ((s1 = getenv ("TIMERANGESFILE")) && (s2 = getenv ("TIMERANGESSIZE")))
+        timerangesload (s1, atoi (s2));
+
+    if (!(fp3 = sfnew (NULL, NULL, 4096, 3, SF_WRITE)))
+        SUerror ("vg_dq_dt_stat", "cannot write to fd 3");
+}
+{
+    sl_dq_dt_inv_t *dqip;
+    int stati, statm, isi, ism, res;
+    liku_t *likup;
+    char *m1p;
+
+    DROP;
+    OUT->scope[0] = 0;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (statn < 0)
+        return __result;
+
+    for (stati = statm = 0; stati < statn; stati++) {
+        switch (stats[stati].s_param) {
+        case KEYPARAM:
+            res = SKCMP (stats, stati, IN->key);
+            break;
+        case LABELPARAM:
+            res = SLCMP (stats, stati, IN->label);
+            break;
+        }
+        if (!res)
+            break;
+        statm++;
+    }
+    if (statm != statn)
+        return __result;
+
+    if (inlevels && !ILCMP (IN->level))
+        return __result;
+
+    if (isn > 0) {
+        for (isi = ism = 0; isi < isn; isi++) {
+            if (
+                strcmp (iss[isi].s_level, IN->level) == 0 &&
+                strcmp (iss[isi].s_id, IN->id) == 0 &&
+                ISCMP (iss, isi, IN->key)
+            ) {
+                ism++;
+                break;
+            }
+        }
+        if (ism == 0)
+            return __result;
+    }
+
+    if (haveinv && !unknownmode) {
+        if (!sl_dq_dt_invfind (&qc1, &qt1, IN->level, IN->id))
+            return __result;
+
+        for (
+            m1p = M1F (IN->level, IN->id, poutlevel); m1p;
+            m1p = M1N (IN->level, IN->id, poutlevel)
+        ) {
+            dqip = sl_dq_dt_invfind (&qc2, &qt2, poutlevel, m1p);
+            if (!dqip || dqip->sl_class1 != VG_QUERY_N_CLASS_PRIMARY)
+                continue;
+
+            KEEPN (TRUE, poutlevel, m1p);
+        }
+    } else if (unknownmode) {
+        for (
+            m1p = M1F (IN->level, IN->id, poutlevel); m1p;
+            m1p = M1N (IN->level, IN->id, poutlevel)
+        ) {
+            if (strcmp (m1p, "UNKNOWN") == 0) {
+                KEEPN (TRUE, poutlevel, m1p);
+                break;
+            }
+        }
+    } else {
+        for (
+            m1p = M1F (IN->level, IN->id, poutlevel); m1p;
+            m1p = M1N (IN->level, IN->id, poutlevel)
+        ) {
+            KEEPN (TRUE, poutlevel, m1p);
+        }
+    }
+}
+END{
+    sl_stat_t *sp;
+    int filei;
+    liku_t *likup;
+    int likui;
+    struct __outrec_dq_dt_stat_t rec;
+
+    if (runinparallel) {
+        for (likui = 0; likui < likum; likui++) {
+            likup = &likus[likui];
+            memset (&rec, 0, sizeof (struct __outrec_dq_dt_stat_t));
+            rec.iclass = likup->pcl;
+            memcpy (rec.level, likup->l, SZ_level1);
+            memcpy (rec.id, likup->i, SZ_id1);
+            memcpy (rec.key, likup->k, SZ_key);
+            memcpy (rec.unit, likup->u, SZ_unit);
+            memcpy (rec.ilevel, likup->pl, SZ_level1);
+            memcpy (rec.iid, likup->pi, SZ_id1);
+            (*wfunc) (
+                wfp, &rec, wschemap, sizeof (struct __outrec_dq_dt_stat_t)
+            );
+        }
+    } else {
+        for (filei = 0; filei < filen; filei++) {
+            if (likum > 0)
+                if (sl_statopen (files[filei].name) != 0)
+                    continue;
+
+            for (likui = 0; likui < likum; likui++) {
+                likup = &likus[likui];
+                for (sp = sl_statfindfirst (
+                    likup->l, likup->i, likup->k, likup->u
+                ); sp; sp = sl_statfindnext (
+                    likup->l, likup->i, likup->k, likup->u
+                )) {
+                    memset (&rec, 0, sizeof (struct __outrec_dq_dt_stat_t));
+                    memcpy (&rec, sp, sizeof (sl_stat_t));
+                    rec.iclass = likup->pcl;
+                    memcpy (rec.ilevel, likup->pl, SZ_level1);
+                    memcpy (rec.iid, likup->pi, SZ_id1);
+                    rec.frame += files[filei].offset;
+                    if (rec.frame < ffr || rec.frame > lfr)
+                        continue;
+                    if (trn > 0 && !timerangesinrange (sp->sl_timeissued))
+                        continue;
+
+                    (*wfunc) (
+                        wfp, &rec, wschemap,
+                        sizeof (struct __outrec_dq_dt_stat_t)
+                    );
+                }
+            }
+            if (likum > 0)
+                sl_statclose ();
+        }
+    }
+}

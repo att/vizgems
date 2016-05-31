@@ -1,0 +1,17 @@
+#
+# Query setup options
+#
+
+# setting REMOTESPECS indicates that the data extraction part of the queries
+# should be executed on a list of remote servers and not on the local server.
+# the resulting data is collected and brought back to this server which
+# then runs the display generation part of the query.
+# this server must have the combined inventory of all the remote servers
+# so it must be on the CMSYS list of all these remote servers (see the
+# propdata.info file).
+# REMOTESPECS should contain a space separated list of server specs.
+# these specs are similar to the CMSYS specs: user1@server1:querypath1 ...
+# the difference is that the path component is the full path to the script
+# that must be executed to run the query on the remote system.
+# this script is usually .../vizgems/data/system/etc/rundataquery
+REMOTESPECS=

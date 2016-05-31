@@ -1,0 +1,16 @@
+suidserver=(
+  label="Data Server"
+  langs="ksh"
+  launch=no
+  groups="default"
+  default=(
+    label="Data Server Preferences"
+    entrylist="transmission"
+    entries=(
+      transmission=(
+        type=choice var=transmission val="Uncompressed"
+        label="Transmission Mode"
+      )
+    )
+  )
+)

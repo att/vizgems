@@ -1,0 +1,27 @@
+#!/bin/ksh
+
+rm -f data/.autoinvts data/.toooldts
+
+if [[ $(egrep 'TRANSRATE' etc/upload.info) == '' ]] then
+    (
+        print ''
+        print '# network speed in bits per second of this system'
+        print 'TRANSRATE=1000000'
+    ) >> etc/upload.info
+fi
+
+if [[ $(egrep 'TRANSJOBS' etc/upload.info) == '' ]] then
+    (
+        print ''
+        print '# max number of parallel transfer jobs'
+        print 'TRANSJOBS=8'
+    ) >> etc/upload.info
+fi
+
+if [[ $(egrep 'VG_RECTIME' etc/scheduler.info) == '' ]] then
+    (
+        print ''
+        print '# which time to use (schedule/current) in the generated records'
+        print 'export VG_RECTIME=schedule'
+    ) >> etc/scheduler.info
+fi

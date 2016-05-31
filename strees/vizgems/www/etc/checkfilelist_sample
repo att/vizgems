@@ -1,0 +1,34 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export LC_ALL=C LANG=C
+
+cd SWIFT_CFG_SWWWDIR/current || {
+    print -u2 ERROR cannot cd to SWIFT_CFG_SWWWDIR/current
+    exit 1
+}
+
+typeset -A files
+while read f; do
+    files[$f]=1
+done < etc/file.list
+
+tw -e 'if (path=="./(unlikely)/*") status=SKIP;' \
+| while read f; do
+    [[ ${files[$f]} != '' ]] && continue
+    [[ $f == *.old && -f ${f%.old} ]] && continue
+    print $f
+done
+

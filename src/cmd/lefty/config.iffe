@@ -1,0 +1,17 @@
+hdr termios,stdlib,unistd,errno,dirent,ndir
+sys ndir
+lib strerror,drand48,lrand48,srand48
+
+cat{
+#include <ast.h>
+#include <cdt.h>
+#include <stdio.h>
+#undef  HAVE__CNT_IN_FILE
+#undef  HAVE__ENDB_IN_FILE
+#undef  HAVE__IO_READ_END_IN_FILE
+#undef  HAVE__IO_READ_PTR_IN_FILE
+#undef  HAVE__NEXT_IN_FILE
+#undef  HAVE__R_IN_FILE
+#define HAVE__ENDB_IN_FILE      1
+#define HAVE__NEXT_IN_FILE      1
+}end

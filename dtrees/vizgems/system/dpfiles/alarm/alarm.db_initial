@@ -1,0 +1,706 @@
+################################################################
+#rule: any applies to dup suppression and race conditions
+#'any' entry groups identical alarms to one correlation group
+################################################################
+BEGIN
+TEXT $A
+ID any.1
+STATE info
+COMMENT Event Managed by Correlation Engine (race condition)
+END
+################################################################
+
+################################################################
+#rule: by-passing correlation engine
+#these entries are used to by-pass the 'any' entry
+################################################################
+BEGIN
+TEXT $AOVIS:$A
+ID ovis.1
+STATE info
+COMMENT By-passing Engine Rules: Direct Reporting
+END
+
+BEGIN
+TEXT $A+-CNT$A
+ID count.1
+STATE info
+COMMENT Countering in affect: Threshold applied
+END
+
+BEGIN
+TEXT $A--LOG$A
+ID logonly.1
+STATE info
+COMMENT Info: Log only message
+END
+
+BEGIN
+TEXT $A--CLERT$A
+ID clertnotik.1
+STATE info
+COMMENT Info: Ticketing disabled via runigems rule
+END
+
+BEGIN
+TEXT $A--SNMP$A
+ID snmpnotik.1
+STATE info
+COMMENT Info: Ticketing disabled via runigems rule
+END
+
+BEGIN
+TEXT $A--USER$A
+ID usernotik.1
+STATE info
+COMMENT Info: Ticketing disabled via runigems rule
+END
+
+BEGIN
+TEXT $A--PLA$A
+ID bmcnotik.1
+STATE info
+COMMENT Info: Ticketing disabled via runigems rule
+END
+
+BEGIN
+TEXT $APROBE_ICMP:$A
+ID probeicmp.1
+STATE info
+COMMENT By-passing Engine: Probe Rules applied
+END
+
+BEGIN
+TEXT $AURLPROBE:$A
+ID urlprobe.1
+STATE info
+COMMENT By-passing Engine: Probe Rules applied
+END
+
+BEGIN
+TEXT $APACKETLOSS:$A
+ID packetloss.1
+STATE info
+COMMENT By-passing Engine: Probe Rules applied
+END
+
+BEGIN
+TEXT $ALATENCY:$A
+ID latency.1
+COMMENT By-passing Engine: Probe Rules applied
+STATE info
+END
+
+BEGIN
+TEXT $APROBE_HB:$A
+ID probehb.1
+STATE info
+COMMENT By-passing Engine: Probe Rules applied
+END
+################################################################
+
+################################################################
+# in the following entries, these variables are defined for the GEN2_BALANCE correlation rule:
+# num_matchwindow <sec>
+#     maximum time difference between alarms that creates a match
+# num_balancemode (0|1)
+#     0 - add 1 for each alarm (volume counting)
+#     1 - add 1 for each down alarm and -1 for each up alarm (up/down balance)
+# num_ticketimmediatecount <integer>
+#     minimum balance count that causes a ticket to be issued
+# num_ticketdefercount <integer>
+# num_ticketdefertime <sec>
+#     minimum balance count that causes a ticket to be issued after num_ticketdefertime seconds
+#         even if num_ticketimmediatecount has not been reached
+#     num_ticketdefercount should be less than num_ticketimmediatecount
+#     num_ticketdefertime should be set to 0 to disable defered ticketing
+# num_ticketupdatetime <sec>
+#     interval to wait before refreshing a ticket, if set to 0, only one ticket will be created
+#         and the correlation counting will start from zero after that
+################################################################
+
+################################################################
+#rule: nortel real service/server (load balancer) alarms
+################################################################
+BEGIN
+TEXT $Acannot contact real server $1
+ID NetReal.1
+STATE down
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+UNIQUE ip
+TMODE defer
+COMMENT Assigned nortel real server rule
+END
+
+BEGIN
+TEXT $Areal server $1 operational
+ID NetReal.1
+STATE up
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+UNIQUE ip
+TMODE defer
+COMMENT Assigned nortel real server rule
+END
+
+BEGIN
+TEXT $Acannot contact real service $1:$2
+ID NetReal.2
+STATE down
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+VARIABLE port $2
+UNIQUE ip port
+TMODE defer
+COMMENT Assigned nortel real service rule
+END
+
+BEGIN
+TEXT $Areal service $1:$2 operational
+ID NetReal.2
+STATE up
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+VARIABLE port $2
+UNIQUE ip port
+TMODE defer
+COMMENT Assigned nortel real service rule
+END
+################################################################
+
+################################################################
+#rule: nortel port up/down messages
+################################################################
+BEGIN
+TEXT $AALERT$Alink down on port $1
+ID nortelport.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+UNIQUE port
+TMODE defer
+COMMENT Assigned nortel link port-flap rule
+END
+
+BEGIN
+TEXT $ANOTICE$Alink up on port $1
+ID nortelport.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+UNIQUE port
+TMODE defer
+COMMENT Assigned nortel link port-flap rule
+END
+################################################################
+
+################################################################
+#rule: nortel virtual server messages
+################################################################
+BEGIN
+TEXT $ANOTICE$ANo services are available for Virtual Server $1
+ID virtualserver.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+UNIQUE ip
+TMODE defer
+COMMENT Assigned nortel virtual server rule
+END
+
+BEGIN
+TEXT $ANOTICE$AServices are available for Virtual Server $1
+ID virtualserver.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+UNIQUE ip
+TMODE defer
+COMMENT Assigned nortel virtual server rule
+END
+################################################################
+
+################################################################
+#rule: foundry healthchecks
+################################################################
+BEGIN
+TEXT $Aserver $1 $A port $2 is down due to healthcheck
+ID NetFoundry.1
+STATE down
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+VARIABLE port $2
+UNIQUE ip port
+TMODE defer
+COMMENT Assigned foundry healthcheck rule
+END
+
+BEGIN
+TEXT $Aserver $1 $A port $2 is up
+ID NetFoundry.1
+STATE up
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE ip $1
+VARIABLE port $2
+UNIQUE ip port
+TMODE defer
+COMMENT Assigned foundry healthcheck rule
+END
+################################################################
+
+################################################################
+#rule: foundry port flapping
+################################################################
+BEGIN
+TEXT $AL4 server $1 $A port $2 is down$A
+ID foundryport.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE server $1
+VARIABLE port $2
+UNIQUE server port
+TMODE defer
+COMMENT Assigned foundry link port-flap rule
+END
+
+BEGIN
+TEXT $AL4 server $1 $A port $2 is up$A
+ID foundryport.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE server $1
+VARIABLE port $2
+UNIQUE server port
+TMODE defer
+COMMENT Assigned foundry link port-flap rule
+END
+################################################################
+
+################################################################
+#rule: foundry interface up/down
+################################################################
+BEGIN
+TEXT $AFoundry:$AInterface $1, state down
+ID foundryint.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE interface $1
+UNIQUE interface
+TMODE defer
+COMMENT Assigned foundry interface flapping rule
+END
+
+BEGIN
+TEXT $AFoundry:$AInterface $1, state up
+ID foundryint.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE interface $1
+UNIQUE interface
+TMODE defer
+COMMENT Assigned foundry interface flapping rule
+END
+################################################################
+
+################################################################
+#rule: cisco interface/port up/down
+################################################################
+BEGIN
+TEXT $ALINK-3-UPDOWN: Interface $1, changed state to down
+ID iosportflap.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+UNIQUE port
+TMODE defer
+COMMENT Assigned cisco interface/port flapping rule
+END
+
+BEGIN
+TEXT $ALINK-3-UPDOWN: Interface $1, changed state to up
+ID iosportflap.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+UNIQUE port
+TMODE defer
+COMMENT Assigned cisco interface/port flapping rule
+END
+################################################################
+
+################################################################
+#rule: cisco lineprotocol flapping
+################################################################
+BEGIN
+TEXT $ALINEPROTO-5-UPDOWN: $AInterface $1, changed state to down
+ID protoflap.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+UNIQUE port
+TMODE defer
+COMMENT Assigned cisco lineproto port-flap rule
+END
+
+BEGIN
+TEXT $ALINEPROTO-5-UPDOWN: $AInterface $1, changed state to up
+ID protoflap.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+UNIQUE port
+TMODE defer
+COMMENT Assigned cisco lineproto port-flap rule
+END
+################################################################
+
+################################################################
+#rule: cisco portstp message
+################################################################
+BEGIN
+TEXT $A%ETHC-5-PORTFROMSTP:Port $1 left bridge port $2
+ID portstp.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+VARIABLE bridge $2
+UNIQUE port bridge
+TMODE defer
+COMMENT Assigned stp bridge port rule
+END
+
+BEGIN
+TEXT $A%ETHC-5-PORTTOSTP:Port $1 joined bridge port $2
+ID portstp.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE port $1
+VARIABLE bridge $2
+UNIQUE port bridge
+TMODE defer
+COMMENT Assigned stp bridge port rule
+END
+################################################################
+#
+################################################################
+#rule: test threholding msgs
+################################################################
+BEGIN
+TEXT $ANOTICE testing thresh msgs $A
+ID thresh.1
+STATE down
+VARIABLE num_matchwindow 60
+VARIABLE num_ticketupdatetime 600
+VARIABLE num_balancemode 0
+VARIABLE num_ticketimmediatecount 5
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 0
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned threshold counter - params:[ cnt=5 dur=1m update=10m ]
+END
+################################################################
+#
+################################################################
+#rule: test threholding msgs: ignore 1st one the report within 30min
+################################################################
+BEGIN
+TEXT $AInsert the Biogen messages$A
+ID thresh.2
+STATE down
+VARIABLE num_matchwindow 1800
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 0
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 0
+VARIABLE num_ticketdefertime 0
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned threshold counter - params:[ cnt=2 (initial event ignored) dur=30min update=none ]
+END
+################################################################
+#
+################################################################
+#rule: smarts port flapping
+#SMARTS: Root cause event on device PORT-mdf1-bi15k-1.bos1.attens.net/833 [ethernet14/1]. Cert: 100% Indicates that a failure on a port or interface is the root cause."
+#SMARTS: Root cause CLEAR event on device PORT-mdf1-bi15k-1.bos1.attens.net/833 [ethernet14/1]. Cert: 100% Indicates that a failure on a port or interface is the root cause."
+################################################################
+BEGIN
+TEXT $ASMARTS: Root cause event on device PORT-$1 [$2]$A
+ID smarts.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE device $1
+VARIABLE port $2
+UNIQUE device port
+TMODE defer
+COMMENT Assigned smarts port-flap rule
+END
+
+BEGIN
+TEXT $ASMARTS: Root cause CLEAR event on device PORT-$1 [$2]$A
+ID smarts.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE device $1
+VARIABLE port $2
+UNIQUE device port
+TMODE defer
+COMMENT Assigned smarts port-flap rule
+END
+################################################################
+#rule: citrix cpu alarm
+#EVENT ALERTSTARTED : AlertStarted high_cpu_use
+#EVENT ALERTENDED : AlertEnded high_cpu_use
+################################################################
+BEGIN
+TEXT $AALERTSTARTED : AlertStarted high_cpu_use$A
+ID citrix.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned citrix cpu rule
+END
+
+BEGIN
+TEXT $AALERTENDED : AlertEnded high_cpu_use$A
+ID citrix.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned citrix cpu rule
+END
+################################################################
+#rule: sun authentication failures
+################################################################
+BEGIN
+TEXT $APerfigo: Authentication:Unable to login$A
+ID auth.1
+STATE down
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 0
+VARIABLE num_ticketimmediatecount 7
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 0
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned authentication counter - params:[ cnt=7 dur=15m ]
+END
+################################################################
+#rule: sun admin credentials failures
+################################################################
+BEGIN
+TEXT $APerfigo: Administration:Invalid admin credentials$A
+ID cred.1
+STATE down
+VARIABLE num_matchwindow 900
+VARIABLE num_ticketupdatetime 7200
+VARIABLE num_balancemode 0
+VARIABLE num_ticketimmediatecount 4
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 0
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned credential counter - params:[ cnt=4 dur=15m ]
+END
+################################################################
+#
+################################################################
+#rule: kernel link status messages
+################################################################
+BEGIN
+TEXT $ACLERT$A link status definitely down for interface $1, $A
+ID linkstatus.1
+STATE down
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE interface $1
+UNIQUE interface
+TMODE defer
+COMMENT kernel msg: up/down link (5min intervals)
+END
+
+BEGIN
+TEXT $ACLERT$A link status definitely up for primary interface $1, $A
+ID linkstatus.1
+STATE up
+VARIABLE num_matchwindow 300
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE interface $1
+UNIQUE interface
+TMODE defer
+COMMENT kernel msg: up/down link (5min intervals)
+END
+################################################################
+#rule: perfmon status messages
+################################################################
+BEGIN
+TEXT $A+-USER$A Express:$APerfMon Status is Down$A
+ID perfmon.1
+STATE down
+VARIABLE num_matchwindow 600
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned PerfMon down/up rule (10min intervals)
+END
+
+BEGIN
+TEXT $AUSER$A Express:$APerfMon Status is Up$A
+ID perfmon.1
+STATE up
+VARIABLE num_matchwindow 600
+VARIABLE num_ticketupdatetime 0
+VARIABLE num_balancemode 1
+VARIABLE num_ticketimmediatecount 2
+VARIABLE num_ticketdefercount 1
+VARIABLE num_ticketdefertime 300
+VARIABLE misc dummy
+UNIQUE misc
+TMODE defer
+COMMENT Assigned PerfMon down/up rule (10min intervals)
+END
+################################################################

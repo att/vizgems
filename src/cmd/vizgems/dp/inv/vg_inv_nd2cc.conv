@@ -1,0 +1,163 @@
+VARS{
+#include <cdt.h>
+
+#define SZ_level DDSSZ_inrec_inv_edge_level1
+#define SZ_id DDSSZ_inrec_inv_edge_id1
+
+typedef struct cc_s {
+    Dtlink_t link;
+    /* begin key */
+    char level[SZ_level];
+    char id[SZ_id];
+    /*/ end key */
+
+    struct cc_s *ccp;
+    int ndn;
+} cc_t;
+
+typedef struct nd_s {
+    Dtlink_t link;
+    /* begin key */
+    char level[SZ_level];
+    char id[SZ_id];
+    /* end key */
+
+    struct cc_s *ccp;
+} nd_t;
+
+static Dt_t *ccdict;
+static Dtdisc_t ccdisc = {
+    sizeof (Dtlink_t), SZ_level + SZ_id, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+static Dt_t *nddict;
+static Dtdisc_t nddisc = {
+    sizeof (Dtlink_t), SZ_level + SZ_id, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+
+static nd_t *insertnd (char *level, char *id) {
+    nd_t nd, *ndp, *ndmem;
+
+    memcpy (nd.level, level, SZ_level);
+    memcpy (nd.id, id, SZ_id);
+    if (!(ndp = dtsearch (nddict, &nd))) {
+        if (!(ndmem = vmalloc (Vmheap, sizeof (nd_t)))) {
+            SUwarning (0, "insertnd", "cannot allocate ndmem");
+            return NULL;
+        }
+        memset (ndmem, 0, sizeof (nd_t));
+        memcpy (ndmem->level, level, SZ_level);
+        memcpy (ndmem->id, id, SZ_id);
+        if ((ndp = dtinsert (nddict, ndmem)) != ndmem) {
+            SUwarning (0, "insertnd", "cannot insert nd");
+            vmfree (Vmheap, ndmem);
+            return NULL;
+        }
+    }
+    return ndp;
+}
+static cc_t *insertcc (char *level, char *id) {
+    cc_t cc, *ccp, *ccmem;
+
+    memcpy (cc.level, level, SZ_level);
+    memcpy (cc.id, id, SZ_id);
+    if (!(ccp = dtsearch (ccdict, &cc))) {
+        if (!(ccmem = vmalloc (Vmheap, sizeof (cc_t)))) {
+            SUwarning (0, "insertcc", "cannot allocate ccmem");
+            return NULL;
+        }
+        memset (ccmem, 0, sizeof (cc_t));
+        memcpy (ccmem->level, level, SZ_level);
+        memcpy (ccmem->id, id, SZ_id);
+        if ((ccp = dtinsert (ccdict, ccmem)) != ccmem) {
+            SUwarning (0, "insertcc", "cannot insert cc");
+            vmfree (Vmheap, ccmem);
+            return NULL;
+        }
+    }
+    return ccp;
+}
+cc_t *linkcc2cc (cc_t *ccp1, cc_t *ccp2) {
+    cc_t *ccp, *pccp1, *pccp2;
+
+    if (ccp2 == ccp1)
+        return ccp1;
+
+    for (pccp2 = ccp2, ccp = ccp2->ccp; ccp; ccp = ccp->ccp) {
+        if (ccp == ccp1)
+            return ccp1;
+        pccp2 = ccp;
+    }
+    for (pccp1 = ccp1, ccp = ccp1->ccp; ccp; ccp = ccp->ccp) {
+        if (ccp == ccp2)
+            return ccp1;
+        pccp1 = ccp;
+    }
+    if (pccp1 == pccp2)
+        return ccp1;
+    if (pccp1 < pccp2)
+        pccp1->ccp = pccp2;
+    else
+        pccp2->ccp = pccp1;
+    return ccp1;
+}
+}
+BEGIN{
+    if (!(ccdict = dtopen (&ccdisc, Dtset)))
+        SUerror ("vg_inv_nd2cc", "cannot create ccdict");
+    if (!(nddict = dtopen (&nddisc, Dtset)))
+        SUerror ("vg_inv_nd2cc", "cannot create nddict");
+}
+{
+    nd_t *ndp1, *ndp2;
+    cc_t *ccp1, *ccp2;
+
+    DROP;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (!(ndp1 = insertnd (IN->level1, IN->id1)))
+        SUerror ("vg_inv_nd2cc", "insertnd l failed");
+    if (!(ndp2 = insertnd (IN->level2, IN->id2)))
+        SUerror ("vg_inv_nd2cc", "insertnd r failed");
+    if (!ndp1->ccp) {
+        if (!(ccp1 = insertcc (IN->level1, IN->id1)))
+            SUerror ("vg_inv_nd2cc", "insertcc failed");
+        ndp1->ccp = ccp1;
+    }
+    if (!ndp2->ccp) {
+        if (!(ccp2 = insertcc (IN->level2, IN->id2)))
+            SUerror ("vg_inv_nd2cc", "insertcc failed");
+        ndp2->ccp = ccp2;
+    }
+    if (!linkcc2cc (ndp1->ccp, ndp2->ccp))
+        SUerror ("vg_inv_nd2cc", "linkcc2cc failed");
+}
+END{
+    nd_t *ndp;
+    cc_t *ccp;
+    struct __outrec_inv_cc_t rec;
+
+    for (ndp = dtfirst (nddict); ndp; ndp = dtnext (nddict, ndp)) {
+        for (ccp = ndp->ccp; ccp && ccp->ccp; ccp = ccp->ccp)
+            ;
+        ndp->ccp = ccp;
+        ccp->ndn++;
+    }
+    for (ndp = dtfirst (nddict); ndp; ndp = dtnext (nddict, ndp)) {
+        ccp = ndp->ccp;
+        if (ccp->ndn <= 1)
+            continue;
+        memcpy (rec.ndlevel, ndp->level, SZ_level);
+        memcpy (rec.ndid, ndp->id, SZ_id);
+        memcpy (rec.cclevel, ccp->level, SZ_level);
+        memcpy (rec.ccid, ccp->id, SZ_id);
+        rec.ndn = ndp->ccp->ndn;
+        (*wfunc) (wfp, &rec, wschemap, sizeof (struct __outrec_inv_cc_t));
+    }
+}

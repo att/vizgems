@@ -1,0 +1,12 @@
+suistyle=(
+  label="Style Preferences"
+  langs="ksh"
+  launch=no
+  groups="default"
+  default=(
+    label="Style Preferences"
+    entrylist=""
+    entries=(
+    )
+  )
+)

@@ -1,0 +1,84 @@
+set config
+
+hdr values,stdbool,malloc,stddef,stdlib,strings,string,unistd,limits,inttypes
+hdr stdint,errno,iconv,pthread,errno,fpu_control,fenv,iconv
+hdr expat -lexpat
+hdr zlib -lz
+hdr gts -lgts
+hdr triangle
+hdr freetype/freetype -lfreetype
+#hdr ft2build
+hdr jpeglib -ljpeg
+hdr png -lpng
+hdr ttf -lttf
+hdr xpm -lXpm
+
+sys types,fpu,mman
+
+lib sincos,lsqrt,log2 math.h -lm
+lib setenv,strcasecmp,strncasecmp,deflateBound,vsnprintf,vasprintf
+lib drand48,lrand48,srand48,cbrt,fesetenv
+lib feenableexcept fenv.h
+
+typ boolean,intptr
+
+mem jpeg_common_struct.client_data jpeglib.h
+
+hdr stdlib,errno,dirent,termios,ndir
+sys ndir
+lib strerror
+
+mem FILE._IO_read_end,FILE._IO_read_ptr,FILE._next,FILE._endb stdio.h
+mem FILE._cnt,FILE._r stdio.h
+
+exp HAVE_EXPAT HAVE_EXPAT_H & HAVE_EXPAT_LIB
+exp HAVE_SYS_TYPES_H _sys_types
+exp HAVE_LIBZ HAVE_ZLIB_H & HAVE_Z_LIB
+exp HAVE_GTS HAVE_GTS_H & HAVE_GTS_LIB
+exp HAVE_TRIANGLE HAVE_TRIANGLE_H
+exp HAVE_INTPTR_T HAVE_INTPTR
+exp HAVE_LIBFREETYPE HAVE_FREETYPE_LIB
+exp HAVE_FT2BUILD_H HAVE_FREETYPE_LIB
+exp HAVE_LIBJPEG HAVE_JPEGLIB_H & HAVE_JPEG_LIB & HAVE_LIBZ & HAVE_CLIENT_DATA_IN_JPEG_COMMON_STRUCT
+exp HAVE_LIBPNG HAVE_PNG_H & HAVE_PNG_LIB & HAVE_LIBZ
+exp HAVE_PTHREAD HAVE_PTHREAD_H
+exp HAVE_LIBTTF HAVE_TTF_H & HAVE_TTF_LIB
+exp HAVE_LIBXPM HAVE_XPM_H & HAVE_XPM_LIB
+exp HAVE_ICONV HAVE_ICONV_H
+exp HAVE_ICONV_T_DEF HAVE_ICONV_H
+
+exp HAVE_GD_FREETYPE HAVE_FREETYPE_LIB
+exp HAVE_GD_JPEG HAVE_JPEG_LIB
+exp HAVE_GD_PNG HAVE_PNG_LIB
+exp HAVE_GD_XPM HAVE_XPM_LIB
+
+exp HAVE_ERRNO_DECL HAVE_ERRNO_H
+
+cat{
+	#if _PACKAGE_ast
+	#include <ast.h>
+	#include <cdt.h>
+	#include <stdio.h>
+	#ifndef NIL
+	#define NIL(type) ((type)0)
+	#endif
+	#define DEFAULT_DPI 96
+	#define SFDP 1
+	#define ORTHO 1
+	#define VERSION "2.26.3"
+	#define DEMAND_LOADING 0
+	#define DEFAULT_FONTPATH "/usr/"
+
+	#define HAVE_GD_GIF 1
+	#define HAVE_LIBGD 1
+
+	#undef  HAVE__CNT_IN_FILE
+	#undef  HAVE__ENDB_IN_FILE
+	#undef  HAVE__IO_READ_END_IN_FILE
+	#undef  HAVE__IO_READ_PTR_IN_FILE
+	#undef  HAVE__NEXT_IN_FILE
+	#undef  HAVE__R_IN_FILE
+	#define HAVE__ENDB_IN_FILE      1
+	#define HAVE__NEXT_IN_FILE      1
+	#endif
+}end

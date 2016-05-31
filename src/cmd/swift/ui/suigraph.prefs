@@ -1,0 +1,41 @@
+suigraph=(
+  label="Graph Viewer"
+  langs="lefty java"
+  uselang=lefty
+  launch=yes
+  groups="default"
+  default=(
+    label="Graph Viewer Preferences"
+    entrylist=" \
+      vieworigin viewsize viewcolor showtitle title showcontrol canvascolor \
+    "
+    entries=(
+      vieworigin=(
+        type=coord var=vieworigin val="0 0" label="Window Position"
+      )
+      viewsize=(
+        type=coord var=viewsize val="800 400" label="Window Size"
+      )
+      viewcolor=(
+        type=2colors var=viewcolor val="gray black"
+        label="Window Colors"
+      )
+
+      showtitle=(
+        type=yesno var=showtitle val=no label="Show Title"
+      )
+      title=(
+        type=text var=title val="SWIFTUI - Graph View" label="Title"
+      )
+
+      showcontrol=(
+        type=yesno var=showcontrol val=yes label="Show Controls"
+      )
+
+      canvascolor=(
+        type=2colors var=canvascolor val="black white"
+        label="Canvas Colors"
+      )
+    )
+  )
+)

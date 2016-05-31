@@ -1,0 +1,90 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH
+add2path SWIFT_CFG_SWWWDIR/current
+
+case $1 in
+setup)
+    rm -f SWIFT_CFG_DWWWDIR/bin/httpd
+    for i in /usr/sbin/httpd /usr/sbin/httpd2; do
+        if [[ -x $i ]] then
+            ln -s $i SWIFT_CFG_DWWWDIR/bin/httpd
+            break
+        fi
+    done
+    if [[ ! -x SWIFT_CFG_DWWWDIR/bin/httpd ]] then
+        print -u2 ERROR no apache server binary found
+        exit 1
+    fi
+    rm -f SWIFT_CFG_DWWWDIR/bin/htpasswd
+    for i in /usr/bin/htpasswd /usr/bin/htpasswd2; do
+        if [[ -x $i ]] then
+            ln -s $i SWIFT_CFG_DWWWDIR/bin/htpasswd
+            break
+        fi
+    done
+    if [[ ! -x SWIFT_CFG_DWWWDIR/bin/htpasswd ]] then
+        print -u2 ERROR no password binary found
+        exit 1
+    fi
+    rm -f SWIFT_CFG_DWWWDIR/modules/*
+    if [[ $(uname -a) == *x86_64* ]] then
+        dirs="/usr/lib64/httpd/modules /usr/lib64/apache2-prefork /usr/lib64/apache2"
+    else
+        dirs="/usr/lib/httpd/modules /usr/lib/apache2-prefork /usr/lib/apache2"
+    fi
+    rm -f SWIFT_CFG_DWWWDIR/modules/mod_*.so
+    for dir in $dirs; do
+        for i in $dir/mod_*.so; do
+            [[ ! -f $i ]] && continue
+            [[ -f SWIFT_CFG_DWWWDIR/modules/${i##*/} ]] && continue
+            ln -s $i SWIFT_CFG_DWWWDIR/modules
+        done
+    done
+    ;;
+start)
+    if [[ ! -f SWIFT_CFG_DWWWDIR/active ]] then
+        exit 0
+    fi
+    if [[ $2 == check && -f SWIFT_CFG_DWWWDIR/exit.www ]] then
+        exit 0
+    fi
+    if [[
+        SWIFT_CFG_DWWWDIR/accounts/current -nt \
+        SWIFT_CFG_DSYSTEMDIR/dpfiles/account.filter
+    ]] then
+        SWIFT_CFG_DWWWDIR/etc/accountdump
+    fi
+    if [[ ! -f SWIFT_CFG_DWWWDIR/.dbm ]] then
+        SWIFT_CFG_DWWWDIR/etc/loaddbm > /dev/null 2>&1
+    fi
+    rm -f SWIFT_CFG_DWWWDIR/exit.www
+    if [[ -x SWIFT_CFG_DWWWDIR/bin/apachectl ]] then
+        SWIFT_CFG_DWWWDIR/bin/apachectl start > /dev/null 2>&1
+    fi
+    if [[ $(printf '%(%M)T') == 00 ]] then
+        sleep 5
+        SWIFT_CFG_DWWWDIR/etc/swmhb > /dev/null 2>&1
+        SWIFT_CFG_DWWWDIR/etc/swmcleanup > /dev/null 2>&1
+    fi
+    ;;
+stop)
+    if [[ ! -f SWIFT_CFG_DWWWDIR/active ]] then
+        exit 0
+    fi
+    touch SWIFT_CFG_DWWWDIR/exit.www
+    if [[ -x SWIFT_CFG_DWWWDIR/bin/apachectl ]] then
+        SWIFT_CFG_DWWWDIR/bin/apachectl stop > /dev/null 2>&1
+        rm -f SWIFT_CFG_DWWWDIR/logs/httpd.pid
+    fi
+    while [[ -f SWIFT_CFG_DWWWDIR/lock.www ]] do
+        sleep 1
+    done
+    ;;
+esac

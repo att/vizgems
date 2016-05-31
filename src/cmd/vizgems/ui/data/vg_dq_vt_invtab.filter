@@ -1,0 +1,213 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+#define STATE_NONE   0
+#define STATE_PNODE  1
+#define STATE_SNODE  2
+#define STATE_PPEDGE 3
+#define STATE_PSEDGE 4
+#define STATE_SPEDGE 5
+#define STATE_SSEDGE 6
+static int cstate, nstate;
+
+static char *fprefix, *iprefix;
+static int findex;
+static char *rendermode, *pagemode;
+static char *sortorder, *sorturl;
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("INVTABATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot load attr file");
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_invtab", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_invtab", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_invtab", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_SORTORDER].str)
+        SUerror ("vg_dq_vt_invtab", "cannot find sortorder");
+    sortorder = attrs[ATTR_SORTORDER].str;
+    if (!attrs[ATTR_SORTURL].str)
+        SUerror ("vg_dq_vt_invtab", "cannot find sorturl");
+    sorturl = attrs[ATTR_SORTURL].str;
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_invtab", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot init UT");
+    if (RIinit (fprefix, iprefix, 0) == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot init RI");
+    if (EMinit (getenv ("INVTABEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot init EM");
+    if (ITBinit (pagemode) == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot init ITB");
+}
+{
+    ITBnd_t *ndp1, *ndp2;
+
+    DROP;
+
+    if (cat != VG_QUERY_N_CAT_RESULT)
+        return __result;
+
+    switch (type) {
+    case VG_QUERY_N_TYPE_NODE:
+        if (attreval (
+            level1, id1, NULL, NULL, (
+                class1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEATTR : ATTR_SNODEATTR, ATTRENC_HTML
+        ) == -1)
+            SUerror ("vg_dq_vt_invtab", "cannot get node attr");
+        if (!strstr (attrstr, "_SKIP_") && !(ndp1 = ITBinsertnd (
+            level1, id1, class1, attrstr
+        )))
+            SUerror ("vg_dq_vt_invtab", "cannot insert nd");
+        break;
+    case VG_QUERY_N_TYPE_EDGE:
+        if (!(ndp1 = ITBfindnd (level1, id1)))
+            SUerror ("vg_dq_vt_invtab", "cannot find lhs node");
+        if (!(ndp2 = ITBfindnd (level2, id2)))
+            SUerror ("vg_dq_vt_invtab", "cannot find rhs node");
+        if (attreval (
+            ndp1->level, ndp1->id, ndp2->level, ndp2->id, (
+                ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ((
+                ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PPEDGEATTR : ATTR_PSEDGEATTR) : ((
+                ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_SPEDGEATTR : ATTR_SSEDGEATTR), ATTRENC_HTML
+        ) == -1)
+            SUerror ("vg_dq_vt_invtab", "cannot get edge attr");
+        if (!strstr (attrstr, "_SKIP_") && !ITBinserted (ndp1, ndp2, attrstr))
+            SUerror ("vg_dq_vt_invtab", "cannot insert ed");
+        break;
+    }
+}
+END{
+    ITBnd_t *ndp;
+    int ndi;
+    ITBed_t *edp;
+    int edi;
+    int hdrflag;
+
+    if (ITBflatten (sortorder, sorturl) == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot flatten");
+
+    if (ITBsetupprint (rendermode, attrs[ATTR_INVTABATTR].str) == -1)
+        SUerror ("vg_dq_vt_invtab", "cannot setup printing");
+
+    cstate = STATE_NONE;
+
+    for (ndi = 0; ndi < ITBndn; ndi++) {
+        ndp = ITBnds[ndi];
+        if (attreval (
+            ndp->level, ndp->id, NULL, NULL, (
+                ndp->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEURL : ATTR_SNODEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_invtab", "cannot get node url");
+        sfsprintf (objstr, OBJLEN, "n|%s|%s", ndp->level, ndp->id);
+        nstate = (
+            ndp->nclass == VG_QUERY_N_CLASS_PRIMARY
+        ) ?  STATE_PNODE : STATE_SNODE;
+        hdrflag = FALSE;
+        if (cstate != nstate) {
+            if (cstate != STATE_NONE && ITBendnd () == -1) {
+                SUwarning (0, "vg_dq_vt_invtab", "cannot end nd file");
+                return -1;
+            }
+            cstate = nstate;
+            if (ITBbeginnd (fprefix, findex++) == -1) {
+                SUwarning (0, "vg_dq_vt_invtab", "cannot begin nd file");
+                return -1;
+            }
+            hdrflag = TRUE;
+        }
+        if (ITBprintnd (hdrflag, ndp, attrstr, objstr) == -1)
+            SUerror ("vg_dq_vt_invtab", "cannot print nd");
+        if (ndi == ITBndn - 1) {
+            if (ITBendnd () == -1) {
+                SUwarning (0, "vg_dq_vt_invtab", "cannot end nd file");
+                return -1;
+            }
+        }
+    }
+
+    cstate = STATE_NONE;
+
+    for (edi = 0; edi < ITBedn; edi++) {
+        edp = ITBeds[edi];
+        if (attreval (
+            edp->ndp1->level, edp->ndp1->id, edp->ndp2->level, edp->ndp2->id, (
+                edp->ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ((
+                edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PPEDGEURL : ATTR_PSEDGEURL) : ((
+                edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_SPEDGEURL : ATTR_SSEDGEURL), ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_invtab", "cannot get edge url");
+        sfsprintf (
+            objstr, OBJLEN, "e|%s|%s|%s|%s",
+            edp->ndp1->level, edp->ndp1->id, edp->ndp2->level, edp->ndp2->id
+        );
+        nstate = (
+            edp->ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+        ) ? ((
+            edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+        ) ? STATE_PPEDGE : STATE_PSEDGE) : ((
+            edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+        ) ? STATE_SPEDGE : STATE_SSEDGE);
+        hdrflag = FALSE;
+        if (cstate != nstate) {
+            if (cstate != STATE_NONE && ITBended () == -1) {
+                SUwarning (0, "vg_dq_vt_invtab", "cannot end ed file");
+                return -1;
+            }
+            cstate = nstate;
+            if (ITBbegined (fprefix, findex++) == -1) {
+                SUwarning (0, "vg_dq_vt_invtab", "cannot begin ed file");
+                return -1;
+            }
+            hdrflag = TRUE;
+        }
+        if (ITBprinted (hdrflag, edp, attrstr, objstr) == -1)
+            SUerror ("vg_dq_vt_invtab", "cannot print edge");
+        if (edi == ITBedn - 1) {
+            if (ITBended () == -1) {
+                SUwarning (0, "vg_dq_vt_invtab", "cannot end ed file");
+                return -1;
+            }
+        }
+    }
+}

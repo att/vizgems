@@ -1,0 +1,40 @@
+#!/bin/ksh
+
+if [[ $1 == '' || $2 == '' || $3 == '' ]] then
+    print -u2 "usage: mksnmp <name> <arch> <version>"
+    exit
+fi
+n=$1
+a=$2
+v=$3
+shift 3
+
+print mksnmp $n $a $v
+
+rm -rf $n.$a.$v.sw
+mkdir -p $n.$a.$v.sw
+
+exp='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+(
+    cd ..
+    pax -ps -rw mibs vgship/$n.$a.$v.sw
+)
+
+mkdir $n.$a.$v.sw/bin
+walks=$(tw -d ${n//snmp/system}.$a.$v.sw -e 'name=="vgsnmp*walk"')
+if [[ $walks != '' ]] then
+    cp -p $walks $n.$a.$v.sw/bin
+fi
+
+(
+    cd ../strees/vizgems/snmp
+    pax -ps -rw . ../../../vgship/$n.$a.$v.sw
+)
+
+rm -rf $n.$a.$v.data
+mkdir -p $n.$a.$v.data
+
+(
+    cd ../dtrees/vizgems/snmp
+    pax -ps -rw . ../../../vgship/$n.$a.$v.data
+)

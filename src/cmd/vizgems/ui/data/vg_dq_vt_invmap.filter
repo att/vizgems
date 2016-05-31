@@ -1,0 +1,163 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, maxpix;
+static char *rendermode, *pagemode;
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("INVMAPATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot load attr file");
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_invmap", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_invmap", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_invmap", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_MAXPIXEL].str)
+        SUerror ("vg_dq_vt_invmap", "cannot find maxpixel");
+    maxpix = atoi (attrs[ATTR_MAXPIXEL].str);
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_invmap", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot init UT");
+    if (RIinit (fprefix, iprefix, maxpix) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot init RI");
+    if (EMinit (getenv ("INVMAPEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot init EM");
+    if (IMPinit (getenv ("INVMAPGEOMDIR"), pagemode) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot init IMP");
+}
+{
+    IMPnd_t *ndp1, *ndp2;
+
+    DROP;
+
+    if (cat != VG_QUERY_N_CAT_RESULT)
+        return __result;
+
+    switch (type) {
+    case VG_QUERY_N_TYPE_NODE:
+        if (attreval (
+            level1, id1, NULL, NULL, (
+                class1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEATTR : ATTR_SNODEATTR, ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_invmap", "cannot get node attr");
+        if (!(ndp1 = IMPinsertnd (level1, id1, class1, attrstr)))
+            SUerror ("vg_dq_vt_invmap", "cannot insert nd");
+        break;
+    case VG_QUERY_N_TYPE_EDGE:
+        if (!(ndp1 = IMPfindnd (level1, id1)))
+            SUerror ("vg_dq_vt_invmap", "cannot find lhs node");
+        if (!(ndp2 = IMPfindnd (level2, id2)))
+            SUerror ("vg_dq_vt_invmap", "cannot find rhs node");
+        if (attreval (
+            ndp1->level, ndp1->id, ndp2->level, ndp2->id, (
+                ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ((
+                ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PPEDGEATTR : ATTR_PSEDGEATTR) : ((
+                ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_SPEDGEATTR : ATTR_SSEDGEATTR), ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_invmap", "cannot get edge attr");
+        if (!IMPinserted (ndp1, ndp2, attrstr))
+            SUerror ("vg_dq_vt_invmap", "cannot insert ed");
+        break;
+    }
+}
+END{
+    IMPnd_t *ndp;
+    int ndi;
+    IMPed_t *edp;
+    int edi;
+    char tlurl[ATTRBUFLEN];
+
+    tlurl[0] = 0;
+    if (IMPflatten () == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot flatten");
+
+    if (IMPndn > 0 && attreval (
+        IMPnds[0]->level, IMPnds[0]->id, NULL, NULL, ATTR_TITLEURL, ATTRENC_URL
+    ) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot get title url");
+    if (IMPndn > 0)
+        strncpy (tlurl, attrstr, ATTRBUFLEN);
+    if (IMPndn > 0 && attreval (
+        IMPnds[0]->level, IMPnds[0]->id, NULL, NULL,
+        ATTR_TITLEATTR, ATTRENC_SIMPLE
+    ) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot get title attr");
+    if (IMPndn > 0)
+        sfsprintf (objstr, OBJLEN, "n|%s|%s", IMPnds[0]->level, IMPnds[0]->id);
+    if (IMPbegindraw (
+        fprefix, findex, attrs[ATTR_INVMAPATTR].str, attrstr, tlurl, objstr
+    ) == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot begin drawing");
+
+    for (edi = 0; edi < IMPedn; edi++) {
+        edp = IMPeds[edi];
+        if (attreval (
+            edp->ndp1->level, edp->ndp1->id, edp->ndp2->level, edp->ndp2->id, (
+                edp->ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ((
+                edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PPEDGEURL : ATTR_PSEDGEURL) : ((
+                edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_SPEDGEURL : ATTR_SSEDGEURL), ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_invmap", "cannot get edge url");
+        sfsprintf (
+            objstr, OBJLEN, "e|%s|%s|%s|%s",
+            edp->ndp1->level, edp->ndp1->id, edp->ndp2->level, edp->ndp2->id
+        );
+        if (IMPdrawedge (edp, attrstr, objstr) == -1)
+            SUerror ("vg_dq_vt_invmap", "cannot draw edge");
+    }
+    for (ndi = 0; ndi < IMPndn; ndi++) {
+        ndp = IMPnds[ndi];
+        if (attreval (
+            ndp->level, ndp->id, NULL, NULL, (
+                ndp->nclass == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEURL : ATTR_SNODEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_invmap", "cannot get node url");
+        sfsprintf (objstr, OBJLEN, "n|%s|%s", ndp->level, ndp->id);
+        if (IMPdrawnode (ndp, attrstr, objstr) == -1)
+            SUerror ("vg_dq_vt_invmap", "cannot draw node");
+    }
+    if (IMPenddraw () == -1)
+        SUerror ("vg_dq_vt_invmap", "cannot end drawing");
+}

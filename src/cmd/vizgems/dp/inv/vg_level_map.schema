@@ -1,0 +1,8 @@
+name level_map
+field id1 char 4
+field id2 char 4
+field index int
+field dir int
+field iid1 char 4
+field iid2 char 4
+field orig int

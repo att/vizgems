@@ -1,0 +1,440 @@
+rec=(
+    prepend='
+        typeset -A umap smap ssevmap
+        umap[-1]=
+        umap[0]=other
+        umap[1]=Volts
+        umap[2]=Amps
+        umap[3]=Watt
+        umap[4]=voltamp
+        umap[5]=wattHour
+        umap[6]=voltampHour
+        umap[7]=degreeC
+        umap[8]=hertz
+        umap[9]=%
+        umap[10]=meterpersec
+        umap[11]=pascal
+        umap[12]=psi
+        umap[13]=g
+        umap[14]=degreeF
+        umap[15]=feet
+        umap[16]=inches
+        umap[17]=cm
+        umap[18]=meters
+        umap[19]=rpm
+        umap[20]=degrees
+
+        smap[-1]=unavailable
+        smap[0]=open
+        smap[1]=closed
+        smap[2]=belowLowerCritical
+        smap[3]=belowLowerWarning
+        smap[4]=normal
+        smap[5]=aboveUpperWarning
+        smap[6]=aboveUpperCritical
+        smap[7]=on
+        smap[8]=off
+        smap[9]=detected
+        smap[10]=notDetected
+        smap[11]=alarmed
+        smap[12]=ok
+        smap[13]=marginal
+        smap[14]=fail
+        smap[15]=yes
+        smap[16]=no
+        smap[17]=standby
+        smap[18]=one
+        smap[19]=two
+        smap[20]=inSync
+        smap[21]=outOfSync
+
+        ssevmap[-1]=4
+        ssevmap[0]=4
+        ssevmap[1]=4
+        ssevmap[2]=1
+        ssevmap[3]=4
+        ssevmap[4]=0
+        ssevmap[5]=4
+        ssevmap[6]=1
+        ssevmap[7]=0
+        ssevmap[8]=4
+        ssevmap[9]=0
+        ssevmap[10]=4
+        ssevmap[11]=2
+        ssevmap[12]=0
+        ssevmap[13]=2
+        ssevmap[14]=1
+        ssevmap[15]=0
+        ssevmap[16]=0
+        ssevmap[17]=0
+        ssevmap[18]=0
+        ssevmap[19]=0
+        ssevmap[20]=0
+        ssevmap[21]=2
+
+        if [[ $INVMODE == y ]] then
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.3.3.6.1.6 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                phase=${oid%.*}; phase=${phase##*.}
+                phases[$phase]=$phase
+            done
+        else
+            float cvalue uvalue  vvalue pvalue fvalue
+            cunit= uunit= vunit= punit= funit=
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.3.3.4.1.6 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                case $oid in
+                *.1) cunit=${umap[$val]:-""} ;;
+                *.3) uunit=${umap[$val]:-""} ;;
+                *.4) vunit=${umap[$val]:-""} ;;
+                *.5) punit=${umap[$val]:-""} ;;
+                *.7) funit=factor ;;
+                esac
+            done
+            cdigits= udigits= vdigits= pdigits= fdigits=
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.3.3.4.1.7 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                case $oid in
+                *.1) cdigits=$val ;;
+                *.3) udigits=$val ;;
+                *.4) vdigits=$val ;;
+                *.5) pdigits=$val ;;
+                *.7) fdigits=$val ;;
+                esac
+            done
+            cvalue= uvalue= vvalue= pvalue= fvalue=
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.5.2.3.1.4 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                case $oid in
+                *.1) cvalue=$val ;;
+                *.3) uvalue=$val ;;
+                *.4) vvalue=$val ;;
+                *.5) pvalue=$val ;;
+                *.7) fvalue=$val ;;
+                esac
+            done
+            cstate= ustate= vstate= pstate= fstate=
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.5.2.3.1.3 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                case $oid in
+                *.1) cstatesev=${ssevmap[$val]:-0}; cstate=${smap[$val]:-""} ;;
+                *.3) ustatesev=${ssevmap[$val]:-0}; ustate=${smap[$val]:-""} ;;
+                *.4) vstatesev=${ssevmap[$val]:-0}; vstate=${smap[$val]:-""} ;;
+                *.5) pstatesev=${ssevmap[$val]:-0}; pstate=${smap[$val]:-""} ;;
+                *.7) fstatesev=${ssevmap[$val]:-0}; fstate=${smap[$val]:-""} ;;
+                esac
+            done
+            while (( cdigits-- > 0 )) do
+                (( cvalue /= 10.0 ))
+            done
+            while (( udigits-- > 0 )) do
+                (( uvalue /= 10.0 ))
+            done
+            while (( vdigits-- > 0 )) do
+                (( vvalue /= 10.0 ))
+            done
+            while (( pdigits-- > 0 )) do
+                (( pvalue /= 10.0 ))
+            done
+            while (( fdigits-- > 0 )) do
+                (( fvalue /= 10.0 ))
+            done
+            if [[ $cvalue == +([0-9.]) ]] then
+                print "rt=STAT name=sensor_current._total type=number num=$cvalue unit=$cunit label=\"Current (All)\""
+            fi
+            if [[ $uvalue == +([0-9.]) ]] then
+                print "rt=STAT name=sensor_ucurrent._total type=number num=$uvalue unit=$uunit label=\"U.Current (All)\""
+            fi
+            if [[ $pvalue == +([0-9.]) ]] then
+                print "rt=STAT name=sensor_power._total type=number num=$pvalue unit=$punit label=\"Power (All)\""
+            fi
+            if [[ $vvalue == +([0-9.]) ]] then
+                print "rt=STAT name=sensor_volts._total type=number num=$vvalue unit=$vunit label=\"Volts (All)\""
+            fi
+            if [[ $fvalue == +([0-9.]) ]] then
+                print "rt=STAT name=sensor_pf._total type=number num=$fvalue unit=$funit label=\"P.Factor (All)\""
+            fi
+            if (( cstatesev != 0 )) then
+                print "rt=ALARM sev=$cstatesev type=ALARM tech=raritanpx txt=\"Inlet - Current state: $cstate\""
+            fi
+            if (( ustatesev != 0 )) then
+                print "rt=ALARM sev=$ustatesev type=ALARM tech=raritanpx txt=\"Inlet - U.Current state: $cstate\""
+            fi
+            if (( vstatesev != 0 )) then
+                print "rt=ALARM sev=$vstatesev type=ALARM tech=raritanpx txt=\"Inlet - Voltage state: $vstate\""
+            fi
+            if (( pstatesev != 0 )) then
+                print "rt=ALARM sev=$pstatesev type=ALARM tech=raritanpx txt=\"Inlet - Power state: $pstate\""
+            fi
+            if (( fstatesev != 0 )) then
+                print "rt=ALARM sev=$fstatesev type=ALARM tech=raritanpx txt=\"Inlet - P.Factor state: $fstate\""
+            fi
+
+            typeset -A cunits vunits cdigitss vdigitss cvalues vvalues cstates vstates cstatesevs vstatesevs
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.3.3.6.1.6 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                phase=${oid%.*}; phase=${phase##*.}
+                phases[$phase]=$phase
+                case $oid in
+                *.1) cunits[$phase]=${umap[$val]:-""} ;;
+                *.4) vunits[$phase]=${umap[$val]:-""} ;;
+                esac
+            done
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.3.3.6.1.7 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                phase=${oid%.*}; phase=${phase##*.}
+                case $oid in
+                *.1) cdigitss[$phase]=$val ;;
+                *.4) vdigitss[$phase]=$val ;;
+                esac
+            done
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.5.2.4.1.4 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                phase=${oid%.*}; phase=${phase##*.}
+                case $oid in
+                *.1) cvalues[$phase]=$val ;;
+                *.4) vvalues[$phase]=$val ;;
+                esac
+            done
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.6.5.2.4.1.3 | while read -r line; do
+                oid=${line%%" "*}
+                val=${line##*" "}
+                phase=${oid%.*}; phase=${phase##*.}
+                case $oid in
+                *.1) cstatesevs[$phase]=${ssevmap[$val]:-0}; cstates[$phase]=${smap[$val]:-""} ;;
+                *.4) vstatesevs[$phase]=${ssevmap[$val]:-0}; vstates[$phase]=${smap[$val]:-""} ;;
+                esac
+            done
+            for phase in ${phases[@]}; do
+                while (( cdigitss["$phase"]-- > 0 )) do
+                    (( cvalues["$phase"] /= 10.0 ))
+                done
+                while (( vdigitss["$phase"]-- > 0 )) do
+                    (( vvalues["$phase"] /= 10.0 ))
+                done
+                if [[ ${cvalues[$phase]} == +([0-9.]) ]] then
+                    print "rt=STAT name=sensor_current.l$phase type=number num=${cvalues[$phase]} unit=${cunits[$phase]} label=\"Current (L$phase)\""
+                else
+                    print "rt=STAT name=sensor_current.l$phase nodata=2"
+                fi
+                if [[ ${vvalues[$phase]} == +([0-9.]) ]] then
+                    print "rt=STAT name=sensor_volts.l$phase type=number num=${vvalues[$phase]} unit=${vunits[$phase]} label=\"Volts (L$phase-L$(( 1 + (phase % 3) )))\""
+                else
+                    print "rt=STAT name=sensor_volts.l$phase nodata=2"
+                fi
+                print "rt=STAT name=sensor_power.l$phase nodata=2"
+                print "rt=STAT name=sensor_pf.l$phase nodata=2"
+                if [[ ${cstatesevs[$phase]} != @(0|) ]] then
+                    print "rt=ALARM sev=${cstatesevs[$phase]} type=ALARM tech=raritanpx txt=\"Inlet L$phase - Current state: ${cstates[$phase]}\""
+                fi
+                if [[ ${vstatesevs[$phase]} != @(0|) ]] then
+                    print "rt=ALARM sev=${vstatesevs[$phase]} type=ALARM tech=raritanpx txt=\"Inlet L$phase-L$(( 1 + (phase % 3) )) - Voltage state: ${vstates[$phase]}\""
+                fi
+            done
+        fi
+    '
+
+    keys=INDEX
+    walk0=(
+        name='.1.3.6.1.4.1.13742.6.4.1.2.1.3.${INDEX}' # outletSwitchingState
+        type=INTEGER
+        value='${STATUS}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.13742.6.3.5.3.1.3.${INDEX}' # outletName
+        type=STRING
+        value='${NAME}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.13742.6.3.5.3.1.29.${INDEX}' # outletReceptacleDescriptor
+        type=STRING
+        value='${DESCR}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.6.${INDEX}.1' # outletSensorUnits - rmsCurrent
+        type=INTEGER
+        value='${CUNIT}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.6.${INDEX}.4' # outletSensorUnits - rmsVoltage
+        type=INTEGER
+        value='${VUNIT}'
+    )
+    walk5=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.6.${INDEX}.5' # outletSensorUnits - activePower
+        type=INTEGER
+        value='${PUNIT}'
+    )
+    walk6=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.6.${INDEX}.7' # outletSensorUnits - powerFactor
+        type=INTEGER
+        value='${FUNIT}'
+    )
+    walk7=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.7.${INDEX}.1' # outletSensorDecimalDigits - rmsCurrent
+        type=INTEGER
+        value='${CDIGITS}'
+    )
+    walk8=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.7.${INDEX}.4' # outletSensorDecimalDigits - rmsVoltage
+        type=INTEGER
+        value='${VDIGITS}'
+    )
+    walk9=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.7.${INDEX}.5' # outletSensorDecimalDigits - activePower
+        type=INTEGER
+        value='${PDIGITS}'
+    )
+    walk10=(
+        name='.1.3.6.1.4.1.13742.6.3.5.4.1.7.${INDEX}.7' # outletSensorDecimalDigits - powerFactor
+        type=INTEGER
+        value='${FDIGITS}'
+    )
+    walk11=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.4.${INDEX}.1' # measurementsOutletSensorValue - rmsCurrent
+        type=INTEGER
+        value='${CVALUE}'
+    )
+    walk12=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.4.${INDEX}.4' # measurementsOutletSensorValue - rmsVoltage
+        type=INTEGER
+        value='${VVALUE}'
+    )
+    walk13=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.4.${INDEX}.5' # measurementsOutletSensorValue - activePower
+        type=INTEGER
+        value='${PVALUE}'
+    )
+    walk14=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.4.${INDEX}.7' # measurementsOutletSensorValue - powerFactor
+        type=INTEGER
+        value='${FVALUE}'
+    )
+    walk15=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.3.${INDEX}.1' # measurementsOutletSensorState - rmsCurrent
+        type=INTEGER
+        value='${CSTATE}'
+    )
+    walk16=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.3.${INDEX}.4' # measurementsOutletSensorState - rmsVoltage
+        type=INTEGER
+        value='${VSTATE}'
+    )
+    walk17=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.3.${INDEX}.5' # measurementsOutletSensorState - activePower
+        type=INTEGER
+        value='${PSTATE}'
+    )
+    walk18=(
+        name='.1.3.6.1.4.1.13742.6.5.4.3.1.3.${INDEX}.7' # measurementsOutletSensorState - powerFactor
+        type=INTEGER
+        value='${FSTATE}'
+    )
+
+    outkey=INDEX
+    output='${INDEX}|${STATUS}|${NAME}|${DESCR}|${CUNIT}|${CDIGITS}|${CVALUE}|${CSTATE}|${VUNIT}|${VDIGITS}|${VVALUE}|${VSTATE}|${PUNIT}|${PDIGITS}|${PVALUE}|${PSTATE}|${FUNIT}|${FDIGITS}|${FVALUE}|${FSTATE}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r index status name descr cunit cdigits cvalue cstate vunit vdigits vvalue vstate punit pdigits pvalue pstate funit fdigits fvalue fstate; do
+                if [[ $status == 7 ]] then
+                    status=1
+                else
+                    status=0
+                fi
+
+                index=${index//./_}
+                name=${name//[\"\|]/}; name=${name##+(" ")}; name=${name%%+(" ")}
+                [[ $name == "" ]] && name=$index
+
+                if [[ $status == 1 ]] then
+                    print "node|o|$INV_TARGET|si_status$index|up"
+                    print "node|o|$INV_TARGET|si_port$index|$index"
+                else
+                    print "node|o|$INV_TARGET|si_status$index|down"
+                fi
+                print "node|o|$INV_TARGET|si_name$index|$name"
+            done
+            for phase in ${phases[@]}; do
+                print "node|o|$INV_TARGET|si_portl$phase|l$phase"
+            done
+            print "node|o|$INV_TARGET|si_port_total|_total"
+            ;;
+        *)
+            float cvalue vvalue pvalue fvalue
+            while read -r index status name descr cunit cdigits cvalue cstate vunit vdigits vvalue vstate punit pdigits pvalue pstate funit fdigits fvalue fstate; do
+                if [[ $status == 7 ]] then
+                    status=1
+                else
+                    status=0
+                fi
+                [[ $status != 1 ]] && continue
+
+                index=${index//./_}
+                name=${name//[\"\|]/}; name=${name##+(" ")}; name=${name%%+(" ")}
+                [[ $name == "" ]] && name=$index
+
+                cunit=${umap[$cunit]:-""}
+                vunit=${umap[$vunit]:-""}
+                punit=${umap[$punit]:-""}
+                funit=factor
+                while (( cdigits-- > 0 )) do
+                    (( cvalue /= 10.0 ))
+                done
+                while (( vdigits-- > 0 )) do
+                    (( vvalue /= 10.0 ))
+                done
+                while (( pdigits-- > 0 )) do
+                    (( pvalue /= 10.0 ))
+                done
+                while (( fdigits-- > 0 )) do
+                    (( fvalue /= 10.0 ))
+                done
+                cstatesev=${ssevmap[$cstate]:-0}
+                vstatesev=${ssevmap[$vstate]:-0}
+                pstatesev=${ssevmap[$pstate]:-0}
+                fstatesev=${ssevmap[$fstate]:-0}
+                cstate=${smap[$cstate]:-""}
+                vstate=${smap[$vstate]:-""}
+                pstate=${smap[$pstate]:-""}
+                fstate=${smap[$fstate]:-""}
+
+                if [[ $cvalue == +([0-9.]) ]] then
+                    print "rt=STAT name=sensor_current.${index} type=number num=$cvalue unit=$cunit label=\"Current ($name)\""
+                fi
+                if [[ $pvalue == +([0-9.]) ]] then
+                    print "rt=STAT name=sensor_power.${index} type=number num=$pvalue unit=$punit label=\"Power ($name)\""
+                fi
+                if [[ $vvalue == +([0-9.]) ]] then
+                    print "rt=STAT name=sensor_volts.${index} type=number num=$vvalue unit=$vunit label=\"Volts ($name)\""
+                fi
+                if [[ $fvalue == +([0-9.]) ]] then
+                    print "rt=STAT name=sensor_pf.${index} type=number num=$fvalue unit=$funit label=\"P.Factor ($name)\""
+                fi
+
+                if [[ $cstatesev != @(0|) ]] then
+                    print "rt=ALARM sev=$cstatesev type=ALARM tech=raritanpx txt=\"Outlet: $name ($index) - Current state: $cstate\""
+                fi
+                if [[ $vstatesev != @(0|) ]] then
+                    print "rt=ALARM sev=$vstatesev type=ALARM tech=raritanpx txt=\"Outlet: $name ($index) - Voltage state: $vstate\""
+                fi
+                if [[ $pstatesev != @(0|) ]] then
+                    print "rt=ALARM sev=$pstatesev type=ALARM tech=raritanpx txt=\"Outlet: $name ($index) - Power state: $pstate\""
+                fi
+                if [[ $fstatesev != @(0|) ]] then
+                    print "rt=ALARM sev=$fstatesev type=ALARM tech=raritanpx txt=\"Outlet: $name ($index) - P.Factor state: $fstate\""
+                fi
+            done
+            ;;
+        esac
+    }'
+)

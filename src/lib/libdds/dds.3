@@ -1,0 +1,903 @@
+.TH DDS 3
+.SH NAME
+.I DDS
+\- Dynamic Data Schema Library
+.SH SYNOPSIS
+#include <ast.h>
+#include <swift.h>
+#include <dds.h>
+.br
+cc ... -ldds [-laggr] -lswift -last
+.SH DESCRIPTION
+.I DDS
+is a library for operating on fixed-record binary files.
+.I DDS
+implements several operations such as filtering, extracting, and counting.
+.I DDS
+is designed to work on large files.
+To achieve good performance,
+.I DDS
+constructs C code for processing records.
+It compiles this code into shared objects that it then loads in
+the running process.
+.SH SCHEMA SPECIFICATION
+The record fields are described in a schema that can be either
+in the header of the file or in a separate (ascii) schema file.
+A schema file can have the following sections:
+.PP
+.B name
+.I name
+.IP ""
+The name of the schema.
+.PP
+.B field
+.I name
+[\fBunsigned\fP]
+(\fBchar\fP|\fBshort\fP|\fBint\fP|\fBlong\fP|\fBfloat\fP|\fBdouble\fP)
+.I size
+.IP ""
+Name must be a unique C-style identifier.
+Size must be an integer >= 1.
+When size is greater than 1, the field is treated as an array.
+.B unsigned
+may not be used for floats and doubles.
+When
+.I DDS
+constructs C code, it generates a C struct from the schema.
+An implication of this is that there may be padding (extra bytes)
+between the various fields in the C struct.
+This padding must also exist in the data file.
+.SH DATA STRUCTURES
+.DS
+ typedef enum {
+     DDS_FIELD_TYPE_CHAR,
+     DDS_FIELD_TYPE_SHORT,
+     DDS_FIELD_TYPE_INT,
+     DDS_FIELD_TYPE_LONG,
+     DDS_FIELD_TYPE_LONGLONG,
+     DDS_FIELD_TYPE_FLOAT,
+     DDS_FIELD_TYPE_DOUBLE
+ } DDSfieldtype_t;
+
+ typedef struct DDSfield_t {
+     char *name;
+     DDSfieldtype_t type;
+     int isunsigned;
+     int n, off;
+ } DDSfield_t;
+
+ typedef struct DDSschema_t {
+     char *name;
+     DDSfield_t *fields;
+     int fieldn;
+     char *preload;
+     char *include;
+     char *recbuf;
+     int recsize;
+     Vmalloc_t *vm;
+ } DDSschema_t;
+
+ typedef struct DDSheader_t {
+     unsigned int contents;
+     char *schemaname;
+     DDSschema_t *schemap;
+     char *vczspec;
+     void *vczp;
+ } DDSheader_t;
+
+ #define DDS_HDR_NAME ...
+ #define DDS_HDR_DESC ...
+
+ typedef struct DDSexpr_t {
+     char *vars;
+     char *libs;
+     char *begin;
+     char *end;
+     char *loop;
+ } DDSexpr_t;
+.DE
+.SH FUNCTIONS
+.PP
+Unless otherwise specified, all functions of type
+.B int
+will return 0 on success and -1 on failure.
+All functions of pointer type will return a pointer to the data on success
+and NULL on failure.
+.PP
+.B "int DDSinit (void)"
+.br
+.B "int DDSterm (void)"
+.IP ""
+These functions must be called before / after any other calls to
+.I DDS
+functions.
+.PP
+.B "DDSschema_t *DDScreateschema ("
+.br
+.B "\tchar *name, DDSfield_t *fields, int fieldn,"
+.br
+.B "\tchar *preload, char *include"
+.br
+.B ")"
+.br
+.B "int DDSdestroyschema (DDSschema_t *schemap)"
+.IP ""
+.B DDScreateschema
+creates a new schema data structure.
+It uses vmalloc to allocate space.
+.B DDSdestroyschema
+deallocates the space.
+.B name
+is the name of the schema.
+.B fields
+and
+.B fieldn
+are the array and array size of fields.
+.PP
+.B "DDSschema_t *DDSloadschema ("
+.br
+.B "\tchar *fname, Sfio_t *sfp, int *lenp"
+.br
+.B ")"
+.br
+.B "int DDSsaveschema ("
+.br
+.B "\tchar *fname, Sfio_t *sfp"
+.br
+.B "\tDDSschema_t *schemap, int *lenp"
+.br
+.B ")"
+.IP ""
+These functions load and save schemas to files.
+If
+.B fname
+is not NULL, the schema is expected to be in the ascii file called
+.BR fname .
+If
+.B fname
+does not start with '/' or '.',
+.B DDSloadschema
+uses the
+.I AST
+function pathaccess to search for this file in ../lib/dds,
+i.e. for every component of the PATH it searches in the corresponding
+lib/dds directory.
+If
+.B sfp
+is not NULL, it is supposed to point to an open file.
+These functions will read / write the schema from / to this file
+in binary format.
+It is an error to specify both
+.B fname
+and
+.BR sfp .
+If
+.B lenp
+is not NULL, the number of bytes read or written is returned in it.
+These functions are generally not used directly by the application.
+The application should call
+.B DDSreadheader
+and
+.BR DDSwriteheader .
+.PP
+.B "int DDSreadheader (Sfio_t *fp, DDSheader_t *hdrp)"
+.br
+.B "int DDSwriteheader (Sfio_t *fp, DDSheader_t *hdrp)"
+.IP ""
+These functions read/write a header from/to a data file.
+A header consists of a magic word, some flags, and optionally
+the schema name and the schema itself.
+The header itself is optional.
+If the data file does not have a header
+.B DDSreadheader
+returns 1.
+It returns -2 if the file is empty, -1 if there was an error reading
+the header, and 0 on success.
+On success, the
+.B hdrp
+structure will contain the information in the file header.
+.B DDSwriteheader
+returns -1 on error and 0 on success.
+.PP
+.B "int DDSreadrecord (Sfio_t *fp, void *buf, DDSschema_t *schemap)"
+.br
+.B "int DDSwriterecord (Sfio_t *fp, void *buf, DDSschema_t *schemap)"
+.br
+.B "int DDSswaprecord (void *buf, DDSschema_t *schemap)"
+.IP ""
+These functions read/write a record from/to a data file.
+They perform the appropriate byte swapping to convert the data to the
+current systems endianess.
+.B DDSswaprecord
+swaps the bytes in the specified buffer.
+.PP
+.B "int DDSparseexpr (char *str, char *fname, DDSexpr_t *exprp)"
+.IP ""
+.B DDSparseexpr
+parses a C-style expression and separates it into several components.
+The expression is found either in string
+.B str
+or file
+.BR fname .
+.B fname
+is searched using pathaccess (like
+.BR DDSloadschema ).
+There are five possible components: VARS LIBS BEGIN LOOP END.
+Each component begins with the corresponding word and is followed by a
+C expression inside '{}'.
+VARS contains variables that are to be defined globally, i.e. be available
+in all of the following sections.
+LIBS defines a C linker-style list of libraries to link with.
+BEGIN and END contain code that is to be executed at the begining / end
+of processing.
+LOOP is executed once per record.
+All of these components are optional.
+The keyword LOOP can be omitted.
+The contents of the expressions depend on the specific tasks.
+.PP
+The following functions create and destroy various types of processing
+functions.
+They are implemented as shared objects that are loaded in the current process
+and can be called by the application.
+Shared object can be created on the fly using the ``create'' functions,
+or they can be compiled off line, using the ``compile'' functions and then
+loaded using the ``load'' functions.
+Each generated shared object contains three functions: init, term, and work.
+The application code must call the init function once, then the work
+function once for each record, and finally the term function.
+The application code must do all the I/O.
+The generated functions just manipulate the data.
+.PP
+.B "DDSloader_t *DDScreateloader ("
+.br
+.B "\tDDSschema_t *schemap, char *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompileloader ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr, char *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSloader_t *DDSloadloader ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroyloader (DDSloader_t *loaderp)"
+.br
+.DS
+ typedef int (*DDSloaderinitfunc) (void);
+ typedef int (*DDSloadertermfunc) (void);
+ typedef int (*DDSloaderworkfunc) (char **, int, char *, int, int);
+
+ typedef struct DDSloader_t {
+     void *handle;
+     DDSloaderinitfunc init;
+     DDSloadertermfunc term;
+     DDSloaderworkfunc work;
+ } DDSloader_t;
+.DE
+.IP ""
+These functions create / destroy a loader function.
+This function takes an argv/argc pair of parameters that contain ascii
+values for all the fields in the specified schema.
+It returns the record with the values filled in.
+If a field is a character field, the input can be either numeric or
+textual.
+Fields that are arrays map to as many items in the argv array as there
+are elements in the array.
+The work function returns -1 if the number of elements in argv is not
+equal to the number required to populate the record.
+.PP
+.B "DDSsorter_t *DDScreatesorter ("
+.br
+.B "\tDDSschema_t *schemap, char *klist, int rsflags,"
+.br
+.B "\tchar *ccflags, char *ldflags, int flags"
+.br
+.B ")"
+.br
+.B "char *DDScompilesorter ("
+.br
+.B "\tDDSschema_t *schemap, char *klist, char *sostr,"
+.br
+.B "\tchar *ccflags, char *ldflags, int flags"
+.br
+.B ")"
+.br
+.B "DDSsorter_t *DDSloadsorter ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr, int rsflags"
+.br
+.B ")"
+.br
+.B "int DDSdestroysorter (DDSsorter_t *sorterp)"
+.br
+.DS
+ typedef int (*DDSsorterinitfunc) (void);
+ typedef int (*DDSsortertermfunc) (void);
+ typedef Rsdefkey_f DDSsorterworkfunc;
+
+ typedef struct DDSsorter_t {
+     void *handle;
+     Rs_t *rsp;
+     Rsdisc_t rsdisc;
+     DDSsorterinitfunc init;
+     DDSsortertermfunc term;
+     DDSsorterworkfunc work;
+ } DDSsorter_t;
+.DE
+.IP ""
+These functions create / destroy a sorter function.
+This function uses the
+.I recsort
+library to sort.
+If the space-separated list of fields form a single sequence in the data
+record, then none of the init, term, and work functions are generated, since
+there is no need.
+If the key field sequence has gaps, all three functions are generated.
+In this case, the work function is used to construct the key by copying
+all the fields into a single buffer.
+The work function is not called by the application.
+The application calls either
+.B rsprocess
+followed by
+.B rswrite
+or
+.BR rsmerge .
+.B flags
+is passed to the
+.I recsort
+function
+.IR rsopen .
+.PP
+.B "DDSfilter_t *DDScreatefilter ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *fep,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompilefilter ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *fep, char *sostr,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSfilter_t *DDSloadfilter ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroyfilter (DDSfilter_t *filterp)"
+.br
+.DS
+ typedef int (*DDSfilterinitfunc) (void);
+ typedef int (*DDSfiltertermfunc) (void);
+ typedef int (*DDSfilterworkfunc) (char *, int, long long *, long long);
+
+ typedef struct DDSfilter_t {
+     void *handle;
+     DDSfilterinitfunc init;
+     DDSfiltertermfunc term;
+     DDSfilterworkfunc work;
+ } DDSfilter_t;
+.DE
+.IP ""
+These functions create / destroy a filter function.
+The work function is called with four arguments, a pointer to the record data,
+the size of the record, a pointer to the index of the current record, and
+the number of records in the current file (or -1 when the file is not seekable,
+eg. a pipe).
+It returns 0 if the record is to be droped and 1 if it is to be kept.
+The LOOP expression is called once per record.
+It should invoke one of two macros: KEEP or DROP to keep or drop
+the current record.
+The special variable NREC holds the total number of records in the input
+file, or -1 if the input is not a seekable file.
+The special variable INDEX holds the index of the current record.
+When NREC is not -1, INDEX may be set to a value between 0 and NREC - 1
+to indicate that the next record to process should be the one with that index,
+instead of the next record.
+.IP ""
+Example:
+.EX
+\'{ DROP; if (orignpa == 800) KEEP; }\'
+.EE
+.PP
+.B "DDSsplitter_t *DDScreatesplitter ("
+.br
+.B "\tDDSschema_t *schemap, char *slist, char *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompilesplitter ("
+.br
+.B "\tDDSschema_t *schemap, char *slist, char *sostr,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSsplitter_t *DDSloadsplitter ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroysplitter (DDSsplitter_t *spliterp)"
+.br
+.DS
+ typedef int (*DDSsplitterinitfunc) (
+     char *, void *(*) (char *),
+     void *(*) (char *), int (*) (void *)
+ );
+ typedef int (*DDSsplittertermfunc) (void);
+ typedef void *(*DDSsplitterworkfunc) (char *, int);
+
+ typedef struct DDSsplitter_t {
+     void *handle;
+     DDSsplitterinitfunc init;
+     DDSsplittertermfunc term;
+     DDSsplitterworkfunc work;
+ } DDSsplitter_t;
+.DE
+.IP ""
+These functions create / destroy a splitting function.
+.B slist
+is a space-separated list of field names.
+The three function arguments to the init function are functions that
+open, reopen, and close a file.
+For each new combination of the specified fields, the generated function
+will call the
+.B openfunc
+callback.
+This callback must create a new ``channel'', e.g. open a new file,
+and return its handle.
+On every call to the generated function, it returns the handle associated
+with the current record.
+.B closefunc
+must flush any output and close the channel.
+.B prefix
+(the argument in the init function)
+is a prefix for generating a channel name.
+It can contain printf-style directives, one per field specified in
+.B slist
+or no such directives at all.
+In the latter case,
+.B DDScreatesplitter
+generates these directives based on the type of each field.
+.PP
+.B "DDSgrouper_t *DDScreategrouper ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *gep, char *ccflags, char *ldflags
+.br
+.B ")"
+.br
+.B "char *DDScompilegrouper ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *gep, char *sostr,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSgrouper_t *DDSloadgrouper ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroygrouper (DDSgrouper_t *grouperp)"
+.br
+.DS
+ typedef int (*DDSgrouperinitfunc) (
+     char *, void *(*) (char *),
+     void *(*) (char *), int (*) (void *)
+ );
+ typedef int (*DDSgroupertermfunc) (void);
+ typedef void *(*DDSgrouperworkfunc) (char *, int);
+
+ typedef struct DDSgrouper_t {
+     void *handle;
+     DDSgrouperinitfunc init;
+     DDSgroupertermfunc term;
+     DDSgrouperworkfunc work;
+ } DDSgrouper_t;
+.DE
+.IP ""
+These functions create / destroy a grouping function.
+This function differs from a splitting function in that it evaluates
+an expression (specified in
+.BR gep )
+that must generate a small integer indicating the channel corresponding
+to the current record.
+It must assign this integer to the special variable GROUP.
+A value of -1 indicates that the record should not be saved on any channel.
+The generated function returns a handle to the channel.
+.IP ""
+Example:
+.EX
+\'{ GROUP = time / 60; }\'
+.EE
+.PP
+.B "DDSextractor_t *DDScreateextractor ("
+.br
+.B "\tDDSschema_t *schemap, char *ename, char *elist,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompileextractor ("
+.br
+.B "\tDDSschema_t *schemap, char *ename, char *elist, char *sostr,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSextractor_t *DDSloadextractor ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroyextractor (DDSextractor_t *extractorp)"
+.br
+.DS
+ typedef int (*DDSextractorinitfunc) (void);
+ typedef int (*DDSextractortermfunc) (void);
+ typedef int (*DDSextractorworkfunc) (char *, int, char *, int);
+
+ typedef struct DDSextractor_t {
+     void *handle;
+     DDSextractorinitfunc init;
+     DDSextractortermfunc term;
+     DDSextractorworkfunc work;
+     DDSschema_t *schemap;
+ } DDSextractor_t;
+.DE
+.IP ""
+These functions create / destroy an extracting function.
+These functions are similar to the converter functions.
+In these functions the output record is defined to include the fields of
+the input record that are in the
+.B elist
+space-separated list.
+.PP
+.B "DDSconverter_t *DDScreateconverter ("
+.br
+.B "\tDDSschema_t *ischemap, DDSschema_t *oschemap, DDSexpr_t *cep,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompileconverter ("
+.br
+.B "\tDDSschema_t *ischemap, DDSschema_t *oschemap,"
+.br
+.B "\tDDSexpr_t *cep, char *sostr, char *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSconverter_t *DDSloadconverter ("
+.br
+.B "\tDDSschema_t *ischemap, DDSschema_t *oschemap,"
+.br
+.B "\tchar *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroyconverter (DDSconverter_t *converterp)"
+.br
+.DS
+ typedef int (*DDSconverterinitfunc) (void);
+ typedef int (*DDSconvertertermfunc) (void);
+ typedef int (*DDSconverterworkfunc) (
+     char *, int, char *, int, int (*) (void *, size_t)
+ );
+
+ typedef struct DDSconverter_t {
+     void *handle;
+     DDSconverterinitfunc init;
+     DDSconvertertermfunc term;
+     DDSconverterworkfunc work;
+ } DDSconverter_t;
+.DE
+.IP ""
+These functions create / destroy a converter function.
+This function converts a record of type
+.B ischemap
+to a record of type
+.BR oschemap .
+It does so by evaluating the expression specified in
+.BR cep .
+The work function is called with a pointer to the input record, the length
+of the input record, a pointer to the output record, and the length of the
+output record.
+Two macros can be used in the expression: IN, OUT.
+.IP ""
+Example:
+.EX
+\'{ OUT->minutes = IN->seconds / 60; }\'
+.EE
+.PP
+.B "DDScounter_t *DDScreatecounter ("
+.br
+.B "\tDDSschema_t *schemap, char *klist, char *cname,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompilecounter ("
+.br
+.B "\tDDSschema_t *schemap, char *klist, char *cname,"
+.br
+.B "\tchar *sostr, char *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDScounter_t *DDSloadcounter ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroycounter (DDScounter_t *counterp)"
+.br
+.DS
+ typedef int (*DDScounterinitfunc) (Dt_t **, int *);
+ typedef int (*DDScountertermfunc) (void);
+ typedef int (*DDScounterworkfunc) (char *, int, int);
+
+ typedef struct DDScounter_t {
+     void *handle;
+     DDScounterinitfunc init;
+     DDScountertermfunc term;
+     DDScounterworkfunc work;
+     DDSschema_t *schemap;
+ } DDScounter_t;
+.DE
+.IP ""
+These functions create / destroy a counter function.
+.B klist
+is a space-separated list of field names.
+When the
+.B cname
+field is NULL, the output schema contains all the fields of the input
+schema plus a new counter field (as the last field).
+When
+.B counter
+is not NULL, the counter is supposed to be the field with that name in
+.BR schemap .
+The generated function builds a dictionary of records of the output
+schema,  using the fields in
+.B klist
+as a key.
+For every new record, the corresponding counter is incremented by one,
+or by the value of the
+.B counter
+field, if specified.
+The third argument to the work function is a flag that specifies what to
+do with a record that cannot be found in the dictionary.
+If the flag is true, a new record is added to the dictionary and the function
+returns 1.
+If false, the record is not added to the dictionary and the function returns 2.
+The function returns -1 on error and 1 on success.
+A pointer to the dictionary is returned by the init method.
+It can be used to retrieve all the counter records.
+.PP
+.B "DDSaggregator_t *DDScreateaggregator ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *aep, int vtype,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompileaggregator ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *aep,"
+.br
+.B "\tint vtype, char *sostr, char *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSaggregator_t *DDSloadaggregator ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroyaggregator (DDSaggregator_t *aggregatorp)"
+.br
+.DS
+ typedef int (*DDSaggregatorinitfunc) (void);
+ typedef int (*DDSaggregatortermfunc) (void);
+ typedef int (*DDSaggregatorworkfunc) (char *, int, AGGRfile_t *);
+
+ typedef struct DDSaggregator_t {
+     void *handle;
+     DDSaggregatorinitfunc init;
+     DDSaggregatortermfunc term;
+     DDSaggregatorworkfunc work;
+ } DDSaggregator_t;
+.DE
+.IP ""
+These functions create / destroy an aggregator function.
+This function uses the
+.I AGGR
+library.
+.B vtype
+is the type of the aggregation data (int, float, etc.).
+The LOOP expression can use one of the following macros:
+.DS
+KEYFRAMEVALUE(k, f, v)
+ITEMFRAMEVALUE(i, f, v)
+.DE
+.IP ""
+.B f
+specifies the frame number, i.e. one of the two dimensions.
+The other dimension is specified by either the
+.B i
+or the
+.B k
+field.
+.B i
+is a number between 0 and the maximum number of items in the specific
+aggregation type.
+.B k
+is a pointer to a key.
+The LOOP expression can call one of these macros multiple times per invocation.
+Each call to these macros indicates that the value
+.B v
+is to be added to the item at location
+.B i
+or at the location specified using the key
+.B k
+on frame
+.BR f .
+The third argument to the work function is a pointer to the output file.
+The work function returns how many of these pairs it filled out.
+.IP ""
+Example: for each phonecall, split its duration in 10-min bins.
+.EX
+\'{
+    static int spi = 10 * 60;
+    static int max = 24 * 60 * 60;
+    int framei, v;
+
+    if (dur + time > max)
+        dur = max - time;
+    framei = time / spi;
+    v = spi - time % spi;
+    if (v > dur)
+        v = dur;
+    while (dur > 0) {
+        KEYFRAMEVALUE ("total", framei++, v);
+        dur -= v;
+        v = (dur > spi) ? spi : dur;
+    }
+}\'
+.EE
+.PP
+.B "DDSprinter_t *DDScreateprinter ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *pep,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "char *DDScompileprinter ("
+.br
+.B "\tDDSschema_t *schemap, DDSexpr_t *pep, char *sostr,"
+.br
+.B "\tchar *ccflags, char *ldflags"
+.br
+.B ")"
+.br
+.B "DDSprinter_t *DDSloadprinter ("
+.br
+.B "\tDDSschema_t *schemap, char *sostr"
+.br
+.B ")"
+.br
+.B "int DDSdestroyprinter (DDSprinter_t *printerp)"
+.br
+.DS
+ typedef int (*DDSprinterinitfunc) (void);
+ typedef int (*DDSprintertermfunc) (void);
+ typedef int (*DDSprinterworkfunc) (char *, int, Sfio_t *);
+
+ typedef struct DDSprinter_t {
+     void *handle;
+     DDSprinterinitfunc init;
+     DDSprintertermfunc term;
+     DDSprinterworkfunc work;
+ } DDSprinter_t;
+.DE
+.IP ""
+These functions create / destroy a print function.
+This function will print on the file specified as the third argument to
+the work function a line per record, using '|' as a separator.
+.SH ENVIRONMENT
+When the environment variable
+.B DDSDEBUG
+is set to
+.BR on ,
+.I DDS
+will print some diagnostic messages.
+It will also not delete the generated C file from
+.BR /tmp .
+.SH EXAMPLES
+The following code is from
+.B ddsfilter.c
+and shows the sequence of calls for creating and using a filter function.
+.EX
+#include <ast.h>
+#include <swift.h>
+#include <dds.h>
+
+int main (int argc, char **argv) {
+    ...
+
+    DDSinit ();
+    ...
+    if (!(filterp = DDScreatefilter (schemap, &fe)))
+        SUerror ("ddsfilter", "DDScreatefilter failed");
+    if ((*filterp->init) () == -1)
+        SUerror ("ddsfilter", "filterp->init failed");
+    while ((ret = sfread (
+        sfstdin, schemap->recbuf, schemap->recsize
+    )) == schemap->recsize) {
+        if ((*filterp->work) (
+            schemap->recbuf, schemap->recsize, &index, nrec
+        ) != 1)
+            continue;
+        if (sfwrite (
+            sfstdout, schemap->recbuf, schemap->recsize
+        ) != schemap->recsize)
+            SUerror ("ddsfilter", "incomplete write");
+    }
+    if (ret != 0)
+        SUerror ("ddsfilter", "incomplete read");
+    if ((*filterp->term) () == -1)
+        SUerror ("ddsfilter", "filterp->term failed");
+    if (sfsync (NULL) < 0)
+        SUerror ("ddsfilter", "sync failed");
+    DDSdestroyfilter (filterp);
+    DDSterm ();
+}
+.EE
+.SH SEE ALSO
+.IR dds(1) ,
+.IR ddsaggr(1) ,
+.IR ddscat(1) ,
+.IR ddscc(1) ,
+.IR ddschoose(1) ,
+.IR ddsconv(1) ,
+.IR ddscount(1) ,
+.IR ddsextract(1) ,
+.IR ddsfilter(1) ,
+.IR ddsgroup(1) ,
+.IR ddsinfo(1) ,
+.IR ddsload(1) ,
+.IR ddsprint(1) ,
+.IR ddssort(1) ,
+.IR ddssplit(1) ,
+.IR ddssplitnaggr(1) ,
+.IR ddsmkdict(1) ,
+.IR ddsmkarray(1) ,
+.IR ddsmkslist(1) ,
+.IR dds(3) .

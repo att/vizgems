@@ -1,0 +1,10 @@
+#level|short name|next level|name|plural|account param|att flags|cust flags
+b|B|c|Business|Businesses|yes||
+l2|L2|l|State|States|no||
+l|L|s|City|Cities|no||
+c|C|g|Customer|Customers|yes|s|
+s|S|g|Site|Sites|no||
+g|G|o|Group|Groups|no||s
+o|O|o|Asset|Assets|no||
+r|R|r|Resource|Resources|no||
+t|T|t|Type|Types|no||

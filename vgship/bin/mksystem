@@ -1,0 +1,45 @@
+#!/bin/ksh
+
+if [[ $1 == '' || $2 == '' || $3 == '' || $4 == '' ]] then
+    print -u2 "usage: mksystem <name> <arch> <version> <pkg1> ..."
+    exit
+fi
+n=$1
+a=$2
+v=$3
+shift 3
+
+print mksystem $n $a $v
+
+rm -rf $n.$a.$v.sw
+mkdir -p $n.$a.$v.sw
+
+exp='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+for i in "$@"; do
+    (
+        cd $n.$a.$v.sw
+        tgz=$(ls -1 ../../lib/package/tgz/$i.$exp.$a.tgz | tail -1)
+        pax -ps -rf $tgz -s ",^arch/$a/,,"
+    )
+done
+
+(
+    cd ../strees/vizgems/system
+    pax -ps -rw . ../../../vgship/$n.$a.$v.sw
+)
+
+chgrp -Rh swift $n.$a.$v.sw
+
+if [[ $a != win32.i386 ]] then
+    chmod u+s $n.$a.$v.sw/bin/probe
+    chmod u+s,g+s $n.$a.$v.sw/lib/ssd
+    chmod u+s $n.$a.$v.sw/lib/probe/probe
+fi
+
+rm -rf $n.$a.$v.data
+mkdir -p $n.$a.$v.data
+
+(
+    cd ../dtrees/vizgems/system
+    pax -ps -rw . ../../../vgship/$n.$a.$v.data
+)

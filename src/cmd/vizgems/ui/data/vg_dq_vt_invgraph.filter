@@ -1,0 +1,514 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+
+static char graphlevel[SZ_level];
+static char pclusterlevel[SZ_level];
+static char sclusterlevel[SZ_level];
+static char ranklevel[SZ_level];
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, maxpix;
+static char *rendermode, *pagemode;
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("INVGRAPHATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_invgraph", "cannot load attr file");
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_invgraph", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_MAXPIXEL].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find maxpixel");
+    maxpix = atoi (attrs[ATTR_MAXPIXEL].str);
+    if (!attrs[ATTR_LAYOUTSTYLE].str)
+        attrs[ATTR_LAYOUTSTYLE].str = "dot";
+    if (!attrs[ATTR_GRAPHLEVEL].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find graphlevel");
+    strcpy (graphlevel, attrs[ATTR_GRAPHLEVEL].str);
+    if (!attrs[ATTR_PCLUSTERLEVEL].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find pclusterlevel");
+    strcpy (pclusterlevel, attrs[ATTR_PCLUSTERLEVEL].str);
+    if (!attrs[ATTR_SCLUSTERLEVEL].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find sclusterlevel");
+    strcpy (sclusterlevel, attrs[ATTR_SCLUSTERLEVEL].str);
+    if (!attrs[ATTR_RANKLEVEL].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find ranklevel");
+    strcpy (ranklevel, attrs[ATTR_RANKLEVEL].str);
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_invgraph", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_invgraph", "cannot init UT");
+    if (RIinit (fprefix, iprefix, maxpix) == -1)
+        SUerror ("vg_dq_vt_invgraph", "cannot init RI");
+    if (EMinit (getenv ("INVGRAPHEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_invgraph", "cannot init EM");
+    if (IGRinit (pagemode) == -1)
+        SUerror ("vg_dq_vt_invgraph", "cannot init IGR");
+}
+{
+    IGRcc_t *ccp, *pccp;
+    IGRcl_t *clp;
+    IGRnd_t *ndp1, *ndp2;
+    IGRrk_t *rkp;
+    char *m1p;
+
+    DROP;
+
+    if (cat != VG_QUERY_N_CAT_RESULT)
+        return __result;
+
+    switch (type) {
+    case VG_QUERY_N_TYPE_NODE:
+        if (!(ndp1 = IGRinsertnd (level1, id1, class1)))
+            SUerror ("vg_dq_vt_invgraph", "cannot insert nd");
+        if (IGRndexists)
+            return __result;
+
+        if (ranklevel[0]) {
+            for (
+                m1p = M1F (level1, id1, ranklevel); m1p;
+                m1p = M1N (level1, id1, ranklevel)
+            ) {
+                if (!(rkp = IGRinsertrk (ranklevel, m1p)))
+                    SUerror ("vg_dq_vt_invgraph", "cannot insert rk");
+                if (!IGRlinknd2rk (ndp1, rkp))
+                    SUerror ("vg_dq_vt_invgraph", "cannot link nd to rk");
+            }
+        }
+
+        if (graphlevel[0]) {
+            pccp = NULL;
+            for (
+                m1p = M1F (level1, id1, graphlevel); m1p;
+                m1p = M1N (level1, id1, graphlevel)
+            ) {
+                if (!(ccp = IGRinsertcc (graphlevel, m1p)))
+                    SUerror ("vg_dq_vt_invgraph", "cannot insert cc");
+                if (!IGRlinknd2cc (ndp1, ccp))
+                    SUerror ("vg_dq_vt_invgraph", "cannot link nd to cc");
+                if (pccp && !IGRlinkcc2cc (pccp, ccp))
+                    SUerror ("vg_dq_vt_invgraph", "cannot link cc to cc");
+                pccp = ccp;
+            }
+        } else {
+            if (!(ccp = IGRinsertcc ("ALL", "ALL")))
+                SUerror ("vg_dq_vt_invgraph", "cannot insert ALL cc");
+            if (!IGRlinknd2cc (ndp1, ccp))
+                SUerror ("vg_dq_vt_invgraph", "cannot link nd to cc");
+        }
+
+        if (class1 == VG_QUERY_N_CLASS_PRIMARY && pclusterlevel[0]) {
+            for (
+                m1p = M1F (level1, id1, pclusterlevel); m1p;
+                m1p = M1N (level1, id1, pclusterlevel)
+            ) {
+                if (!(clp = IGRinsertcl (pclusterlevel, m1p, class1)))
+                    SUerror ("vg_dq_vt_invgraph", "cannot insert pcl");
+                if (!IGRlinknd2cl (ndp1, clp))
+                    SUerror ("vg_dq_vt_invgraph", "cannot link nd to pcl");
+            }
+        } else if (class1 == VG_QUERY_N_CLASS_SECONDARY && sclusterlevel[0]) {
+            for (
+                m1p = M1F (level1, id1, sclusterlevel); m1p;
+                m1p = M1N (level1, id1, sclusterlevel)
+            ) {
+                if (!(clp = IGRinsertcl (sclusterlevel, m1p, class1)))
+                    SUerror ("vg_dq_vt_invgraph", "cannot insert scl");
+                if (!IGRlinknd2cl (ndp1, clp))
+                    SUerror ("vg_dq_vt_invgraph", "cannot link nd to scl");
+           }
+        }
+        break;
+    case VG_QUERY_N_TYPE_EDGE:
+        if (!(ndp1 = IGRfindnd (level1, id1)))
+            SUerror ("vg_dq_vt_invgraph", "cannot find lhs node");
+        if (!(ndp2 = IGRfindnd (level2, id2)))
+            SUerror ("vg_dq_vt_invgraph", "cannot find rhs node");
+        if (
+            ndp1->ccn > 0 && ndp2->ccn > 0 &&
+           !IGRlinkcc2cc (ndp1->ccs[0], ndp2->ccs[0])
+        )
+            SUerror ("vg_dq_vt_invgraph", "cannot link ccs of edge");
+        if (!IGRinserted (ndp1, ndp2))
+            SUerror ("vg_dq_vt_invgraph", "cannot insert ed");
+        break;
+    }
+}
+END{
+    IGRcc_t *ccp1, *lccp1, *ccp2, *lccp2, *ccp3;
+    int cci1, cci2, cci3;
+    IGRcl_t *clp;
+    int cli, maxcli;
+    IGRrk_t *rkp;
+    int rki, maxrki;
+    IGRnd_t *ndp1, *ndp2;
+    int ndi1, ndi2, wndn;
+    IGRed_t *edp;
+    int edi;
+    Agraph_t *gp;
+    int maxrc;
+
+    if (IGRflatten () == -1)
+        SUerror ("vg_dq_vt_invgraph", "cannot flatten");
+
+    for (cci1 = 0; cci1 < IGRccn; cci1++) {
+        if (!(ccp1 = IGRccs[cci1]) || ccp1->done)
+            continue;
+        lccp1 = (ccp1->lccp) ? ccp1->lccp : ccp1;
+        for (cci2 = cci1; cci2 < IGRccn; cci2++) {
+            if (!(ccp2 = IGRccs[cci2]))
+                continue;
+            lccp2 = (ccp2->lccp) ? ccp2->lccp : ccp2;
+            if (lccp1 != lccp2)
+                continue;
+
+            if (ccp1 == ccp2) { // insert as graph
+                if (attreval (
+                    ccp2->level, ccp2->id, NULL, NULL,
+                    ATTR_GRAPHATTR, ATTRENC_SIMPLE
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot get graph attr");
+                if (IGRnewgraph (ccp2, attrstr) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot create graph");
+            } else { // insert as subgraph
+                if (attreval (
+                    ccp2->level, ccp2->id, NULL, NULL,
+                    ATTR_SGRAPHATTR, ATTRENC_SIMPLE
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot get sgraph attr");
+                if (IGRnewccgraph (ccp1->gp, ccp2, attrstr) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot create sgraph");
+            }
+
+            wndn = 0;
+            for (ndi1 = 0; ndi1 < IGRndn; ndi1++) {
+                if (!(ndp1 = IGRnds[ndi1]))
+                    continue;
+                for (cci3 = 0; cci3 < ndp1->ccn; cci3++) {
+                    if (!(ccp3 = ndp1->ccs[cci3]))
+                        continue;
+                    if (ccp3 == ccp2)
+                        break;
+                }
+                if (cci3 == ndp1->ccn)
+                    continue;
+                if (ndp1->np)
+                    continue;
+
+                IGRwnds[wndn++] = ndp1;
+                ndp1->ccp = ccp2;
+                ndp1->gp = ccp2->gp;
+
+                maxcli = -1, maxrc = -1;
+                for (cli = 0; cli < ndp1->cln; cli++)
+                    if (maxrc < ndp1->cls[cli]->rc)
+                        maxrc = ndp1->cls[cli]->rc, maxcli = cli;
+                if (maxcli > -1) {
+                    clp = ndp1->cls[maxcli];
+                    ndp1->clp = clp;
+                    if (!clp->gp) {
+                        if (attreval (
+                            clp->level, clp->id, NULL, NULL, (
+                                ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+                            ) ? ATTR_PCLUSTERATTR : ATTR_SCLUSTERATTR,
+                            ATTRENC_SIMPLE
+                        ) == -1)
+                            SUerror (
+                                "vg_dq_vt_invgraph", "cannot get cluster attr"
+                            );
+                        if (IGRnewclgraph (ndp1->gp, clp, attrstr) == -1)
+                            SUerror (
+                                "vg_dq_vt_invgraph", "cannot create cluster"
+                            );
+                    }
+                    ndp1->gp = clp->gp;
+                }
+
+                maxrki = -1, maxrc = -1;
+                for (rki = 0; rki < ndp1->rkn; rki++)
+                    if (maxrc < ndp1->rks[rki]->rc)
+                        maxrc = ndp1->rks[rki]->rc, maxrki = rki;
+                if (maxrki > -1) {
+                    rkp = ndp1->rks[maxrki];
+                    ndp1->rkp = rkp;
+                    for (ndi2 = 0; ndi2 < wndn - 1; ndi2++)
+                        if (
+                            IGRwnds[ndi2]->clp == ndp1->clp &&
+                            IGRwnds[ndi2]->rkp == ndp1->rkp
+                        )
+                            break;
+                    if (ndi2 < wndn - 1)
+                        ndp1->rkgp = IGRwnds[ndi2]->rkgp;
+                    else {
+                        if (attreval (
+                            rkp->level, rkp->id, NULL, NULL,
+                            ATTR_RANKATTR, ATTRENC_SIMPLE
+                        ) == -1)
+                            SUerror (
+                                "vg_dq_vt_invgraph", "cannot get rank attr"
+                            );
+                        if (IGRnewrkgraph (ndp1->gp, rkp, attrstr) == -1)
+                            SUerror ("vg_dq_vt_invgraph", "cannot create rank");
+                        ndp1->rkgp = rkp->gp;
+                    }
+                    ndp1->gp = ndp1->rkgp;
+                }
+
+                if (attreval (
+                    ndp1->level, ndp1->id, NULL, NULL, (
+                        ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+                    ) ? ATTR_PNODEATTR : ATTR_SNODEATTR, ATTRENC_SIMPLE
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot get node attr");
+                if (IGRnewnode (ndp1->gp, ndp1, attrstr) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot create node");
+            }
+            IGRccs[cci2]->done = TRUE;
+        }
+        for (edi = 0; edi < IGRedn; edi++) {
+            if (!(edp = IGReds[edi]))
+                continue;
+            if (!edp->ndp1->np || !edp->ndp2->np)
+                continue;
+            ndp1 = edp->ndp1, ndp2 = edp->ndp2;
+            if (ndp1->rkgp && ndp1->rkgp == ndp2->rkgp)
+                gp = ndp1->rkgp;
+            else if (
+                ndp1->clp && ndp2->clp && ndp1->clp->gp &&
+                ndp1->clp->gp == ndp2->clp->gp
+            )
+                gp = ndp1->clp->gp;
+            else if (
+                ndp1->ccp && ndp1->ccp->gp && ndp1->ccp->gp == ndp2->ccp->gp
+            )
+                gp = ndp1->ccp->gp;
+            else if (ndp2->ccp == ccp1)
+                gp = ndp2->ccp->gp;
+            else
+                gp = ndp1->ccp->gp;
+
+            if (attreval (
+                edp->ndp1->level, edp->ndp1->id,
+                edp->ndp2->level, edp->ndp2->id, (
+                    edp->ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ((
+                    edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_PPEDGEATTR : ATTR_PSEDGEATTR) : ((
+                    edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_SPEDGEATTR : ATTR_SSEDGEATTR), ATTRENC_SIMPLE
+            ) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot get edge attr");
+            if (IGRnewedge (gp, edp, attrstr) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot create edge");
+        }
+
+        if (IGRlayout (attrs[ATTR_LAYOUTSTYLE].str) == -1)
+            SUerror ("vg_dq_vt_invgraph", "cannot generate layout");
+
+        for (cci3 = 0; cci3 < IGRccn; cci3++) {
+            if (!IGRccs[cci3] || !IGRccs[cci3]->gp || IGRccs[cci3] != lccp1)
+                continue;
+            ccp3 = IGRccs[cci3];
+            if (attreval (
+                ccp3->level, ccp3->id, NULL, NULL, ATTR_GRAPHURL, ATTRENC_URL
+            ) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot get graph url");
+            sfsprintf (objstr, OBJLEN, "n|%s|%s", ccp3->level, ccp3->id);
+            if (IGRbegindraw (
+                fprefix, findex, &EMops[ccp3->opi], ccp3->opn, objstr, attrstr
+            ) == -1) {
+                SUwarning (0, "vg_dq_vt_invgraph", "cannot begin graph draw");
+                goto next;
+            }
+        }
+        for (cci3 = 0; cci3 < IGRccn; cci3++) {
+            if (!IGRccs[cci3] || !IGRccs[cci3]->gp || IGRccs[cci3] == ccp1)
+                continue;
+            ccp3 = IGRccs[cci3];
+            if (attreval (
+                ccp3->level, ccp3->id, NULL, NULL, ATTR_SGRAPHURL, ATTRENC_URL
+            ) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot get sgraph url");
+            sfsprintf (objstr, OBJLEN, "n|%s|%s", ccp3->level, ccp3->id);
+            if (IGRdrawsgraph (
+                ccp3->gp, &EMops[ccp3->opi], ccp3->opn, objstr, attrstr
+            ) == -1) {
+                SUwarning (0, "vg_dq_vt_invgraph", "cannot draw subgraph");
+                continue;
+            }
+        }
+        for (cli = 0; cli < IGRcln; cli++) {
+            if (!IGRcls[cli] || !IGRcls[cli]->gp)
+                continue;
+            clp = IGRcls[cli];
+            if (attreval (
+                clp->level, clp->id, NULL, NULL, (
+                    clp->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_PCLUSTERURL : ATTR_SCLUSTERURL, ATTRENC_URL
+            ) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot get cluster url");
+            sfsprintf (objstr, OBJLEN, "n|%s|%s", clp->level, clp->id);
+            if (IGRdrawsgraph (
+                clp->gp, &EMops[clp->opi], clp->opn, objstr, attrstr
+            ) == -1) {
+                SUwarning (0, "vg_dq_vt_invgraph", "cannot draw cluster");
+                continue;
+            }
+        }
+        for (rki = 0; rki < IGRrkn; rki++) {
+            if (!IGRrks[rki] || !IGRrks[rki]->gp)
+                continue;
+            rkp = IGRrks[rki];
+            for (ndi1 = 0; ndi1 < IGRndn; ndi1++) {
+                if (!(ndp1 = IGRnds[ndi1]))
+                    continue;
+                if (ndp1->rkp != rkp || !ndp1->rkgp)
+                    continue;
+                if (attreval (
+                    rkp->level, rkp->id, NULL, NULL, ATTR_RANKURL, ATTRENC_URL
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgraph", "cannot get rank url");
+                sfsprintf (objstr, OBJLEN, "n|%s|%s", rkp->level, rkp->id);
+                if (IGRdrawsgraph (
+                    ndp1->rkgp, &EMops[rkp->opi], rkp->opn, objstr, attrstr
+                ) == -1) {
+                    SUwarning (0, "vg_dq_vt_invgraph", "cannot draw rank");
+                    continue;
+                }
+                for (ndi2 = ndi1; ndi2 < IGRndn; ndi2++) {
+                    if (!(ndp2 = IGRnds[ndi2]))
+                        continue;
+                    if (ndp2->rkgp == ndp1->rkgp)
+                        ndp2->rkgp = NULL;
+                }
+            }
+        }
+        for (edi = 0; edi < IGRedn; edi++) {
+            if (!IGReds[edi] || !IGReds[edi]->ep)
+                continue;
+            edp = IGReds[edi];
+            if (attreval (
+                edp->ndp1->level, edp->ndp1->id,
+                edp->ndp2->level, edp->ndp2->id, (
+                    edp->ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ((
+                    edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_PPEDGEURL : ATTR_PSEDGEURL) : ((
+                    edp->ndp2->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_SPEDGEURL : ATTR_SSEDGEURL), ATTRENC_URL
+            ) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot get edge url");
+            sfsprintf (
+                objstr, OBJLEN, "e|%s|%s|%s|%s",
+                edp->ndp1->level, edp->ndp1->id,
+                edp->ndp2->level, edp->ndp2->id
+            );
+            if (IGRdrawedge (
+                edp->ep, &EMops[edp->opi], edp->opn, objstr, attrstr
+            ) == -1) {
+                SUwarning (0, "vg_dq_vt_invgraph", "cannot draw edge");
+                continue;
+            }
+        }
+        for (ndi1 = 0; ndi1 < IGRndn; ndi1++) {
+            if (!IGRnds[ndi1] || !IGRnds[ndi1]->np)
+                continue;
+            ndp1 = IGRnds[ndi1];
+            if (attreval (
+                ndp1->level, ndp1->id, NULL, NULL, (
+                    ndp1->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_PNODEURL : ATTR_SNODEURL, ATTRENC_URL
+            ) == -1)
+                SUerror ("vg_dq_vt_invgraph", "cannot get node url");
+            sfsprintf (objstr, OBJLEN, "n|%s|%s", ndp1->level, ndp1->id);
+            if (IGRdrawnode (
+                ndp1->np, &EMops[ndp1->opi], ndp1->opn,
+                ndp1->havewh, ndp1->w, ndp1->h, objstr, attrstr
+            ) == -1) {
+                SUwarning (0, "vg_dq_vt_invgraph", "cannot draw node");
+                continue;
+            }
+        }
+        if (IGRenddraw () == -1) {
+            SUwarning (0, "vg_dq_vt_invgraph", "cannot end graph draw");
+            goto next;
+        }
+        findex++;
+
+next:
+        for (edi = 0; edi < IGRedn; edi++) {
+            if (!(edp = IGReds[edi]))
+                continue;
+            if (!edp->ep)
+                continue;
+            IGReds[edi] = NULL;
+        }
+        for (ndi1 = 0; ndi1 < IGRndn; ndi1++) {
+            if (!(ndp1 = IGRnds[ndi1]))
+                continue;
+            if (!ndp1->np)
+                continue;
+
+            for (cci3 = 0; cci3 < ndp1->ccn; cci3++)
+               if (ndp1->ccs[cci3]) {
+                   ndp1->ccs[cci3]->gp = NULL;
+                   IGRunlinknd2cc (ndp1, ndp1->ccs[cci3]);
+               }
+            for (cli = 0; cli < ndp1->cln; cli++)
+               if (ndp1->cls[cli]) {
+                   ndp1->cls[cli]->gp = NULL;
+                   IGRunlinknd2cl (ndp1, ndp1->cls[cli]);
+               }
+            for (rki = 0; rki < ndp1->rkn; rki++)
+               if (ndp1->rks[rki]) {
+                   ndp1->rks[rki]->gp = NULL;
+                   IGRunlinknd2rk (ndp1, ndp1->rks[rki]);
+               }
+            IGRnds[ndi1] = NULL;
+        }
+        for (rki = 0; rki < IGRrkn; rki++)
+            if (IGRrks[rki] && IGRrks[rki]->rc == 0)
+                IGRrks[rki] = NULL;
+        for (cli = 0; cli < IGRcln; cli++)
+            if (IGRcls[cli] && IGRcls[cli]->rc == 0)
+                IGRcls[cli] = NULL;
+        for (cci2 = 0; cci2 < IGRccn; cci2++)
+            if (
+                IGRccs[cci2] && IGRccs[cci2]->prc == 0 && IGRccs[cci2]->src == 0
+            )
+                IGRccs[cci2] = NULL;
+        IGRreset (attrs[ATTR_LAYOUTSTYLE].str);
+    }
+}

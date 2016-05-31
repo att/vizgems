@@ -1,0 +1,41 @@
+VARS{
+#define SZ_level DDSSZ_inrec_inv_node_level
+#define SZ_id DDSSZ_inrec_inv_node_id
+#define SZ_key DDSSZ_inrec_inv_node_key
+#define SZ_val DDSSZ_inrec_inv_node_val
+
+static struct __outrec_inv_node_t rec;
+
+static char *attr = "name";
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+}
+BEGIN{
+    memset (&rec, 0, sizeof (struct __outrec_inv_node_t));
+}
+{
+    DROP;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (strcmp (rec.id, IN->id) != 0 || strcmp (rec.level, IN->level) != 0) {
+        if (rec.key[0])
+            (*wfunc) (wfp, &rec, wschemap, sizeof (struct __outrec_inv_node_t));
+        memset (&rec, 0, sizeof (struct __outrec_inv_node_t));
+    }
+
+    if (!rec.key[0] || strcmp (IN->key, attr) == 0) {
+        memcpy (rec.level, IN->level, SZ_level);
+        memcpy (rec.id, IN->id, SZ_id);
+        memcpy (rec.key, IN->key, SZ_key);
+        memcpy (rec.val, IN->val, SZ_val);
+    }
+}
+END{
+    if (rec.key[0])
+        (*wfunc) (wfp, &rec, wschemap, sizeof (struct __outrec_inv_node_t));
+}

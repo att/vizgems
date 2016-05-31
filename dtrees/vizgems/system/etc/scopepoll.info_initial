@@ -1,0 +1,15 @@
+# this shell script specifies the list of scopes to upload data from.
+# it must set the variable POLLSYS to either 'NONE' for no uploads,
+# to a QUOTED, SPACE-SEPARATED line of the form:
+#     "user1@server1:dir1 user2@server2:dir2 ..."
+# where:
+#     'user' is the user name on the scope
+#     'server' is the name or ip address of the scope
+#     'dir' is the remote directory name to search for data
+# example:
+#     POLLSYS="scope@unixscope:/export/home/swift/vizgems/data/scopes/outgoing"
+# NOTE: this mechanism uses SSH to copy data, so SSH to these remote
+# systems must be enabled
+
+# systems to poll
+POLLSYS=NONE

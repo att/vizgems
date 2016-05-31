@@ -1,0 +1,323 @@
+VARS{
+#include <math.h>
+#include <vmalloc.h>
+#include <cdt.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#define VG_STATMAP_MAIN
+#include "vg_statmap.c"
+
+#define SZ_id DDSSZ_outrec_dq_dt_stat_id
+#define SZ_level DDSSZ_outrec_dq_dt_stat_level
+#define SZ_key DDSSZ_outrec_dq_dt_stat_key
+#define SZ_label DDSSZ_outrec_dq_dt_stat_label
+
+#include "vg_dq_dt_attrs.c"
+
+#define epsilon 1E-6
+#define ALMOSTZERO(v) ((v) >= -epsilon && (v) <= epsilon)
+
+typedef struct proj_s {
+    Dtlink_t link;
+    /* begin key */
+    char level[SZ_level], id[SZ_id], key[SZ_key];
+    /* end key */
+    double mx, my, sx, sy, r, r1, r2, a, b;
+    int n, minframe, maxframe, mintime, maxtime;
+    struct __outrec_dq_dt_stat_t rec;
+} proj_t;
+
+static Dt_t *projdict;
+static Dtdisc_t projdisc = {
+    sizeof (Dtlink_t), SZ_level + SZ_id + SZ_key, 0,
+    NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+#define GROUP_CURR 0
+#define GROUP_MEAN 1
+#define GROUP_SDEV 2
+
+typedef struct stat_s {
+    Dtlink_t link;
+    /* begin key */
+    int group, frame;
+    char level[SZ_level], id[SZ_id], key[SZ_key];
+    /* end key */
+    int groupmode, aggrmode, valn;
+    float val;
+    proj_t *projp;
+    struct __outrec_dq_dt_stat_t rec;
+} stat_t;
+
+static Dt_t *statdict;
+static Dtdisc_t statdisc = {
+    sizeof (Dtlink_t), sizeof (int) + SZ_level + SZ_id + SZ_key, 0,
+    NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static int groupmode, projmode;
+static int fframe, lframe, ft, lt;
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+}
+BEGIN{
+    groupmode = atoi (getenv ("GROUPMODE"));
+    projmode = atoi (getenv ("PROJMODE"));
+    fframe = atoi (getenv ("FFRAME"));
+    lframe = atoi (getenv ("LFRAME"));
+    ft = atoi (getenv ("FT"));
+    lt = atoi (getenv ("LT"));
+    if (projmode && !(projdict = dtopen (&projdisc, Dtoset)))
+        SUerror ("vg_dq_dt_stat_gnp", "cannot open proj dict");
+    if (!(statdict = dtopen (&statdisc, Dtoset)))
+        SUerror ("vg_dq_dt_stat_gnp", "cannot open stat dict");
+    if (statmapload (getenv ("STATMAPFILE"), TRUE, FALSE, FALSE) == -1)
+        SUerror ("vg_dq_dt_stat_gnp", "cannot load statmap file");
+}
+{
+    proj_t p, *pp, *pmem;
+    stat_t s, *sp, *smem;
+    int smi, group;
+
+    DROP;
+    OUT->scope[0] = 0;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    group = GROUP_CURR;
+    if (IN->label[0] == '_')
+        if (strcmp (IN->label, "___mean___") == 0)
+            group = GROUP_MEAN;
+        else if (strcmp (IN->label, "___sdev___") == 0)
+            group = GROUP_SDEV;
+
+    pp = NULL;
+    if (projmode && group == GROUP_CURR) {
+        memset (&p, 0, sizeof (proj_t));
+        if (groupmode) {
+            strcpy (p.level, IN->ilevel);
+            strcpy (p.id, IN->iid);
+        } else {
+            strcpy (p.level, IN->level);
+            strcpy (p.id, IN->id);
+        }
+        strcpy (p.key, IN->key);
+        if (!(pp = dtsearch (projdict, &p))) {
+            if (!(pmem = vmalloc (Vmheap, sizeof (proj_t)))) {
+                SUwarning (0, "vg_dq_dt_stat_gnp", "cannot allocate proj");
+                return __result;
+            }
+            memset (pmem, 0, sizeof (proj_t));
+            if (groupmode) {
+                strcpy (pmem->level, IN->ilevel);
+                strcpy (pmem->id, IN->iid);
+            } else {
+                strcpy (pmem->level, IN->level);
+                strcpy (pmem->id, IN->id);
+            }
+            strcpy (pmem->key, IN->key);
+            if ((pp = dtinsert (projdict, pmem)) != pmem) {
+                SUwarning (0, "vg_dq_dt_stat_gnp", "cannot insert proj");
+                vmfree (Vmheap, pmem);
+                return __result;
+            }
+            pp->minframe = INT_MAX;
+            memcpy (&pp->rec, __inrecp, sizeof (struct __outrec_dq_dt_stat_t));
+            if (groupmode) {
+                memcpy (pp->rec.level, pp->level, SZ_level);
+                memcpy (pp->rec.id, pp->id, SZ_id);
+            }
+        }
+        if (pp->minframe > IN->frame)
+            pp->minframe = IN->frame, pp->mintime = IN->timeissued;
+        if (pp->maxframe < IN->frame)
+            pp->maxframe = IN->frame, pp->maxtime = IN->timeissued;
+    }
+
+    memset (&s, 0, sizeof (stat_t));
+    s.group = group;
+    s.frame = IN->frame;
+    if (groupmode) {
+        strcpy (s.level, IN->ilevel);
+        strcpy (s.id, IN->iid);
+    } else {
+        strcpy (s.level, IN->level);
+        strcpy (s.id, IN->id);
+    }
+    strcpy (s.key, IN->key);
+    if (!(sp = dtsearch (statdict, &s))) {
+        if (!(smem = vmalloc (Vmheap, sizeof (stat_t)))) {
+            SUwarning (0, "vg_dq_dt_stat_gnp", "cannot allocate stat");
+            return __result;
+        }
+        memset (smem, 0, sizeof (stat_t));
+        smem->group = group;
+        smem->frame = IN->frame;
+        if (groupmode) {
+            strcpy (smem->level, IN->ilevel);
+            strcpy (smem->id, IN->iid);
+        } else {
+            strcpy (smem->level, IN->level);
+            strcpy (smem->id, IN->id);
+        }
+        strcpy (smem->key, IN->key);
+        if ((sp = dtinsert (statdict, smem)) != smem) {
+            SUwarning (0, "vg_dq_dt_stat_gnp", "cannot insert stat");
+            vmfree (Vmheap, smem);
+            return __result;
+        }
+        if ((smi = statmapfind (IN->key)) >= 0) {
+            sp->groupmode = statmaps[smi].groupmode;
+            sp->aggrmode = statmaps[smi].aggrmode;
+        } else {
+            sp->groupmode = VG_STATMAP_GROUPMODE_AVG;
+            sp->aggrmode = VG_STATMAP_AGGRMODE_AVG;
+        }
+        sp->projp = pp;
+        memcpy (&sp->rec, __inrecp, sizeof (struct __outrec_dq_dt_stat_t));
+    }
+
+    if (!groupmode)
+        switch (sp->aggrmode) {
+        case VG_STATMAP_AGGRMODE_AVG:
+            sp->val += IN->val, sp->valn++;
+            break;
+        case VG_STATMAP_AGGRMODE_SUM:
+            sp->val += IN->val;
+            break;
+        case VG_STATMAP_AGGRMODE_MIN:
+            if (sp->val > IN->val)
+                sp->val = IN->val;
+            break;
+        case VG_STATMAP_AGGRMODE_MAX:
+            if (sp->val < IN->val)
+                sp->val = IN->val;
+            break;
+        }
+    else {
+        switch (sp->groupmode) {
+        case VG_STATMAP_GROUPMODE_AVG:
+            sp->val += IN->val, sp->valn++;
+            break;
+        case VG_STATMAP_GROUPMODE_SUM:
+            sp->val += IN->val;
+            break;
+        case VG_STATMAP_GROUPMODE_MIN:
+            if (sp->val > IN->val)
+                sp->val = IN->val;
+            break;
+        case VG_STATMAP_GROUPMODE_MAX:
+            if (sp->val < IN->val)
+                sp->val = IN->val;
+            break;
+        }
+    }
+}
+END{
+    proj_t *pp;
+    stat_t *sp;
+
+    if (!groupmode) {
+        for (sp = dtfirst (statdict); sp; sp = dtnext (statdict, sp)) {
+            switch (sp->aggrmode) {
+            case VG_STATMAP_AGGRMODE_AVG:
+                sp->val /= sp->valn;
+                break;
+            case VG_STATMAP_AGGRMODE_SUM:
+                break;
+            case VG_STATMAP_AGGRMODE_MIN:
+                break;
+            case VG_STATMAP_AGGRMODE_MAX:
+                break;
+            }
+            sp->rec.val = sp->val;
+        }
+    } else {
+        for (sp = dtfirst (statdict); sp; sp = dtnext (statdict, sp)) {
+            memcpy (sp->rec.level, sp->level, SZ_level);
+            memcpy (sp->rec.id, sp->id, SZ_id);
+            switch (sp->groupmode) {
+            case VG_STATMAP_GROUPMODE_AVG:
+                sp->val /= sp->valn;
+                break;
+            case VG_STATMAP_GROUPMODE_SUM:
+                break;
+            case VG_STATMAP_GROUPMODE_MIN:
+                break;
+            case VG_STATMAP_GROUPMODE_MAX:
+                break;
+            }
+            sp->rec.val = sp->val;
+        }
+    }
+
+    for (sp = dtfirst (statdict); sp; sp = dtnext (statdict, sp)) {
+        (*wfunc) (
+            wfp, &sp->rec, wschemap, sizeof (struct __outrec_dq_dt_stat_t)
+        );
+    }
+
+    if (projmode) {
+        for (sp = dtfirst (statdict); sp; sp = dtnext (statdict, sp)) {
+            if (!sp->projp)
+                continue;
+            sp->projp->mx += sp->frame;
+            sp->projp->my += sp->val;
+            sp->projp->n++;
+        }
+        for (pp = dtfirst (projdict); pp; pp = dtnext (projdict, pp)) {
+            pp->mx /= pp->n;
+            pp->my /= pp->n;
+        }
+        for (sp = dtfirst (statdict); sp; sp = dtnext (statdict, sp)) {
+            if (!sp->projp)
+                continue;
+            sp->projp->sx += (
+                (sp->frame - sp->projp->mx) * (sp->frame - sp->projp->mx)
+            );
+            sp->projp->sy += (
+                (sp->val - sp->projp->my) * (sp->val - sp->projp->my)
+            );
+            sp->projp->r1 += (
+                (sp->frame - sp->projp->mx) * (sp->val - sp->projp->my)
+            );
+        }
+        for (pp = dtfirst (projdict); pp; pp = dtnext (projdict, pp)) {
+            if (pp->n < 1)
+                continue;
+            pp->sx = sqrt (pp->sx / (pp->n - 1.0));
+            pp->sy = sqrt (pp->sy / (pp->n - 1.0));
+            pp->r2 = (pp->n - 1.0) * pp->sx * pp->sy;
+            if (ALMOSTZERO (pp->r2) || ALMOSTZERO (pp->sx))
+                continue;
+            pp->r = pp->r1 / pp->r2;
+            pp->b = pp->r * (pp->sy / pp->sx);
+            pp->a = pp->my - pp->b * pp->mx;
+            pp->rec.val = pp->a + pp->b * pp->minframe;
+            pp->rec.frame = pp->minframe;
+            pp->rec.timeissued = pp->mintime;
+
+            memset (pp->rec.label, 0, SZ_label);
+            strcpy (pp->rec.label, "___proj___");
+            (*wfunc) (
+                wfp, &pp->rec, wschemap, sizeof (struct __outrec_dq_dt_stat_t)
+            );
+            pp->rec.val = pp->a + pp->b * pp->maxframe;
+            pp->rec.frame = pp->maxframe;
+            pp->rec.timeissued = pp->maxtime;
+            (*wfunc) (
+                wfp, &pp->rec, wschemap, sizeof (struct __outrec_dq_dt_stat_t)
+            );
+            pp->rec.val = pp->a + pp->b * lframe;
+            pp->rec.frame = lframe;
+            pp->rec.timeissued = lt;
+            (*wfunc) (
+                wfp, &pp->rec, wschemap, sizeof (struct __outrec_dq_dt_stat_t)
+            );
+        }
+    }
+}

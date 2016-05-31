@@ -1,0 +1,111 @@
+VARS{
+#include <cdt.h>
+#include <vmalloc.h>
+#include <swift.h>
+#include "vg_hdr.h"
+
+#define S_level DDSSZ_rec_dq_dt_alarm_level1
+#define S_id DDSSZ_rec_dq_dt_alarm_id1
+#define S_aid DDSSZ_rec_dq_dt_alarm_alarmid
+
+#define AIDPINCR 50
+typedef struct lvid_s {
+    Dtlink_t link;
+    /* begin key */
+    char lv[S_level], id[S_id];
+    /* end key */
+
+    char **aidps;
+    int aidpm, aidpn;
+} lvid_t;
+
+static Dt_t *lviddict;
+static Dtdisc_t lviddisc = {
+    sizeof (Dtlink_t), S_level + S_id, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static int lvidinit (void) {
+    if (!(lviddict = dtopen (&lviddisc, Dtoset))) {
+        SUwarning (0, "lvidinit", "cannot open lvid dict");
+        return -1;
+    }
+    return 0;
+}
+
+static int lvidinsert (char *lv, char *id, char *aid) {
+    lvid_t li, *lip, *limem;
+    int aidpi;
+
+    memset (&li, 0, sizeof (lvid_t));
+    strcpy (li.lv, lv);
+    strcpy (li.id, id);
+    if (!(lip = dtsearch (lviddict, &li))) {
+        if (!(limem = vmalloc (Vmheap, sizeof (lvid_t)))) {
+            SUwarning (0, "lvidinsert", "cannot allocate lvid");
+            return -1;
+        }
+        memset (limem, 0, sizeof (lvid_t));
+        strcpy (limem->lv, lv);
+        strcpy (limem->id, id);
+        if ((lip = dtinsert (lviddict, limem)) != limem) {
+            SUwarning (0, "lvidinsert", "cannot insert lvid");
+            vmfree (Vmheap, limem);
+            return -1;
+        }
+    }
+    for (aidpi = 0; aidpi < lip->aidpm; aidpi++) {
+        if (strcmp (lip->aidps[aidpi], aid) == 0)
+            return 0;
+    }
+    if (lip->aidpm >= lip->aidpn) {
+        if (!(lip->aidps = vmresize (
+            Vmheap, lip->aidps, (lip->aidpn + AIDPINCR) * sizeof (char *),
+            VM_RSCOPY
+        ))) {
+            SUwarning (0, "lvidinsert", "cannot grow aidps array");
+            return -1;
+        }
+    }
+    if (!(lip->aidps[lip->aidpm] = vmstrdup (Vmheap, aid))) {
+        SUwarning (0, "lvidinsert", "cannot copy aid");
+        return -1;
+    }
+    lip->aidpm++;
+
+    return 0;
+}
+
+static int lviddump (void) {
+    lvid_t li, *lip, *limem;
+    int aidpi, l;
+
+    for (lip = dtfirst (lviddict); lip; lip = dtnext (lviddict, lip)) {
+        sfprintf (sfstdout, "%s|%s", lip->lv, lip->id);
+        for (aidpi = 0; aidpi < lip->aidpm; aidpi++) {
+            l = strlen (lip->aidps[aidpi]) + 1;
+            sfprintf (
+                sfstdout, "|%s%s", lip->aidps[aidpi], (l == S_aid) ? ".*" : ""
+            );
+        }
+        sfprintf (sfstdout, "\n");
+    }
+    return 0;
+}
+}
+BEGIN{
+    lvidinit ();
+}
+{
+    char *s1, *s2;
+
+    DROP;
+    if (strlen (alarmid) >= 4) {
+        s1 = strchr (alarmid, '_');
+        s2 = strchr (alarmid, '.');
+        if (s1 && s2 && (s1 < s2 || s1 == s2 + 1))
+            lvidinsert (level1, id1, alarmid);
+    }
+}
+END{
+    lviddump ();
+}

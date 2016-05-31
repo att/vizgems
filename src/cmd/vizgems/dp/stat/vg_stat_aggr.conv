@@ -1,0 +1,173 @@
+VARS{
+#include <tm.h>
+#define VG_STATMAP_MAIN
+#include "vg_statmap.c"
+
+#define SZ_level DDSSZ_outrec_stat_level
+#define SZ_id DDSSZ_outrec_stat_id
+#define SZ_key DDSSZ_outrec_stat_key
+#define SZ_label DDSSZ_outrec_stat_label
+#define SZ_unit DDSSZ_outrec_stat_unit
+
+#define ABS(a) (((a) >= 0.0) ? (a) : -(a))
+
+static int mode, nframe, nval;
+static float cval;
+
+static int havedata, aggrmode;
+static char plevel[SZ_level], pid[SZ_id], pkey[SZ_key], punit[SZ_unit];
+static char plabel[SZ_label], mlabel[SZ_label];
+static int pframe, ptim, prframe, pt;
+
+static struct __outrec_stat_t rec;
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+
+static int emit (void) {
+    memset (&rec, 0, sizeof (struct __outrec_stat_t));
+    rec.timeissued = ptim;
+    strcpy (&rec.level[0], plevel);
+    strcpy (&rec.id[0], pid);
+    strcpy (&rec.key[0], pkey);
+    strcpy (&rec.unit[0], punit);
+    rec.frame = pframe;
+    switch (aggrmode) {
+    case VG_STATMAP_AGGRMODE_AVG:
+        strcpy (&rec.label[0], plabel);
+        rec.val = cval / nval;
+        break;
+    case VG_STATMAP_AGGRMODE_SUM:
+        strcpy (&rec.label[0], plabel);
+        rec.val = cval;
+        break;
+    case VG_STATMAP_AGGRMODE_MIN:
+        strcpy (&rec.label[0], mlabel);
+        rec.val = cval;
+        break;
+    case VG_STATMAP_AGGRMODE_MAX:
+        strcpy (&rec.label[0], mlabel);
+        rec.val = cval;
+        break;
+    }
+    (*wfunc) (wfp, &rec, wschemap, sizeof (struct __outrec_stat_t));
+
+    return 0;
+}
+
+static void mytmfmt1 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+static void mytmfmt2 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+}
+BEGIN{
+    mode = atoi (getenv ("MODE"));
+    if (statmapload (getenv ("STATMAPFILE"), TRUE, FALSE, FALSE) == -1)
+        SUerror ("vg_stat_aggr", "cannot load statmap file");
+
+    havedata = FALSE;
+
+    pframe = prframe = -1;
+}
+{
+    char buf[1000];
+    int smi;
+    time_t t;
+
+    DROP;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (prframe == IN->frame)
+        IN->timeissued = pt;
+    pt = t = IN->timeissued;
+    prframe = IN->frame;
+    if (mode == 1) {
+        mytmfmt1 (buf, 1000, "%d", &t);
+        nframe = 24 * (atoi (buf) - 1);
+        mytmfmt2 (buf, 1000, "%H", &t);
+        nframe += atoi (buf);
+    } else if (mode == 2) {
+        mytmfmt1 (buf, 1000, "%J", &t);
+        nframe = atoi (buf);
+    }
+    if (
+        strcmp (plevel, IN->level) != 0 || strcmp (pid, IN->id) != 0 ||
+        strcmp (pkey, IN->key) != 0 || pframe != nframe
+    ) {
+        if (havedata)
+            emit (), havedata = FALSE;
+        strcpy (plevel, IN->level);
+        strcpy (pid, IN->id);
+        strcpy (pkey, IN->key);
+        strcpy (punit, IN->unit);
+        IN->label[SZ_label - 1] = 0;
+        strcpy (plabel, IN->label);
+        pframe = nframe;
+        ptim = IN->timeissued;
+        cval = 0.0, nval = 0;
+        aggrmode = VG_STATMAP_AGGRMODE_AVG;
+        if ((smi = statmapfind (IN->key)) >= 0)
+            aggrmode = statmaps[smi].aggrmode;
+    }
+
+    switch (aggrmode) {
+    case VG_STATMAP_AGGRMODE_AVG:
+        cval += IN->val, nval++;
+        break;
+    case VG_STATMAP_AGGRMODE_SUM:
+        cval += IN->val, nval++;
+        break;
+    case VG_STATMAP_AGGRMODE_MIN:
+        if (nval == 0 || cval > IN->val) {
+            IN->label[SZ_label - 1] = 0;
+            cval = IN->val, strcpy (mlabel, IN->label);
+        }
+        nval++;
+        break;
+    case VG_STATMAP_AGGRMODE_MAX:
+        if (nval == 0 || cval < IN->val) {
+            IN->label[SZ_label - 1] = 0;
+            cval = IN->val, strcpy (mlabel, IN->label);
+        }
+        nval++;
+        break;
+    }
+    havedata = TRUE;
+    OUT->frame = -1;
+}
+END{
+    if (havedata)
+        emit ();
+}

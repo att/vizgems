@@ -1,0 +1,11 @@
+suibrowser=(
+  label="Browser Interface"
+  langs="ksh java"
+  uselang=ksh
+  launch=yes
+  groups="default"
+  default=(
+    label="Browser Interface Preferences"
+    entrylist=""
+  )
+)

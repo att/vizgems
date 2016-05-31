@@ -1,0 +1,39 @@
+#!/bin/ksh
+
+export TZ=SWIFT_CFG_SYSTZ
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSNMPDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+add2path SWIFT_CFG_SSNMPDIR/current
+add2path SWIFT_CFG_DSNMPDIR
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export MIBDIRS=SWIFT_CFG_SSNMPDIR/current/share/snmp/mibs
+
+export VG_SSYSTEMDIR=SWIFT_CFG_SSYSTEMDIR
+export VG_SSCOPESDIR=SWIFT_CFG_SSCOPESDIR
+export VG_SWWWDIR=SWIFT_CFG_SWWWDIR
+export VG_SSNMPDIR=SWIFT_CFG_SSNMPDIR
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+export VG_DSCOPESDIR=SWIFT_CFG_DSCOPESDIR
+export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
+export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
+
+export LC_ALL=C LANG=C
+
+PATH=$PATH:/usr/sbin:/sbin
+
+$SHELL snmp_process

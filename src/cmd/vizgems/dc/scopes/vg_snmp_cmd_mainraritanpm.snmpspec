@@ -1,0 +1,105 @@
+rec=(
+    prepend='
+        if [[ $INVMODE != y ]] then
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.4.1.20.2.1.7.1 | read -r current
+            current=${current##*"Gauge32: "}
+            if [[ $current == +([0-9]) ]] then
+                print "rt=STAT name=sensor_current._total type=number num=$(( current / 1000.0 )) unit=Amps label=\"Current (All)\""
+            fi
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.4.1.20.2.1.9.1 | read -r power
+            power=${power##*"Gauge32: "}
+            if [[ $power == +([0-9]) ]] then
+                print "rt=STAT name=sensor_power._total type=number num=$(( power / 1000.0 )) unit=kW label=\"Power (All)\""
+            fi
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.4.1.20.2.1.8.1 | read -r voltage
+            voltage=${voltage##*"Gauge32: "}
+            if [[ $voltage == +([0-9]) ]] then
+                print "rt=STAT name=sensor_volts._total type=number num=$(( voltage / 1000.0 )) unit=Volts label=\"Volts (All)\""
+            fi
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.4.1.20.2.1.11.1 | read -r pfactor
+            pfactor=${pfactor##*"Gauge32: "}
+            if [[ $pfactor == +([0-9]) ]] then
+                print "rt=STAT name=sensor_pf._total type=number num=$(( pfactor / 100.0 )) unit=factor label=\"P.Factor (All)\""
+            fi
+            $SNMPCMD $SNMPARGS .1.3.6.1.4.1.13742.4.1.3.1.5.0 | read -r temp
+            temp=${temp##*"Gauge32: "}
+            temp=${temp#*"("}
+            temp=${temp%")"*}
+            temp=${temp%oF}
+            if [[ $temp == +([0-9.]) ]] then
+                print "rt=STAT name=sensor_temp._total type=number num=$(( (temp / 10.0) * 1.8 + 32.0 )) unit=F label=\"Temp (All)\""
+            fi
+        fi
+    '
+    keys=INDEX
+    walk0=(
+        name='.1.3.6.1.4.1.13742.4.1.2.2.1.2.${INDEX}' # outletLabel
+        type=STRING
+        value='${NAME}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.13742.4.1.2.2.1.3.${INDEX}' # outletOperationalState
+        type=INTEGER
+        value='${STATUS}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.13742.4.1.2.2.1.4.${INDEX}' # outletCurrent
+        type=INTEGER
+        value='${CURRENT}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.13742.4.1.2.2.1.7.${INDEX}' # outletActivePower
+        type=INTEGER
+        value='${POWER}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.13742.4.1.2.2.1.6.${INDEX}' # outletVoltage
+        type=INTEGER
+        value='${VOLTAGE}'
+    )
+    walk5=(
+        name='.1.3.6.1.4.1.13742.4.1.2.2.1.9.${INDEX}' # outletPowerFactor
+        type=INTEGER
+        value='${PFACTOR}'
+    )
+    outkey=INDEX
+    output='${INDEX}|${NAME}|${STATUS}|${CURRENT}|${POWER}|${VOLTAGE}|${PFACTOR}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r index name status current power voltage pfactor; do
+                index=${index//./_}
+                name=${name//[\"\|]/}; name=${name##+(" ")}; name=${name%%+(" ")}
+                if [[ $status == 1 ]] then
+                    print "node|o|$INV_TARGET|si_status$index|up"
+                    print "node|o|$INV_TARGET|si_port$index|$index"
+                else
+                    print "node|o|$INV_TARGET|si_status$index|down"
+                fi
+                print "node|o|$INV_TARGET|si_name$index|$name"
+            done
+            print "node|o|$INV_TARGET|si_port_total|_total"
+            ;;
+        *)
+            while read -r index name status current power voltage pfactor; do
+                [[ $status != 1 ]] && continue
+                index=${index//./_}
+                name=${name//[\"\|]/}; name=${name##+(" ")}; name=${name%%+(" ")}
+                if [[ $current == +([0-9]) ]] then
+                    print "rt=STAT name=sensor_current.${index} type=number num=$(( current / 1000.0 )) unit=Amps label=\"Current ($name)\""
+                fi
+                if [[ $power == +([0-9]) ]] then
+                    print "rt=STAT name=sensor_power.${index} type=number num=$(( power / 1000.0 )) unit=kW label=\"Power ($name)\""
+                fi
+                if [[ $voltage == +([0-9]) ]] then
+                    print "rt=STAT name=sensor_volts.${index} type=number num=$(( voltage / 1000.0 )) unit=Volts label=\"Volts ($name)\""
+                fi
+                if [[ $pfactor == +([0-9]) ]] then
+                    print "rt=STAT name=sensor_pf.${index} type=number num=$(( pfactor / 100.0 )) unit=factor label=\"P.Factor ($name)\""
+                fi
+            done
+            ;;
+        esac
+    }'
+)

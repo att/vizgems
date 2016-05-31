@@ -1,0 +1,45 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+if [[ ! -d $VGMAINDIR/data/main/latest/processed/total ]] then
+    print -u2 ERROR no data directory
+    exit 1
+fi
+
+dir=$VGMAINDIR/data/main/latest/processed/total
+
+if [[ ! -f $dir/inv-nodes-uniq.dds ]] then
+    print -u2 ERROR no processed inventory file
+    exit 2
+fi
+if [[ ! -f $dir/inv-maps-uniq.dds ]] then
+    print -u2 ERROR no processed map file
+    exit 2
+fi
+export INVMAPFILE=$dir/inv-maps-uniq.dds
+if [[ ! -f $dir/LEVELS-maps.dds ]] then
+    print -u2 ERROR no processed map file
+    exit 2
+fi
+export LEVELMAPFILE=$dir/LEVELS-maps.dds
+
+ddsfilter -osm none \
+    -fso vg_inv_map_check.filter.so \
+$dir/inv-nodes-uniq.dds

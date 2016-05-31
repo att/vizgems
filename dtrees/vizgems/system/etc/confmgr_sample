@@ -1,0 +1,747 @@
+#!/bin/ksh
+
+usage=$'
+[-1p1?
+@(#)$Id: confmgr (AT&T) 2007-03-25 $
+]
+[+NAME?confmgr - configuration manager]
+[+DESCRIPTION?\bconfmgr\b handles the importing and exporting of files
+managed by the configuration manager.
+]
+[200:importlegacy?imports new inventory data from the legacy directory.
+]
+[201:importview?imports new inventory data from the view directory.
+]
+[202:importscope?imports new inventory data from the scope directory.
+]
+[203:push?pushes the specified file to all systems.
+the file argument must be the base name of the file, e.g. type.txt.
+this option is to be used when there is reason to believe that a file
+is out of sync.
+if the file name is \baccounts\b then all three web account files will be
+copied.
+]:[file]
+[204:printmd5?prints the md5 checksums for all the files.
+]
+[205:updatephrase?updates the pass phrase.
+]
+[206:printbyuser?prints number of configuration records owned by specified user.
+]
+[999:v?increases the verbosity level. May be specified multiple times.]
+'
+
+function showusage {
+    OPTIND=0
+    getopts -a confmgr "$usage" opt '-?'
+}
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+if [[ $BUILTINREC != 1 ]] then
+    builtin -f codex codex 2> /dev/null
+    builtin -f swiftsh swiftshenc swiftshdec 2> /dev/null
+else
+    builtin -f codex codex
+    builtin -f swiftsh swiftshenc swiftshdec
+fi
+if [[ $? != 0 && $BUILTINREC != 1 ]] then
+    BUILTINREC=1 exec $SHELL $0 "$@"
+fi
+
+function queueins {
+    typeset file=$1 rfile=$2 ofile=$3
+    typeset ts pfile sn
+
+    ts=$(printf '%(%Y%m%d-%H%M%S)T')
+    sn=SWIFT_CFG_SYSNAME
+    pfile=cm.$ts.$file.${rfile//./_X_X_}.$sn.$sn.$RANDOM.full.xml
+    pfile=SWIFT_CFG_DSYSTEMDIR/incoming/cm/$pfile
+    (
+        print "<a>full</a>"
+        print "<u>$sn</u>"
+        print "<f>"
+        cat $ofile
+        print "</f>"
+    ) > $pfile.tmp && mv $pfile.tmp $pfile
+}
+
+function queuerem {
+    typeset file=$1 rfile=$2
+    typeset ts pfile sn
+
+    ts=$(printf '%(%Y%m%d-%H%M%S)T')
+    sn=SWIFT_CFG_SYSNAME
+    pfile=cm.$ts.$file.${rfile//./_X_X_}.$sn.$sn.$RANDOM.remove.xml
+    pfile=SWIFT_CFG_DSYSTEMDIR/incoming/cm/$pfile
+    (
+        print "<a>remove</a>"
+        print "<u>$sn</u>"
+        print "<f>"
+        print "</f>"
+    ) > $pfile.tmp && mv $pfile.tmp $pfile
+}
+
+encryptfields='scope_pass|scope_snmpcommunity'
+function encryptfile { # $1 = file
+    typeset line fs v ev
+
+    if [[ $(
+        egrep "^node.*\|($encryptfields)\|" $i \
+        | egrep -v 'SWENC.*SWENC.*SWENC' | head -1
+    ) == '' ]] then
+        return
+    fi
+
+    while read -r line; do
+        if [[
+            $line == "node|"*"|"@($encryptfields)"|"* &&
+            $line != *SWENC*SWENC*SWENC*
+        ]] then
+            set -f
+            set -A fs -- $line
+            set +f
+            v=${fs[4]}
+            print -r -- "$v" \
+            | codex --passphrase="$ENCRYPTCODE" ">aes>uu-base64-string" \
+            | read -r ev
+            if (( ${#ev} < 1 )) then
+                print -r -- "$line"
+                continue
+            fi
+            print -rn -- "${fs[0]}|${fs[1]}|${fs[2]}|${fs[3]}|"
+            print -r -- "SWENC${ev}SWENC${ENCRYPTPHRASE}SWENC"
+        else
+            print -r -- "$line"
+        fi
+    done < $i > $i.enc
+    if (( $(wc -l < $i) == $(wc -l < $i.enc) )) then
+        print -u2 replacing file $i with encrypted version
+        mv $i.enc $i
+    else
+        print -u2 ERROR encryption failed for file $i
+        rm $i.enc
+    fi
+}
+
+export LC_ALL=C LANG=C
+
+while getopts -a confmgr "$usage" opt; do
+    case $opt in
+    200) mode=importlegacy ;;
+    201) mode=importview ;;
+    202) mode=importscope ;;
+    203) mode=push; file=$OPTARG ;;
+    204) mode=printmd5 ;;
+    205) mode=updatephrase ;;
+    206) mode=printbyuser ;;
+    999) (( SWIFTWARNLEVEL++ )) ;;
+    *) showusage; exit 1 ;;
+    esac
+done
+shift $OPTIND-1
+
+cd SWIFT_CFG_DSYSTEMDIR
+
+sn=SWIFT_CFG_SYSNAME
+
+case $mode in
+printmd5)
+    . SWIFT_CFG_DSYSTEMDIR/etc/confmgr.info
+    PATH=SWIFT_CFG_SSYSTEMDIR/current/bin:$PATH
+    vg_cmprintmd5 SWIFT_CFG_SSYSTEMDIR/current/lib/vg/vg_cmfilelist
+    exit 0
+    ;;
+printbyuser)
+    . SWIFT_CFG_DSYSTEMDIR/dpfiles/config.sh
+    export DEFAULTLEVEL
+    . SWIFT_CFG_DSYSTEMDIR/etc/confmgr.info
+    PATH=SWIFT_CFG_SSYSTEMDIR/current/bin:$PATH
+    export VIEWALL=1 SWIFTDATADIR=SWIFT_CFG_DSYSTEMDIR
+    vg_cmprintbyaccount SWIFT_CFG_SSYSTEMDIR/current/lib/vg/vg_cmfilelist
+    exit 0
+    ;;
+esac
+
+exec 4>&2
+lockfile=SWIFT_CFG_DSYSTEMDIR/lock.confmgr
+exitfile=SWIFT_CFG_DSYSTEMDIR/exit.confmgr
+[[ -f $exitfile ]] && exit 0
+set -o noclobber
+while ! command exec 3> $lockfile; do
+    if kill -0 $(< $lockfile); then
+        [[ $nowait == y ]] && exit 0
+    elif [[ $(fuser $lockfile) != '' ]] then
+        [[ $nowait == y ]] && exit 0
+    else
+        rm -f $lockfile
+        [[ $nowait == y ]] && exit 0
+    fi
+    if [[ -f $exitfile ]] then
+        exit 0
+    fi
+    print -u4 waiting for another instance to exit - pid: $(< ${lockfile})
+    sleep 1
+done 2> /dev/null
+print -u3 $$
+set +o noclobber
+exec 4>&-
+
+trap "rm -f $lockfile" HUP QUIT TERM KILL EXIT
+
+case $mode in
+importlegacy)
+    mkdir -p inv/legacy/cache tmp/inv
+
+    IFS='|'
+
+    typeset -A bmap bmapr cmap cmapr lmap lmapr tmap tmapr o2c o2s tla2icon
+    typeset -l bid cid lid tid oid sid gid oid1 oid2
+    typeset bname cname lname tname oname sname gname GNAME
+
+    egrep -v '^#|^$' dpfiles/inv/business.txt | while read -r bid bname j; do
+        bmap[$bid]=$bname
+        bmapr[$bname]=$bid
+    done
+    egrep -v '^node\|l\|.*\|name\|' dpfiles/inv/location.txt \
+    | while read -r j1 j2 lid j4 lname j5; do
+        lmap[$lid]=$lname
+        lmapr[$lname]=$lid
+    done
+    egrep -v '^#|^$' dpfiles/inv/customer.txt | while read -r cid cname j; do
+        cmap[$cid]=$cname
+        cmapr[$cname]=$cid
+    done
+    egrep -v '^#|^$' dpfiles/inv/type.txt | while read -r tid tname j; do
+        tmap[$tid]=$tname
+        tmapr[$tname]=$tid
+    done
+    egrep -v '^#|^$' dpfiles/inv/tla2icon.txt | while read -r tla icon; do
+        tla2icon[$tla]=$icon
+    done
+
+    exec > tmp/inv/full.txt
+
+    for i in inv/legacy/inventory-*.txt; do
+        [[ ! -f $i ]] && continue
+        print -u2 file $i
+        egrep -v '^#|^$' $i | while read -r \
+            oid alias info1 info2 comm cname sname lname \
+            rname tla onname anname bname \
+        ; do
+            onname=${onname:-$oid}
+            info1=${info1##+(' ')}
+            info1=${info1%%+(' ')}
+            info1=${info1//+(' ')/' '}
+            info2=${info2##+(' ')}
+            info2=${info2%%+(' ')}
+            info2=${info2//+(' ')/' '}
+            cname=${cname##+(' ')}
+            cname=${cname%%+(' ')}
+            cname=${cname//+(' ')/' '}
+            sname=${sname##+(' ')}
+            sname=${sname%%+(' ')}
+            sname=${sname//+(' ')/' '}
+            lname=${lname##+(' ')}
+            lname=${lname%%+(' ')}
+            lname=${lname//+(' ')/' '}
+            onname=${onname##+(' ')}
+            onname=${onname%%+(' ')}
+            onname=${onname//+(' ')/' '}
+            anname=${anname##+(' ')}
+            anname=${anname%%+(' ')}
+            anname=${anname//+(' ')/' '}
+            bname=${bname##+(' ')}
+            bname=${bname%%+(' ')}
+            bname=${bname//+(' ')/' '}
+
+            oid=${oid//[!.a-zA-Z0-9_:-]/}
+
+            cid=${cmapr[$cname]}
+            if [[ $cid == '' ]] then
+                print -u2 "ERROR ($oid) no customer '$cname' in customer file"
+            fi
+
+            sid=$sname
+            sid=${sid//[!.a-zA-Z0-9_:-]/}
+
+            lid=${lmapr[$lname]}
+            if [[ $lid == '' ]] then
+                print -u2 "WARNING ($oid) no location '$lname' in location file"
+            fi
+
+            tid=${tla#*--}
+            tid=${tid//[!.a-zA-Z0-9_:-]/}
+            tname=${tmap[$tid]}
+            if [[ $tname == '' ]] then
+                print -u2 "WARNING ($oid) no type '$tid' in type file"
+            fi
+
+            bid=${bmapr[$bname]}
+            if [[ $bid == '' ]] then
+                print -u2 "WARNING ($oid) no business '$bname' in business file"
+            fi
+
+            [[ $cid == '' ]] && continue
+
+            oname=${onname//'<br>'/}
+            onname=${onname//'<br>'/\\n}
+
+            aname=${anname//'<br>'/}
+            anname=${anname//'<br>'/\\n}
+
+            snname=${sname//'<br>'/\\n}
+            sname=${sname//'<br>'/}
+
+            if [[ $info1 != '' && $info2 != '' ]] then
+                info="$info1 $info2"
+            else
+                info="$info1$info2"
+            fi
+
+            [[ $oid != '' && $oname != '' ]] \
+            && print -r "$cid|node|o|$oid|name|$oname"
+            [[ $oid != '' && $alias != '' ]] \
+            && print -r "$cid|node|o|$oid|alias|$alias"
+            [[ $oid != '' && $onname != '' ]] \
+            && print -r "$cid|node|o|$oid|nodename|$onname"
+            [[ $oid != '' && $anname != '' ]] \
+            && print -r "$cid|node|o|$oid|aliasname|$anname"
+            [[ $oid != '' && $info != '' ]] \
+            && print -r "$cid|node|o|$oid|info|$info"
+            [[ $oid != '' && $tid != '' && ${tla2icon[$tid]} != '' ]] \
+            && print -r "$cid|node|o|$oid|icon|${tla2icon[$tid]}"
+            [[ $sid != '' && $sname != '' ]] \
+            && print -r "$cid|node|s|$cid:$sid|name|$sname"
+            [[ $sid != '' && $snname != '' ]] \
+            && print -r "$cid|node|s|$cid:$sid|nodename|$sname"
+
+            [[ $oid != '' && $bid != '' ]] \
+            && print "$cid|map|o|$oid|b|$bid||"
+            [[ $oid != '' && $cid != '' ]] \
+            && print "$cid|map|o|$oid|c|$cid||"
+            [[ $sid != '' && $lid != '' ]] \
+            && print "$cid|map|s|$cid:$sid|l|$lid||"
+            [[ $sid != '' && $cid != '' ]] \
+            && print "$cid|map|s|$cid:$sid|c|$cid||"
+            [[ $oid != '' && $tid != '' ]] \
+            && print "$cid|map|o|$oid|t|$tid||"
+
+            o2c[$oid]=$cid
+            o2s[$oid]=$cid:$sid
+        done
+    done
+
+    for i in inv/legacy/group-*.txt; do
+        [[ ! -f $i ]] && continue
+        print -u2 file $i
+        egrep -v '^#|^$' $i | while read -r oid gnname j; do
+            gnname=${gnname##+(' ')}
+            gnname=${gnname%%+(' ')}
+            gnname=${gnname//+(' ')/' '}
+
+            oid=${oid//[!.a-zA-Z0-9_:-]/}
+
+            cid=${o2c[$oid]}
+            if [[ $cid == '' ]] then
+                print -u2 "ERROR ($oid) cannot find customer mapping"
+            fi
+
+            sid=${o2s[$oid]}
+            if [[ $sid == '' ]] then
+                print -u2 "ERROR ($oid) cannot find site mapping"
+            fi
+
+            [[ $cid == '' || $sid == '' ]] && continue
+
+            gid=${gnname//'<br>'/}
+            gid=${gid//[!.a-zA-Z0-9_:-]/}
+            gname=${gnname//'<br>'/}
+            gnname=${gnname//'<br>'/\\n}
+
+            egid=$sid:$gid
+            if (( ${#egid} >= 64 )) then
+                egid=$gid
+            fi
+
+            [[ $gid != '' && $gname != '' ]] \
+            && print -r "$cid|node|g|$egid|name|$gname"
+            [[ $gid != '' && $gnname != '' ]] \
+            && print -r "$cid|node|g|$egid|nodename|$gnname"
+            [[ $gid != '' && $gnname != '' ]] \
+            && print -r "$cid|node|g|$egid|groupname|$gnname"
+
+            [[ $gid != '' && $sid != '' ]] \
+            && print "$cid|map|g|$egid|s|$sid||"
+            [[ $oid != '' && $gid != '' ]] \
+            && print "$cid|map|o|$oid|g|$egid||"
+        done
+    done
+
+    for i in inv/legacy/cabling-*.txt; do
+        [[ ! -f $i ]] && continue
+        print -u2 file $i
+        egrep -v '^#|^$' $i | while read -r oid1 oid2 attr; do
+            attr=${attr##+(' ')}
+            attr=${attr%%+(' ')}
+            attr=${attr//+(' ')/' '}
+
+            oid1=${oid1//[!.a-zA-Z0-9_:-]/}
+            oid2=${oid2//[!.a-zA-Z0-9_:-]/}
+
+            cid1=${o2c[$oid1]}
+            if [[ $cid1 == '' ]] then
+                print -u2 "ERROR ($oid1) cannot find customer mapping"
+            fi
+
+            cid2=${o2c[$oid2]}
+            if [[ $cid2 == '' ]] then
+                print -u2 "ERROR ($oid2) cannot find customer mapping"
+            fi
+
+            [[ $cid1 == '' || $cid2 == '' ]] && continue
+
+            key=
+            [[ $attr != '' ]] && key=mode
+
+            [[ $oid1 != '' && $oid2 != '' ]] \
+            && print "$cid1|edge|o|$oid1|o|$oid2|$key|$attr"
+            [[ $oid1 != '' && $oid2 != '' ]] \
+            && print "$cid2|edge|o|$oid1|o|$oid2|$key|$attr"
+        done
+    done
+
+    exec >&-
+
+    tw -i -d inv/legacy/cache -e 'name=="*-inv.txt.new"' rm
+
+    pcid=
+    sort -u tmp/inv/full.txt | while read -r line; do
+        cid=${line%%'|'*}
+        if [[ $cid != $pcid ]] then
+            if [[ $pcid != '' ]] then
+                exec >&-
+            fi
+            exec > inv/legacy/cache/$cid-inv.txt.new
+            print -u2 generating customer file $cid
+        fi
+        pcid=$cid
+        print -r "${line#*'|'}"
+    done
+
+    exec >&-
+
+    for i in inv/legacy/cache/*.txt; do
+        [[ ! -f $i ]] && continue
+        j=${i##*/}
+        if [[ ! -f $i.new ]] then
+            read yn?"file $j is old, remove? (y/n) "
+            if [[ $yn == y ]] then
+                print -u2 removing file $j
+                queuerem view $j
+                rm $i
+            fi
+        fi
+    done
+
+    for i in inv/legacy/cache/*-inv.txt.new; do
+        [[ ! -f $i ]] && continue
+        j=${i##*/}
+        j=${j%.new}
+        if cmp $i ${i%.new} > /dev/null 2>&1; then
+            print -u2 file $j up to date
+            rm $i
+        else
+            print -u2 updating file $j
+            mv $i ${i%.new}
+            queueins view $j ${i%.new}
+        fi
+    done
+    ;;
+importview)
+    mkdir -p inv/view/cache tmp/inv
+
+    IFS='|'
+
+    typeset -A bmap bmapr cmap cmapr lmap lmapr tmap tmapr o2c o2s
+    typeset -l bid cid lid tid oid sid gid oid1 oid2
+    typeset bname cname lname tname oname sname gname GNAME
+
+    egrep -v '^#|^$' dpfiles/inv/business.txt | while read -r bid bname j; do
+        bmap[$bid]=$bname
+        bmapr[$bname]=$bid
+    done
+    egrep -v '^#|^$' dpfiles/inv/location.txt | while read -r lid lname j; do
+        lmap[$lid]=$lname
+        lmapr[$lname]=$lid
+    done
+    egrep -v '^#|^$' dpfiles/inv/customer.txt | while read -r cid cname j; do
+        cmap[$cid]=$cname
+        cmapr[$cname]=$cid
+    done
+    egrep -v '^#|^$' dpfiles/inv/type.txt | while read -r tid tname j; do
+        tmap[$tid]=$tname
+        tmapr[$tname]=$tid
+    done
+
+    for i in inv/view/*-inv.txt; do
+        [[ ! -f $i ]] && continue
+        print -u2 file $i
+        j=${i##*/}
+        cid=${j%-inv.txt}
+        if [[ ${cmap[$cid]} == '' ]] then
+            print -u2 "ERROR ($cid) no customer id '$cid' in customer file"
+            continue
+        fi
+        l=inv/view/cache/${i##*/}
+        egrep -v '^#|^$' $i | while read -r t a b c d e f; do
+            case $t in
+            node)
+                lv=$a oid=$b k=$c v=$d
+                oid=${oid//[!.a-zA-Z0-9_:-]/}
+                k=${k//[!.a-zA-Z0-9_:-]/_}
+                print -r "node|$lv|$oid|$k|$v"
+                ;;
+            edge)
+                lv1=$a oid1=$b lv2=$c oid2=$d k=$e v=$f
+                oid1=${oid1//[!.a-zA-Z0-9_:-]/}
+                oid2=${oid2//[!.a-zA-Z0-9_:-]/}
+                k=${k//[!.a-zA-Z0-9_:-]/_}
+                print -r "edge|$lv1|$oid1|$lv2|$oid2|$k|$v"
+                ;;
+            map)
+                lv1=$a oid1=$b lv2=$c oid2=$d k=$e v=$f
+                oid1=${oid1//[!.a-zA-Z0-9_:-]/}
+                oid2=${oid2//[!.a-zA-Z0-9_:-]/}
+                k=${k//[!.a-zA-Z0-9_:-]/_}
+                print -r "map|$lv1|$oid1|$lv2|$oid2|$k|$v"
+                ;;
+            esac
+        done | sort -u > $l.tmp
+        if cmp $l.tmp $l > /dev/null 2>&1; then
+            print -u2 file $j up to date
+            rm $l.tmp
+        else
+            print -u2 updating file $j
+            mv $l.tmp $l
+            queueins view $j $l
+        fi
+    done
+
+    for i in inv/view/cache/*.txt; do
+        [[ ! -f $i ]] && continue
+        j=${i##*/}
+        if [[ ! -f inv/view/$j ]] then
+            read yn?"file $j is old, remove? (y/n) "
+            if [[ $yn == y ]] then
+                print -u2 removing file $j
+                queuerem view $j
+                rm $i
+            fi
+        fi
+    done
+
+    ;;
+importscope)
+    . ./dpfiles/config.sh
+    encryptfields=${ENCRYPTFIELDS:-'scope_pass|scope_snmpcommunity'}
+    if [[ $ENCRYPTMODE == y ]] then
+        if [[ ! -s ./dpfiles/encrypt.txt ]] then
+            ENCRYPTMODE=n
+        else
+            read ENCRYPTPHRASE < ./dpfiles/encrypt.txt
+            if (( ${#ENCRYPTPHRASE} < 20 )) then
+                ENCRYPTMODE=n
+            fi
+            swiftshdec ENCRYPTPHRASE ENCRYPTCODE
+            if (( ${#ENCRYPTCODE} < 1 )) then
+                ENCRYPTMODE=n
+            fi
+        fi
+    fi
+
+    mkdir -p inv/scope/cache tmp/inv
+
+    IFS='|'
+
+    typeset -A bmap bmapr cmap cmapr lmap lmapr tmap tmapr o2c o2s
+    typeset -l bid cid lid tid oid sid gid oid1 oid2
+    typeset bname cname lname tname oname sname gname GNAME
+
+    egrep -v '^#|^$' dpfiles/inv/business.txt | while read -r bid bname j; do
+        bmap[$bid]=$bname
+        bmapr[$bname]=$bid
+    done
+    egrep -v '^#|^$' dpfiles/inv/location.txt | while read -r lid lname j; do
+        lmap[$lid]=$lname
+        lmapr[$lname]=$lid
+    done
+    egrep -v '^#|^$' dpfiles/inv/customer.txt | while read -r cid cname j; do
+        cmap[$cid]=$cname
+        cmapr[$cname]=$cid
+    done
+    egrep -v '^#|^$' dpfiles/inv/type.txt | while read -r tid tname j; do
+        tmap[$tid]=$tname
+        tmapr[$tname]=$tid
+    done
+
+    for i in inv/scope/*-inv.txt; do
+        [[ ! -f $i ]] && continue
+        print -u2 file $i
+        j=${i##*/}
+        if [[ $j != ${sn}-* ]] then
+            print -u2 "ERROR file $j does not belong to this system"
+            continue
+        fi
+        cid=${j%-inv.txt}; cid=${cid#*-}
+        if [[ ${cmap[$cid]} == '' ]] then
+            print -u2 "ERROR ($cid) no customer id '$cid' in customer file"
+            continue
+        fi
+        [[ $ENCRYPTMODE == y ]] && encryptfile $i
+        typeset -A nodes attrs
+        l=inv/scope/cache/${i##*/}
+        egrep -v '^#|^$' $i | sort -t'|' -ru | while read -r t a b c d e f; do
+            case $t in
+            node)
+                lv=$a oid=$b k=$c v=$d
+                oid=${oid//[!.a-zA-Z0-9_:-]/}
+                k=${k//[!.a-zA-Z0-9_:-]/_}
+                if [[ $plv != $lv || $poid != $oid ]] then
+                    if [[ $poid != '' ]] then
+                        for attri in "${!attrs[@]}"; do
+                            if [[ $attri != scope* ]] then
+                                print -u2 -n "WARNING scope files are only"
+                                print -u2 -n " supposed to contain attributes"
+                                print -u2 " with a scope prefix ($poid,$attri)"
+                                continue
+                            fi
+                            if [[ ${attrs[$attri]} == '' ]] then
+                                print -u2 -n "ERROR empty attribute"
+                                print -u2 " ($poid,${attrs[$attri]})"
+                            fi
+                        done
+                        for attri in \
+                            scope_ip scope_servicelevel \
+                            scope_sysfunc scope_systype; \
+                        do
+                            if [[ ${attrs[$attri]} == '' ]] then
+                                print -u2 -n "ERROR missing mandatory attr"
+                                print -u2 " ($poid,$attri)"
+                            fi
+                        done
+                    fi
+                    unset attrs; typeset -A attrs
+                    plv=$lv poid=$oid
+                    nodes[$lv:$oid]=1
+                fi
+                print -r "node|$lv|$oid|$k|$v"
+                attrs[$k]=$v
+                ;;
+            edge)
+                lv1=$a oid1=$b lv2=$c oid2=$d k=$e v=$f
+                oid1=${oid1//[!.a-zA-Z0-9_:-]/}
+                oid2=${oid2//[!.a-zA-Z0-9_:-]/}
+                k=${k//[!.a-zA-Z0-9_:-]/_}
+                print -r "edge|$lv1|$oid1|$lv2|$oid2|$k|$v"
+                if [[ ${nodes[$lv1:$oid1]} != 1 ]] then
+                    print -u2 "ERROR no node record for edge asset $lv1:$oid1"
+                fi
+                if [[ ${nodes[$lv2:$oid2]} != 1 ]] then
+                    print -u2 "ERROR no node record for edge asset $lv2:$oid2"
+                fi
+                print -u2 -n "WARNING scope files are not supposed to contain"
+                print -u2 "edge records"
+                ;;
+            map)
+                lv1=$a oid1=$b lv2=$c oid2=$d k=$e v=$f
+                oid1=${oid1//[!.a-zA-Z0-9_:-]/}
+                oid2=${oid2//[!.a-zA-Z0-9_:-]/}
+                k=${k//[!.a-zA-Z0-9_:-]/_}
+                print -r "map|$lv1|$oid1|$lv2|$oid2|$k|$v"
+                if [[ ${nodes[$lv1:$oid1]} != 1 ]] then
+                    print -u2 "ERROR no node record for map asset $lv1:$oid1"
+                fi
+                if [[ ${nodes[$lv2:$oid2]} != 1 ]] then
+                    print -u2 "ERROR no node record for map asset $lv2:$oid2"
+                fi
+                print -u2 -n "WARNING scope files are not supposed to contain"
+                print -u2 "map records"
+                ;;
+            esac
+        done | sort -t'|' -u > $l.tmp
+        if cmp $l.tmp $l > /dev/null 2>&1; then
+            print -u2 file $j up to date
+            rm $l.tmp
+        else
+            print -u2 updating file $j
+            mv $l.tmp $l
+            queueins scope $j $l
+        fi
+    done
+
+    for i in inv/scope/cache/*.txt; do
+        [[ ! -f $i ]] && continue
+        j=${i##*/}
+        if [[ ! -f inv/scope/$j ]] then
+            read yn?"file $j is old, remove? (y/n) "
+            if [[ $yn == y ]] then
+                print -u2 removing file $j
+                queuerem scope $j
+                rm $i
+            fi
+        fi
+    done
+
+    ;;
+push)
+    mkdir -p inv/scope/cache tmp/inv
+
+    case $file in
+    customer.txt)      type=customer;   ofile=dpfiles/inv/customer.txt        ;;
+    business.txt)      type=business;   ofile=dpfiles/inv/business.txt        ;;
+    location.txt)      type=location;   ofile=dpfiles/inv/location.txt        ;;
+    type.txt)          type=type;       ofile=dpfiles/inv/type.txt            ;;
+    profile.txt)       type=profile;    ofile=dpfiles/stat/profile.txt        ;;
+    threshold.txt)     type=threshold;  ofile=dpfiles/stat/threshold.txt      ;;
+    alarmemail.filter) type=alarmemail; ofile=dpfiles/alarm/alarmemail.filter ;;
+    alarm.filter)      type=filter;     ofile=dpfiles/alarm/alarm.filter      ;;
+    accounts)
+        queueins passwd "" SWIFT_CFG_DWWWDIR/.passwd
+        queueins group "" SWIFT_CFG_DWWWDIR/.group
+        queueins account "" SWIFT_CFG_DWWWDIR/accounts/current
+        exit 0
+        ;;
+    *)
+        print -u2 ERROR unknown file $file
+        exit 0
+        ;;
+    esac
+    queueins $type "" $ofile
+    ;;
+updatephrase)
+    . ./dpfiles/config.sh
+    if [[ $ENCRYPTMODE == y ]] then
+        read phrase1?"new pass phrase: "
+        read phrase2?"re-enter pass phrase: "
+        if [[ $phrase1 != $phrase2 ]] then
+            print -u2 ERROR pass phrases do not match
+            exit 0
+        fi
+        swiftshenc phrase1 phrase2
+        print -r "$phrase2" > ./dpfiles/encrypt.txt.tmp
+        [[ -s ./dpfiles/encrypt.txt.tmp ]] \
+        && mv ./dpfiles/encrypt.txt.tmp ./dpfiles/encrypt.txt
+    fi
+    ;;
+esac

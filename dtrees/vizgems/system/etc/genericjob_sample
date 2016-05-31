@@ -1,0 +1,123 @@
+#!/bin/ksh
+
+export TZ=SWIFT_CFG_SYSTZ
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VG_SYSNAME=SWIFT_CFG_SYSNAME
+export VG_SYSMODE=SWIFT_CFG_SYSMODE
+export VG_NFSMODE=SWIFT_CFG_NFSMODE
+
+export VG_SSYSTEMDIR=SWIFT_CFG_SSYSTEMDIR
+export VG_SSCOPESDIR=SWIFT_CFG_SSCOPESDIR
+export VG_SWWWDIR=SWIFT_CFG_SWWWDIR
+export VG_SSNMPDIR=SWIFT_CFG_SSNMPDIR
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+export VG_DPSYSTEMDIR=SWIFT_CFG_DPSYSTEMDIR
+export VG_DASYSTEMDIR=SWIFT_CFG_DASYSTEMDIR
+export VG_DSCOPESDIR=SWIFT_CFG_DSCOPESDIR
+export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
+export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=SWIFT_CFG_DPSYSTEMDIR
+
+export LC_ALL=C LANG=C
+
+PATH=$PATH:/usr/sbin:/sbin
+
+typeset -A generics
+
+function loadspecs {
+    typeset -A seen
+
+    for generici in $VGMAINDIR/generic/*.sh; do
+        export GENERICSPEC=${generici##*/}
+        GENERICSPEC=${GENERICSPEC%.sh}
+        export GENERICPATH=${generics[$GENERICSPEC]}
+        if ! ksh -n $generici > /dev/null 2>&1; then
+            print -u2 SWIFT ERROR spec $GENERICSPEC has syntax errors
+            continue
+        fi
+        if ! vg_generic_loadspec $GENERICSPEC; then
+            print -u2 SWIFT ERROR failed to load spec $GENERICSPEC
+            continue
+        fi
+        generics[$GENERICSPEC]=$GENERICPATH
+        seen[$GENERICSPEC]=1
+    done
+    for generici in "${!generics[@]}"; do
+        if [[ ${seen[$generici]} == '' ]] then
+            unset generics[$generici]
+        fi
+    done
+}
+
+if [[ $1 == aggregate ]] then
+    loadspecs
+    md=$(printf '%(%Y.%m.%d)T')
+    for generici in "${!generics[@]}"; do
+        export GENERICSPEC=$generici GENERICPATH=${generics[$generici]}
+        $SHELL vg_generic_processing -levels 2 -locksuffix 2 -maxdate $md
+        $SHELL vg_generic_processing -levels 3 -locksuffix 3 -maxdate $md
+    done
+    exit
+fi
+
+mkdir -p $VGMAINDIR/tmp
+lockfile=$VGMAINDIR/tmp/inuse.generic
+set -o noclobber
+if ! command exec 3> $lockfile; then
+    if kill -0 $(< $lockfile); then
+        exit 0
+    elif [[ $(fuser $lockfile) != '' ]] then
+        exit 0
+    else
+        rm $lockfile
+        exit 0
+    fi
+fi 2> /dev/null
+print -u3 $$
+trap 'rm -f $lockfile' HUP QUIT TERM KILL EXIT
+set +o noclobber
+
+(( updatesec = 5 * 60 ))
+usec=0
+
+loadspecs
+
+while [[
+    ! -f $VGMAINDIR/exit.inc.generic && ! -f $VGMAINDIR/exit.proc.generic
+]] do
+    (( usec += SECONDS ))
+    SECONDS=0
+    if (( usec >= updatesec )) then
+        loadspecs
+        usec=0
+    fi
+    for generici in "${!generics[@]}"; do
+        export GENERICSPEC=$generici GENERICPATH=${generics[$generici]}
+        $SHELL vg_generic_incoming
+        $SHELL vg_generic_processing -levels 1 -maxdate $(printf '%(%Y.%m.%d)T')
+    done
+    if [[ $1 == once ]] then
+        exit
+    fi
+    sleep 15
+    touch $lockfile
+done

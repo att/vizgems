@@ -1,0 +1,147 @@
+VARS{
+#include <math.h>
+#define SZ_level DDSSZ_outrec_stat_level
+#define SZ_id DDSSZ_outrec_stat_id
+#define SZ_key DDSSZ_outrec_stat_key
+#define SZ_label DDSSZ_outrec_stat_label
+#define SZ_unit DDSSZ_outrec_stat_unit
+
+static float *vals;
+static int valn, valm;
+
+static int havedata;
+static char plevel[SZ_level], pid[SZ_id], pkey[SZ_key], punit[SZ_unit];
+static int basetime, spf, pframe, minframe, maxframe;
+
+static struct __outrec_stat_t rec;
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+
+#define ABS(a) (((a) >= 0.0) ? (a) : -(a))
+#define MAXSIGMA 6.0
+#define CALC(m, s, i1, i2) { \
+    double _ms, _ds; \
+    int _i, _m; \
+    _m = (i2 - i1) + 1; \
+    _ms = 0.0, _ds = 0.0; \
+    for (_i = i1; _i <= i2; _i++) \
+        _ms += vals[_i]; \
+    m = _ms / _m; \
+    for (_i = i1; _i <= i2; _i++) \
+        _ds += (vals[_i] - m) * (vals[_i] - m); \
+    if (_m > 1) \
+        s = sqrt (_ds / (_m - 1)); \
+    else \
+        s = 0.0; \
+}
+
+static int emit (void) {
+    float mean, sdev, meanm1, sdevm1;
+    int time;
+
+    if (valm == 0)
+        return 0;
+
+    CALC (mean, sdev, 0, valm - 1);
+    if (valm > 2 && sdev > 0.0) {
+        CALC (meanm1, sdevm1, 0, valm - 2);
+        if (ABS (vals[valm - 1] - meanm1) > sdevm1 * MAXSIGMA)
+            mean = meanm1, sdev = sdevm1;
+        else {
+            CALC (meanm1, sdevm1, 1, valm - 1);
+            if (ABS (vals[0] - meanm1) > sdevm1 * MAXSIGMA)
+                mean = meanm1, sdev = sdevm1;
+        }
+    }
+
+    time = basetime + (pframe - minframe) * spf;
+
+    memset (&rec, 0, sizeof (struct __outrec_stat_t));
+    rec.timeissued = time;
+    strcpy (&rec.level[0], plevel);
+    strcpy (&rec.id[0], pid);
+    strcpy (&rec.key[0], pkey);
+    strcpy (&rec.unit[0], punit);
+    strcpy (&rec.label[0], "___mean___");
+    rec.frame = pframe;
+    rec.val = mean;
+    (*wfunc) (wfp, &rec, wschemap, sizeof (struct __outrec_stat_t));
+
+    memset (&rec, 0, sizeof (struct __outrec_stat_t));
+    rec.timeissued = time;
+    strcpy (&rec.level[0], plevel);
+    strcpy (&rec.id[0], pid);
+    strcpy (&rec.key[0], pkey);
+    strcpy (&rec.unit[0], punit);
+    strcpy (&rec.label[0], "___sdev___");
+    rec.frame = pframe;
+    rec.val = sdev;
+    (*wfunc) (wfp, &rec, wschemap, sizeof (struct __outrec_stat_t));
+
+    return 0;
+}
+}
+BEGIN{
+    char *s;
+
+    basetime = strtoll (getenv ("BASETIME"), &s, 10);
+    spf = atoi (getenv ("STATINTERVAL"));
+    minframe = atof (getenv ("MINFRAME"));
+    maxframe = atof (getenv ("MAXFRAME"));
+
+    havedata = FALSE;
+    valm = 0;
+
+    pframe = -1;
+}
+{
+    int vali, valj;
+
+    DROP;
+
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (isnan (IN->val) || IN->frame < minframe || IN->frame > maxframe)
+        return __result;
+
+    if (
+        strcmp (plevel, IN->level) != 0 || strcmp (pid, IN->id) != 0 ||
+        strcmp (pkey, IN->key) != 0 || pframe != IN->frame
+    ) {
+        if (havedata)
+            emit (), havedata = FALSE;
+        strcpy (plevel, IN->level);
+        strcpy (pid, IN->id);
+        strcpy (pkey, IN->key);
+        strcpy (punit, IN->unit);
+        pframe = IN->frame;
+        valm = 0;
+    }
+
+    if (valm >= valn) {
+        if (!(vals = vmresize (
+            Vmheap, vals, (valn + 10) * sizeof (float), VM_RSCOPY
+        )))
+            SUerror ("vg_stat_prof", "cannot grow vals array");
+        valn += 10;
+    }
+    for (vali = 0; vali <= valm; vali++) {
+        if (vali == valm || vals[vali] > IN->val) {
+            for (valj = valm; valj > vali; valj--)
+                vals[valj] = vals[valj - 1];
+            vals[vali] = IN->val;
+            break;
+        }
+    }
+    valm++;
+    havedata = TRUE;
+    OUT->frame = -1;
+}
+END{
+    if (havedata)
+        emit ();
+}

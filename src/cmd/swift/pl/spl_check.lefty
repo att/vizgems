@@ -1,0 +1,369 @@
+#
+# SWIFTPL
+#
+# this file implements the syntactic checks on drawings
+#
+spl.check.openview = function () {
+    local wid;
+
+    if (~(spl.check.view >= 0)) {
+        spl.check.view = createwidget (-1, [
+            'size' = spl.coords.cview.size;
+            'origin' = spl.coords.cview.origin;
+            'type' = 'view';
+            'name' = 'SWIFTPL: error reports';
+        ]);
+        widgets[spl.check.view].closeview = spl.check.closeview;
+        spl.check.array = createwidget (spl.check.view, [
+            'type' = 'array';
+        ]);
+        spl.check.scroll = createwidget (spl.check.array, [
+            'type' = 'scroll';
+        ]);
+        spl.check.list = createwidget (spl.check.scroll, [
+            'type' = 'array';
+        ]);
+        spl.check.button = createwidget (spl.check.array, [
+            'type' = 'button'; 'text' = 'done';
+        ]);
+        widgets[spl.check.button].pressed = spl.check.done;
+        widgets[spl.check.array].resize = spl.check.resize;
+        setwidgetattr (spl.check.array, [
+            'size' = spl.coords.cview.size;
+        ]);
+        setwidgetattr (spl.check.list, [
+            'size' = spl.coords.label.size;
+        ]);
+    } else {
+        for (wid in spl.check.ws)
+            destroywidget (wid);
+        spl.check.ws = [];
+        setwidgetattr (spl.check.view, ['zorder' = 'top';]);
+        spl.check.message = '';
+    }
+};
+spl.check.closeview = function (data) {
+    destroywidget (spl.check.button);
+    destroywidget (spl.check.list);
+    destroywidget (spl.check.scroll);
+    destroywidget (spl.check.array);
+    destroywidget (spl.check.view);
+    spl.check.message = '';
+};
+spl.check.msg = function (message) {
+    local wid;
+
+    if (spl.check.message ~= message) {
+        wid = createwidget (spl.check.list, [
+            'type' = 'label';
+            'text' = message;
+        ]);
+        spl.check.message = message;
+        spl.check.ws[wid] = wid;
+    }
+};
+spl.check.error = function (t, message, obj) {
+    local s, wid;
+
+    if (obj.nid >= 0) # it's a node
+        s = concat ('    shape: ', obj.nid, ' label: ', obj.attr.label);
+    else # it's an edge
+        s = concat (
+            '    arc: ', obj.eid, ' from: ', obj.tail.attr.label,
+            ' to: ', obj.hespl.attr.label
+        );
+    if (spl.check.message ~= message) {
+        wid = createwidget (spl.check.list, [
+            'type' = 'label';
+            'text' = message;
+        ]);
+        spl.check.message = message;
+        spl.check.ws[wid] = wid;
+    }
+    wid = createwidget (spl.check.list, [
+        'type' = 'button';
+        'text' = s;
+    ]);
+    spl.check.ws[wid] = ['obj' = obj; 't' = t;];
+    widgets[wid].pressed = spl.check.pressed;
+};
+#
+# all checks
+#
+spl.check.allchecks = function (t) {
+    spl.check.openview ();
+    spl.check.msg ('(click on an entry to highlight object)');
+    spl.check.check1 (t);
+    spl.check.check2 (t);
+    spl.check.check3 (t);
+    spl.check.check4 (t);
+    spl.check.check5 (t);
+    spl.check.check6 (t);
+    spl.check.check7 (t);
+    spl.check.check8 (t);
+    return;
+};
+#
+# check1 - single root
+#
+spl.check.check1 = function (t) {
+    local multiroots, nid, node, noinedges, eid, optaction, optreport;
+
+    remove ('rootnode', spl.check);
+    multiroots = 0;
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        noinedges = 1;
+        for (eid in node.edges)
+            if (node.edges[eid].head == node)
+                noinedges = 0;
+        if (noinedges == 1) {
+            if (node.attr.type == 'action') {
+                if (optaction) {
+                    spl.check.error (t, 'multiple action roots', optaction);
+                    spl.check.error (t, 'multiple action roots', node);
+                } else
+                    optaction = node;
+            } else if (node.attr.type == 'report') {
+                if (optreport) {
+                    spl.check.error (t, 'multiple report roots', optreport);
+                    spl.check.error (t, 'multiple report roots', node);
+                } else
+                    optreport = node;
+            } else if (spl.check.rootnode) {
+                if (multiroots == 0)
+                    spl.check.error (
+                        t, 'multiple roots', spl.check.rootnode
+                    );
+                spl.check.error (t, 'multiple roots', node);
+                multiroots = 1;
+            } else
+                spl.check.rootnode = node;
+        }
+    }
+};
+#
+# check2 - no cycles
+#
+spl.check.check2 = function (t) {
+    local nodes, stack, i, nid, node, eid, edge;
+
+    # we build an array of <node> - <depth>
+    # it's an error if a node points to another node
+    # with smaller depth
+    nodes = [
+        spl.check.rootnode.nid = 0;
+    ];
+    stack[0] = spl.check.rootnode.nid;
+    i = 1;
+    while (i > 0) {
+        nid = stack[i - 1];
+        i = i - 1;
+        node = t.gt.graph.nodes[nid];
+        for (eid in node.edges) {
+            edge = node.edges[eid];
+            if (edge.tail ~= node)
+                continue;
+            if (~(nodes[edge.hespl.nid] >= 0)) {
+                nodes[edge.hespl.nid] = nodes[node.nid] + 1;
+                stack[i] = edge.hespl.nid;
+                i = i + 1;
+            } else if (nodes[edge.hespl.nid] < nodes[node.nid])
+                spl.check.error (t, 'cycle', edge);
+        }
+    }
+};
+#
+# check2 - no cycles
+#
+spl.check.check2 = function (t) {
+    local stack, i, nid, node, eid, edge;
+
+    stack[0] = spl.check.rootnode.nid;
+    i = 1;
+    spl.check.rootnode.mark = 1;
+    while (i > 0) {
+        nid = stack[i - 1];
+        node = t.gt.graph.nodes[nid];
+        if (node.mark == 2) {
+            remove ('mark', node);
+            i = i - 1;
+            continue;
+        }
+        node.mark = 2;
+        for (eid in node.edges) {
+            edge = node.edges[eid];
+            if (edge.tail ~= node)
+                continue;
+            if (edge.hespl.mark == 2)
+                spl.check.error (t, 'cycle', edge);
+            else if (edge.hespl.mark ~= 1) {
+                stack[i] = edge.hespl.nid;
+                i = i + 1;
+                edge.hespl.mark = 1;
+            }
+        }
+    }
+};
+#
+# check3 - all actions must be leaves
+#          (ignoring comment shapes)
+#
+spl.check.check3 = function (t) {
+    local nid, node, numoutedges, eid;
+
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        if (node.attr.type ~= 'action')
+            continue;
+        numoutedges = 0;
+        for (eid in node.edges)
+            if (node.edges[eid].tail == node)
+                if (node.edges[eid].hespl.attr.type ~= 'comment')
+                    numoutedges = numoutedges + 1;
+        if (numoutedges > 0)
+            spl.check.error (t, 'action is not a leaf', node);
+    }
+};
+#
+# check4 - all leaves must be either actions or reports
+#          (ignoring comment shapes)
+#
+spl.check.check4 = function (t) {
+    local nid, node, numoutedges, eid;
+
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        if (node.attr.type == 'comment')
+            continue;
+        numoutedges = 0;
+        for (eid in node.edges)
+            if (node.edges[eid].tail == node)
+                if (node.edges[eid].hespl.attr.type ~= 'comment')
+                    numoutedges = numoutedges + 1;
+        if (numoutedges == 0)
+            if (node.attr.type ~= 'action' & node.attr.type ~= 'report')
+                spl.check.error (
+                    t, 'leaf is not an action or report', node
+                );
+    }
+};
+#
+# check5 - all reports are either leaves or have one child, an action
+#          (ignoring comment shapes)
+#
+spl.check.check5 = function (t) {
+    local nid, node, numoutedges, eid;
+
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        if (node.attr.type ~= 'report')
+            continue;
+        numoutedges = 0;
+        for (eid in node.edges)
+            if (node.edges[eid].tail == node)
+                if (node.edges[eid].hespl.attr.type ~= 'comment') {
+                    numoutedges = numoutedges + 1;
+                    if (node.edges[eid].hespl.attr.type ~= 'action')
+                        spl.check.error (t, 'report child is not an action',
+                                node.edges[eid].head);
+                }
+        if (numoutedges > 1)
+            spl.check.error (t, 'report has too many children', node);
+    }
+};
+#
+# check6 - action node parents must be reports and
+#          must be connected by solid arrow edges
+#
+spl.check.check6 = function (t) {
+    local nid, node, numoutedges, eid;
+
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        if (node.attr.type ~= 'action')
+            continue;
+        for (eid in node.edges)
+            if (node.edges[eid].head == node)
+                if (node.edges[eid].tail.attr.type ~= 'report')
+                    spl.check.error (t, 'action parent is not a report',
+                                node.edges[eid].tail);
+                else if (node.edges[eid].attr.type ~= 'edgea')
+                    spl.check.error (t, 'report-to-action edge is not solid',
+                                node.edges[eid]);
+    }
+};
+#
+# check7 - comment shapes must have one parent, a non-comment shape
+#          the connecting edge must be solid without an arrow
+#
+spl.check.check7 = function (t) {
+    local nid, node, numoutedges, eid;
+
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        if (node.attr.type ~= 'comment')
+            continue;
+        numoutedges = tablesize (node.edges);
+        for (eid in node.edges)
+            if (node.edges[eid].head == node)
+                if (node.edges[eid].tail.attr.type == 'comment') {
+                    spl.check.error (t, 'comment parent cannot be a comment',
+                            node.edges[eid].tail);
+                } else if (node.edges[eid].attr.type ~= 'edgec')
+                    spl.check.error (t, 'comment edge is not solid',
+                                node.edges[eid]);
+        if (numoutedges > 1)
+            spl.check.error (t, 'comment shape has too many edges', node);
+    }
+};
+#
+# check8 - text attrs must be filled in for all shapes and
+#          directed edges, except for report edges
+#
+spl.check.check8 = function (t) {
+    local nid, node, eid, edge;
+
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        if (~node.attr.name | node.attr.name == '')
+            spl.check.error (t, 'name attribute not filled', node);
+    }
+    for (eid in t.gt.graph.edges) {
+        edge = t.gt.graph.edges[eid];
+        if (~edge.attr.name | edge.attr.name == '')
+            if (edge.attr.type ~= 'edgec' & edge.tail.attr.type ~= 'report')
+                spl.check.error (t, 'name attribute not filled', edge);
+    }
+};
+spl.check.done = function (data) {
+    setwidgetattr (spl.check.view, ['zorder' = 'bottom';]);
+};
+spl.check.pressed = function (data) {
+    local wt, vid, vt, pos, rect;
+
+    wt = spl.check.ws[data.widget];
+    for (vid in wt.t.gt.views) {
+        vt = wt.t.gt.views[vid];
+        break;
+    }
+    spl.view.unhighlightobj (wt.t.gt);
+    spl.view.highlightobj (wt.t.gt, wt.obj);
+    rect = wt.t.gt.highlightrect;
+    pos.x = ((rect[0].x + rect[1].x) / 2) * vt.vsize.x /
+            (vt.wrect[1].x - vt.wrect[0].x);
+    pos.y = (vt.wrect[1].y - (rect[0].y + rect[1].y) / 2) * vt.vsize.y /
+            (vt.wrect[1].y - vt.wrect[0].y);
+    setwidgetattr (vt.scroll, ['childcenter' = pos;]);
+};
+spl.check.resize = function (data) {
+    local ret, x, y;
+
+    x = data.size.x;
+    y = data.size.y;
+    ret = [
+        spl.check.button = ['x' = x; 'y' = 30;];
+        spl.check.scroll = ['x' = x; 'y' = y - 30;];
+    ];
+    return ret;
+};

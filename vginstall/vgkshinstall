@@ -1,0 +1,18 @@
+#!/bin/ksh
+
+id=$(/usr/bin/id -u)
+
+if [[ $id != 0 ]] then
+    print -u2 you must run this script as root
+    exit 0
+fi
+
+if [[ ! -f ksh ]] then
+    print -u2 you must first extract ksh from the package
+    print -u2 example: tar xvf vg.full.linux.i386.v07.2009-04-18.tar ksh
+    exit 0
+fi
+
+cp ksh /bin/ksh.new
+mv /bin/ksh /bin/ksh.bak
+mv /bin/ksh.new /bin/ksh

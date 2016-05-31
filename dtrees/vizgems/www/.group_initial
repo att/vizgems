@@ -1,0 +1,3 @@
+all: swiftdemo
+vg: swiftdemo
+vg_att_admin: swiftdemo

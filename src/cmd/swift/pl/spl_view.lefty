@@ -1,0 +1,789 @@
+#
+# SWIFTPL
+#
+#     this file implements the main view
+#
+spl.view.protogt = [
+    'layoutmode' = 'sync';
+    'actions' = copy (dotty.protogt.actions);
+];
+spl.view.protovt = [
+    'type' = 'normal';
+    'menus' = [
+        'general' = [
+            0 = "undo";
+            1 = "paste";
+            2 = "do layout";
+            3 = "cancel layout";
+            4 = "redraw";
+            5 = "zoom in";
+            6 = "zoom out";
+            7 = "text view";
+            8 = "quit";
+        ];
+        'node' = [
+            0 = 'attributes';
+            1 = 'copy';
+            2 = 'copy subgraph';
+            3 = 'cut';
+            4 = 'cut subgraph';
+            5 = 'delete';
+            6 = 'delete subgraph';
+        ];
+        'edge' = [
+            0 = 'attributes';
+            1 = 'shift left';
+            2 = 'shift right';
+            3 = 'copy';
+            4 = 'copy subgraph';
+            5 = 'cut';
+            6 = 'cut subgraph';
+            7 = 'delete';
+            8 = 'delete subgraph';
+        ];
+    ];
+    'keys' = [
+        'general' = [
+            'u' = "undo";
+            'p' = "paste";
+            'l' = "do layout";
+            'k' = "cancel layout";
+            ' ' = "redraw";
+            'Z' = "zoom in slowly";
+            'z' = "zoom out slowly";
+        ];
+        'node' = [
+            'a' = "attributes";
+            'c' = "copy";
+            'C' = "copy subgraph";
+            'd' = "delete";
+            'D' = "delete subgraph";
+        ];
+        'edge' = [
+            'a' = "attributes";
+            'c' = "copy";
+            'C' = "copy subgraph";
+            'd' = "delete";
+            'D' = "delete subgraph";
+        ];
+    ];
+];
+spl.view.init = function () {
+};
+#
+# actions
+#
+spl.view.createview = function (name) {
+    local origin, t, tt, n, i, nid;
+
+    origin = spl.coords.mview.origin;
+    if (spl.views)
+        origin = [
+            'x' = origin.x + random (100);
+            'y' = origin.y + random (100);
+        ];
+    if (~name)
+        if (~(name = ask ('give drawing name: ', 'file', ''))) {
+            if (~spl.views | tablesize (spl.views) == 0)
+                exit ();
+            return;
+        } else if (name == '')
+            name = 'new';
+    name = spl.canonname (name);
+
+# the X window
+    t.view = createwidget (-1, [
+        'type'   = 'view';
+        'name'   = concat ('SWIFTPL: drawing ', name);
+        'origin' = origin;
+        'size'   = spl.coords.mview.size;
+    ]);
+    widgets[t.view].closeview = spl.view.closeview;
+
+# everything is inside a vertical list
+    t.areas = createwidget (t.view, [
+        'type' = 'array'; 'mode' = 'vertical';
+    ]);
+
+# action menus area
+    t.actions = createwidget (t.areas, [
+        'type' = 'array'; 'mode' = 'horizontal';
+        'size' = spl.coords.label.size;
+    ]);
+    t.file = createwidget (t.actions, [
+        'type' = 'label'; 'text' = 'File';
+        'borderwidth' = 1;
+    ]);
+    widgets[t.file].leftdown = spl.view.dofilemenu;
+    widgets[t.file].rightdown = spl.view.dofilemenu;
+    t.decorate = createwidget (t.actions, [
+        'type' = 'label'; 'text' = 'View';
+        'borderwidth' = 1;
+    ]);
+    widgets[t.decorate].leftdown = spl.view.dodecoratemenu;
+    widgets[t.decorate].rightdown = spl.view.dodecoratemenu;
+    t.analysis = createwidget (t.actions, [
+        'type' = 'label'; 'text' = 'Process';
+        'borderwidth' = 1;
+    ]);
+    widgets[t.analysis].leftdown = spl.view.doanalysismenu;
+    widgets[t.analysis].rightdown = spl.view.doanalysismenu;
+    t.setdef = createwidget (t.actions, [
+        'type' = 'label'; 'text' = 'Set defaults';
+        'borderwidth' = 1;
+    ]);
+    widgets[t.setdef].leftdown = spl.view.dosetdefmenu;
+    widgets[t.setdef].rightdown = spl.view.dosetdefmenu;
+
+# the graph
+    spl.view.protovt.parent = t.areas;
+    t.gnvt = dotty.createviewandgraph (concat (name, '.spl'), "file",
+            spl.view.protogt, spl.view.protovt);
+    t.canvas = t.gnvt.vt.canvas;
+    t.graph = widgets[t.canvas].parent;
+    t.gt = t.gnvt.gt;
+    t.gt.splname = name;
+    t.changed = 0;
+    if (tablesize (t.gt.graph.nodes) == 0) {
+        t.gt.graph.graphattr.version = spl.version;
+        t.gt.graph.graphattr.ordering = 'out';
+    } else if (t.gt.graph.graphattr.version ~= spl.version) {
+        spl.loadmodule ('upgrade');
+        if (spl.upgrade.upgrade (t) == 1)
+            t.changed = 1;
+    }
+    t.labelmode = 'name';
+
+# link t into the views array
+    spl.views[t.view] = t;
+    spl.views[t.areas] = t;
+    spl.views[t.actions] = t;
+    spl.views[t.file] = t;
+    spl.views[t.decorate] = t;
+    spl.views[t.analysis] = t;
+    spl.views[t.setdef] = t;
+    spl.views[t.graph] = t;
+    spl.views[t.canvas] = t;
+
+# it's best to install the resize routines after all the widgets are set up
+    widgets[t.areas].resize   = spl.view.areasresize;
+    widgets[t.actions].resize = spl.view.actionsresize;
+
+# force a resize
+    setwidgetattr (t.file, ['size' = spl.coords.label.size;]);
+    setwidgetattr (t.graph, ['size' = spl.coords.graph.size;]);
+    for (nid in t.gt.graph.nodes) {
+        if (t.gt.graph.nodes[nid].attr.firstnode)
+            t.gt.firstnode = t.gt.graph.nodes[nid];
+        if (t.gt.graph.nodes[nid].attr.lastnode)
+            t.gt.lastnode = t.gt.graph.nodes[nid];
+    }
+    t.wattr = getwidgetattr (t.graph, [0 = "childcenter"; 1 = "size";]);
+
+# recompute colors
+    spl.setdef (t, spl.data.global.node);
+    spl.setdef (t, spl.data.global.edge);
+
+    return t.gt;
+};
+spl.view.destroyview = function (t) {
+    if (t.changed) {
+        if (~(s = ask ('drawing has been modified, really close?',
+                'choice', 'close|cancel|save & close')) | s == 'cancel')
+            return;
+        if (s == 'save & close')
+            spl.view.saveview (t, 0);
+    }
+# delete the graph view
+    t.gt.destroyview (dotty.views[t.canvas]);
+
+# remove the X window
+    destroywidget (t.view);
+
+# unlink t from the views array
+    remove (t.view, spl.views);
+    remove (t.areas, spl.views);
+    remove (t.actions, spl.views);
+    remove (t.file, spl.views);
+    remove (t.decorate, spl.views);
+    remove (t.analysis, spl.views);
+    remove (t.setdef, spl.views);
+    remove (t.graph, spl.views);
+    remove (t.canvas, spl.views);
+    if (tablesize (spl.views) == 0)
+        exit ();
+};
+spl.view.eraseview = function (t) {
+    if ((s = ask ('really erase view?', 'choice', 'yes|no')) == 'yes') {
+        spl.view.unhighlightobj (t.gt);
+        t.gt.erasegraph (t.gt);
+        if (gt.firstnode)
+            remove ('firstnode', gt);
+        if (gt.lastnode)
+            remove ('lastnode', gt);
+        t.changed = 1;
+    }
+};
+spl.view.changename = function (t) {
+    local s;
+
+    if (~(s = ask ('give new name: ')) | s == '')
+        return;
+    t.gt.graph.graphattr.label = s;
+    t.gt.graph.graphattr.fontsize = 30;
+    t.gt.graph.fontsize = 30;
+    spl.view.layoutgraph (t.gt);
+    t.changed = 1;
+};
+spl.view.saveview = function (t, altname) {
+    if (altname) {
+        if (~(s = ask ('drawing name', 'file',
+                concat (t.gt.swiftname, '.spl'))) | s == '')
+            return;
+        s = spl.canonname (s);
+    } else
+        s = t.gt.splname;
+    spl.view.unhighlightobj (t.gt);
+    t.gt.savegraph (t.gt, concat (s, '.spl'), 'file');
+    t.changed = 0;
+};
+spl.view.quit = function () {
+    local changed;
+
+    for (vid in spl.views) {
+        if (spl.views[vid].changed) {
+            changed = 1;
+            break;
+        }
+    }
+    if (changed) {
+        if (~(s = ask ('quit without saving changes?', 'choice',
+                'quit|cancel|save & quit')) | s == 'cancel')
+            return;
+        if (s == 'save & quit') {
+            for (vid in spl.views) {
+                if (spl.views[vid].changed)
+                    spl.view.saveview (spl.views[vid], 0);
+            }
+        }
+    }
+    exit ();
+};
+spl.view.changeviewmode = function (t, mode) {
+    if (t.labelmode == mode)
+        return;
+    t.labelmode = mode;
+    spl.view.resetview (t);
+};
+spl.view.resetview = function (t) {
+    local nid, node, type, eid, edge, aid;
+
+    spl.view.unhighlightobj (t.gt);
+    for (nid in t.gt.graph.nodes) {
+        node = t.gt.graph.nodes[nid];
+        type = node.attr.type;
+        for (aid in spl.data.nodes[type].dattr)
+            if (~node.attr[aid])
+                node.attr[aid] = '';
+        for (aid in spl.data.nodes[type].gattr)
+            if (aid ~= 'label')
+                node.attr[aid] = spl.data.nodes[type].gattr[aid];
+        spl.setobj (t, node);
+    }
+    for (eid in t.gt.graph.edges) {
+        edge = t.gt.graph.edges[eid];
+        type = edge.attr.type;
+        for (aid in spl.data.edges[type].dattr)
+            if (~edge.attr[aid])
+                edge.attr[aid] = '';
+        for (aid in spl.data.edges[type].gattr)
+            if (aid ~= 'label')
+                edge.attr[aid] = spl.data.edges[type].gattr[aid];
+        spl.setobj (t, edge);
+    }
+    spl.view.layoutgraph (t.gt);
+    t.changed = 1;
+};
+spl.view.insertnode = function (t, pos) {
+    local node, aid;
+
+    node = t.gt.insertnode (t.gt, null, null, null, null, 0);
+    node.attr.type = spl.nodetype;
+    for (aid in spl.data.nodes[spl.nodetype].gattr)
+        node.attr[aid] = spl.data.nodes[spl.nodetype].gattr[aid];
+    for (aid in spl.data.nodes[spl.nodetype].dattr)
+        node.attr[aid] = spl.data.nodes[spl.nodetype].dattr[aid];
+    node.pos = copy (pos);
+    if (node.attr.width)
+        node.size.x = node.attr.width * 72;
+    else
+        node.size.x = 72;
+    if (node.attr.height)
+        node.size.y = node.attr.height * 72;
+    else
+        node.size.y = 72;
+    t.gt.unpacknodeattr (t.gt, node);
+    t.gt.drawnode (t.gt, t.gt.views, node);
+    spl.setobj (t, node);
+    t.changed = 1;
+};
+spl.view.insertedge = function (t, nodea, porta, nodeb, portb, attr) {
+    local edge, aid;
+
+    edge = t.gt.insertedge (t.gt, nodea, porta, nodeb, portb, attr, 0);
+    edge.attr.type = spl.edgetype;
+    for (aid in spl.data.edges[spl.edgetype].gattr)
+        edge.attr[aid] = spl.data.edges[spl.edgetype].gattr[aid];
+    for (aid in spl.data.edges[spl.edgetype].dattr)
+        edge.attr[aid] = spl.data.edges[spl.edgetype].dattr[aid];
+    edge.points = [
+        0 = copy (nodea.pos);
+        1 = copy (nodea.pos);
+        2 = copy (nodeb.pos);
+        3 = copy (nodeb.pos);
+    ];
+    t.gt.unpackedgeattr (t.gt, edge);
+    t.gt.drawedge (t.gt, t.gt.views, edge);
+    spl.setobj (t, edge);
+    t.changed = 1;
+};
+spl.view.shiftedge = function (t, edge, mode) {
+    local n, eid, edges, edgei;
+
+    n = 0;
+    for (eid = 0; eid < t.gt.graph.maxeid; eid = eid + 1) {
+        if (t.gt.graph.edges[eid].tail == edge.tail) {
+            edges[n] = t.gt.graph.edges[eid];
+            if (t.gt.graph.edges[eid] == edge)
+                edgei = n;
+            n = n + 1;
+        }
+    }
+    if (mode == 'left') {
+        if (edgei == 0) {
+            dotty.message (0, 'cannot shift leftmost edge left');
+            return;
+        }
+        t.gt.swapedgeids (t.gt, edges[edgei - 1], edges[edgei]);
+    } else if (mode == 'right') {
+        if (edgei == n - 1) {
+            dotty.message (0, 'cannot shift rightmost edge right');
+            return;
+        }
+        t.gt.swapedgeids (t.gt, edges[edgei], edges[edgei + 1]);
+    }
+    spl.view.layoutgraph (t.gt);
+};
+spl.view.copyobj = function (t, obj, mode) {
+    if (mode == 'copy')
+        t.gt.cut (t.gt, obj, 'one', 'support', 'copy');
+    else if (mode == 'copy subgraph')
+        t.gt.cut (t.gt, obj, 'reachable', 'support', 'copy');
+    else if (mode == 'cut') {
+        t.gt.cut (t.gt, obj, 'one', 'support', 'cut');
+        t.changed = 1;
+    } else if (mode == 'cut subgraph') {
+        t.gt.cut (t.gt, obj, 'reachable', 'support', 'cut');
+        t.changed = 1;
+    }
+};
+spl.view.removeobj = function (t, obj, mode) {
+    if (mode == 'delete') {
+        if (obj.nid >= 0)
+            t.gt.removenode (t.gt, obj);
+        else
+            t.gt.removeedge (t.gt, obj);
+    } else if (mode == 'delete subgraph')
+        t.gt.removesubtree (t.gt, obj);
+    t.changed = 1;
+};
+spl.view.layoutgraph = function (gt) {
+    local obj;
+
+    if (gt.highlight) {
+        obj = gt.highlight;
+        spl.view.unhighlightobj (gt);
+        gt.layoutgraph (gt);
+        spl.view.highlightobj (gt, obj);
+    } else
+        gt.layoutgraph (gt);
+};
+spl.view.highlightobj = function (gt, obj) {
+    local pos, size, rect, vid;
+
+    if (obj.nid >= 0) {
+        pos = obj.pos;
+        size = obj.size;
+        rect[0] = [
+            'x' = pos.x - size.x / 2 - 4;
+            'y' = pos.y - size.y / 2 - 4;
+        ];
+        rect[1] = [
+            'x' = rect[0].x + size.x + 8;
+            'y' = rect[0].y + size.y + 8;
+        ];
+    } else {
+        rect[0] = [
+            'x' = (obj.points[1].x + obj.points[2].x) / 2 - 10;
+            'y' = (obj.points[1].y + obj.points[2].y) / 2 - 10;
+        ];
+        rect[1] = [
+            'x' = rect[0].x + 20;
+            'y' = rect[0].y + 20;
+        ];
+    }
+    gt.highlightrect = rect;
+    for (vid in gt.views)
+        box (gt.views[vid].canvas, null, rect, [
+            'mode' = 'xor'; 'width' = 2;
+        ]);
+    gt.highlight = obj;
+};
+spl.view.unhighlightobj = function (gt) {
+    local vid;
+
+    if (~gt.highlight)
+        return;
+    for (vid in gt.views)
+        box (gt.views[vid].canvas, null, gt.highlightrect, [
+            'mode' = 'xor'; 'width' = 2;
+        ]);
+    remove ('highlight', gt);
+};
+spl.view.redraw = function (data) {
+    local vt, gt, t, attr;
+
+    vt = dotty.views[data.widget];
+    gt = dotty.graphs[vt.gtid];
+    t = spl.views[data.widget];
+    if (gt.highlight)
+        box (vt.canvas, null, gt.highlightrect, [
+            'width' = 2; 'color' = 0;
+        ]);
+    gt.drawgraph (gt, [vt.vtid = vt;]);
+    if (gt.highlight)
+        box (vt.canvas, null, gt.highlightrect, [
+            'width' = 2; 'mode' = 'xor';
+        ]);
+    t.wattr = getwidgetattr (vt.scroll, [0 = "childcenter"; 1 = "size";]);
+};
+#
+# resize callbacks
+#
+spl.view.areasresize = function (data) {
+    local vs, ret;
+
+    vs = spl.views[data.widget];
+    ret = [
+        vs.actions = ['x' = data.size.x; 'y' = spl.coords.label.size.y;];
+        vs.graph   = [
+            'x' = data.size.x;
+            'y' = data.size.y - spl.coords.label.size.y;
+        ];
+    ];
+    return ret;
+};
+spl.view.actionsresize = function (data) {
+    local vs, x, y, ret;
+
+    vs = spl.views[data.widget];
+    x = data.size.x / 4;
+    y = spl.coords.label.size.y;
+    ret = [
+        vs.file     = ['x' = x; 'y' = y;];
+        vs.decorate = ['x' = x; 'y' = y;];
+        vs.analysis = ['x' = x; 'y' = y;];
+        vs.setdef   = ['x' = x; 'y' = y;];
+    ];
+    return ret;
+};
+#
+# user interface
+#
+spl.view.filemenu = [
+    0 = "Erase drawing";
+    1 = "Open drawing";
+    2 = "Close drawing";
+    3 = "Save drawing";
+    4 = "Save as ...";
+    5 = "Print drawing";
+    6 = "Change Name";
+    7 = "Quit";
+];
+spl.view.dofilemenu = function (data) {
+    local me, t, s, i;
+
+    t = spl.views[data.widget];
+    if (t.changed == 1) {
+        me = spl.view.filemenu[3];
+        spl.view.filemenu[3] = concat (
+            spl.view.filemenu[3], '(needed)'
+        );
+    }
+    i = displaymenu (data.widget, spl.view.filemenu);
+    if (me)
+        spl.view.filemenu[3] = me;
+    if (~(i  >= 0))
+        return;
+    s = spl.view.filemenu[i];
+    if (s == "Erase drawing")
+        spl.view.eraseview (t);
+    else if (s == "Open drawing")
+        spl.view.createview (null);
+    else if (s == "Close drawing")
+        spl.view.destroyview (t);
+    else if (s == "Change Name")
+        spl.view.changename (t);
+    else if (s == "Save drawing")
+        spl.view.saveview (t, 0);
+    else if (s == "Save as ...")
+        spl.view.saveview (t, 1);
+    else if (s == "Print drawing")
+        t.gt.printorsave (t.gt, t.gnvt.vt,
+                'printer', null, 'best fit', '8.5x11');
+    else if (s == "Quit")
+        spl.view.quit ();
+};
+spl.view.decoratemenu = [
+    0 = "Do layout";
+    1 = "Redraw";
+    2 = "Zoom in";
+    3 = "Zoom out";
+    4 = "Show name";
+    5 = "Show name and args";
+    6 = "Show all";
+];
+spl.view.dodecoratemenu = function (data) {
+    local t, s, i;
+
+    t = spl.views[data.widget];
+    vt = dotty.views[t.canvas];
+    if (~((i = displaymenu (data.widget, spl.view.decoratemenu)) >= 0))
+        return;
+    s = spl.view.decoratemenu[i];
+    if (s == "Do layout")
+        spl.view.layoutgraph (t.gt);
+    else if (s == "Redraw")
+        spl.view.redraw (['widget' = t.canvas;]);
+    else if (s == "Zoom in")
+        dotty.zoom (vt, 0.5);
+    else if (s == "Zoom out")
+        dotty.zoom (vt, 2);
+    else if (s == "Show name")
+        spl.view.changeviewmode (t, 'name');
+    else if (s == "Show name and args")
+        spl.view.changeviewmode (t, 'name args');
+    else if (s == "Show all")
+        spl.view.changeviewmode (t, 'all');
+};
+spl.view.analysismenu = [
+    0 = "Analyze drawing";
+    1 = "Generate code";
+];
+spl.view.doanalysismenu = function (data) {
+    local t, s, i;
+
+    t = spl.views[data.widget];
+    if (~((i = displaymenu (data.widget, spl.view.analysismenu)) >= 0))
+        return;
+    s = spl.view.analysismenu[i];
+    if (s == "Analyze drawing") {
+        spl.loadmodule ('check');
+        spl.check.allchecks (t);
+    } else if (s == "Generate code")
+        spl.gen (t.gt);
+};
+spl.view.setdefmenu = [
+    0 = "Shape defaults";
+    1 = "Arc defaults";
+];
+spl.view.dosetdefmenu = function (data) {
+    local t, s, i;
+
+    t = spl.views[data.widget];
+    if (~((i = displaymenu (data.widget, spl.view.setdefmenu)) >= 0))
+        return;
+    s = spl.view.setdefmenu[i];
+    if (s == "Shape defaults") {
+        spl.view.unhighlightobj (t.gt);
+        spl.queries.getattrstart (
+            t, spl.data.global.node, spl.setdef
+        );
+    } else if (s == "Arc defaults") {
+        spl.view.unhighlightobj (t.gt);
+        spl.queries.getattrstart (
+            t, spl.data.global.edge, spl.setdef
+        );
+    }
+};
+#
+# graph UI
+#
+spl.view.protogt.actions.general["undo"] = function (gt, vt, data) {
+    spl.view.unhighlightobj (gt);
+    gt.undo (gt, 1);
+    spl.view.layoutgraph (gt);
+    t.changed = 1;
+};
+spl.view.protogt.actions.general["paste"] = function (gt, vt, data) {
+    gt.paste (gt, data.pos, 1);
+    spl.view.layoutgraph (gt);
+    spl.views[data.widget].changed = 1;
+};
+spl.view.protogt.actions.general["do layout"] = function (gt, vt, data) {
+    spl.view.layoutgraph (gt);
+};
+spl.view.protogt.actions.node["attributes"] = function (gt, vt, obj, data) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.highlightobj (gt, obj);
+    spl.queries.getattrstart (t, obj, spl.setobj);
+};
+spl.view.protogt.actions.node["copy"] = function (gt, vt, obj, data) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.copyobj (t, obj, 'copy');
+    dotty.clipgt.layoutgraph (dotty.clipgt);
+};
+spl.view.protogt.actions.node["copy subgraph"] = function (
+    gt, vt, obj, data
+) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.copyobj (t, obj, 'copy subgraph');
+    dotty.clipgt.layoutgraph (dotty.clipgt);
+};
+spl.view.protogt.actions.node["cut"] = function (gt, vt, obj, data) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.copyobj (t, obj, 'cut');
+    dotty.clipgt.layoutgraph (dotty.clipgt);
+};
+spl.view.protogt.actions.node["cut subgraph"] = function (
+    gt, vt, obj, data
+) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.copyobj (t, obj, 'cut subgraph');
+    dotty.clipgt.layoutgraph (dotty.clipgt);
+};
+spl.view.protogt.actions.node["delete"] = function (gt, vt, obj, data) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.removeobj (t, obj, 'delete');
+};
+spl.view.protogt.actions.node["delete subgraph"] = function (
+    gt, vt, obj, data
+) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.removeobj (t, obj, 'delete subgraph');
+};
+spl.view.protogt.actions.edge = spl.view.protogt.actions.node;
+spl.view.protogt.actions.edge["shift left"] = function (gt, vt, obj, data) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.shiftedge (t, obj, 'left');
+};
+spl.view.protogt.actions.edge["shift right"] = function (
+    gt, vt, obj, data
+) {
+    local t;
+
+    t = spl.views[data.widget];
+    spl.view.unhighlightobj (gt);
+    spl.view.shiftedge (t, obj, 'right');
+};
+dotty.protovt.normal.uifuncs = [
+    'leftdown' = function (data) {
+        widgets[data.widget].sawleftdown = 1;
+        if (data.obj)
+            widgets[data.widget].selected = data.obj;
+        else
+            remove ('selected', widgets[data.widget]);
+    };
+    'leftmove' = function (data) {
+        local vt, t, dp, attr, cpos, pos;
+
+        if (widgets[data.widget].sawleftdown ~= 1)
+            return;
+        t = spl.views[data.widget];
+        vt = dotty.views[data.widget];
+        pos.x = data.pos.x * vt.vsize.x / (vt.wrect[1].x - vt.wrect[0].x);
+        pos.y = (vt.wrect[1].y - data.pos.y) * vt.vsize.y /
+                (vt.wrect[1].y - vt.wrect[0].y);
+        dp = [
+            'x' = pos.x - t.wattr.childcenter.x;
+            'y' = pos.y - t.wattr.childcenter.y;
+        ];
+        cpos = copy (t.wattr.childcenter);
+        if (-dp.x > t.wattr.size.x / 2 - 50)
+            cpos.x = cpos.x - 100;
+        if (dp.x > t.wattr.size.x / 2 - 50)
+            cpos.x = cpos.x + 100;
+        if (-dp.y > t.wattr.size.y / 2 - 50)
+            cpos.y = cpos.y - 100;
+        if (dp.y > t.wattr.size.y / 2 - 50)
+            cpos.y = cpos.y + 100;
+        setwidgetattr (vt.scroll, ['childcenter' = cpos;]);
+        attr = getwidgetattr (vt.scroll, [0 = "childcenter";]);
+        spl.views[data.widget].wattr.childcenter = attr.childcenter;
+    };
+    'leftup' = function (data) {
+        local gt, t;
+
+        if (widgets[data.widget].sawleftdown ~= 1)
+            return;
+        widgets[data.widget].sawleftdown = 0;
+        t = spl.views[data.widget];
+        gt = t.gt;
+        if (~data.obj & ~widgets[data.widget].selected)
+            spl.view.insertnode (t, data.pos);
+        else if (data.obj & widgets[data.widget].selected) {
+            if (data.obj == widgets[data.widget].selected) {
+                spl.view.unhighlightobj (gt);
+                spl.view.highlightobj (gt, data.obj);
+                spl.queries.getattrstart (t, data.obj, spl.setobj);
+            } else if (data.obj.nid >= 0 &
+                    widgets[data.widget].selected.nid >= 0) {
+                if (data.pobj.attr.support)
+                    dotty.groupnodes (gt, [
+                        data.obj.nid = data.obj;
+                        data.pobj.nid = data.pobj;
+                    ], data.obj, null);
+                else if (data.obj.attr.support)
+                    dotty.groupnodes (gt, [
+                        data.obj.nid = data.obj;
+                        data.pobj.nid = data.pobj;
+                    ], data.pobj, null);
+                else
+                    spl.view.insertedge (t, data.pobj, null,
+                            data.obj, null, null);
+            }
+        }
+    };
+    'rightdown' = dotty.protovt.normal.uifuncs.rightdown;
+    'keyup' = dotty.protovt.normal.uifuncs.keyup;
+    'redraw' = function (data) {
+        spl.view.redraw (data);
+    };
+    'closeview' = function (data) {
+        spl.view.destroyview (spl.views[data.widget]);
+    };
+];

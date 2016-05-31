@@ -1,0 +1,176 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+static char *statemap[] = {
+    VG_ALARM_S_STATE_NONE, /* VG_ALARM_N_STATE_NONE */
+    VG_ALARM_S_STATE_INFO, /* VG_ALARM_N_STATE_INFO */
+    VG_ALARM_S_STATE_DEG,  /* VG_ALARM_N_STATE_DEG  */
+    VG_ALARM_S_STATE_DOWN, /* VG_ALARM_N_STATE_DOWN */
+    VG_ALARM_S_STATE_UP,   /* VG_ALARM_N_STATE_UP   */
+};
+
+static char *modemap[] = {
+    VG_ALARM_S_MODE_NONE,  /* VG_ALARM_N_MODE_NONE  */
+    VG_ALARM_S_MODE_KEEP,  /* VG_ALARM_N_MODE_KEEP  */
+    VG_ALARM_S_MODE_DEFER, /* VG_ALARM_N_MODE_DEFER */
+    VG_ALARM_S_MODE_DROP,  /* VG_ALARM_N_MODE_DROP  */
+};
+
+static char *typemap[] = {
+    VG_ALARM_S_TYPE_NONE,  /* VG_ALARM_N_TYPE_NONE  */
+    VG_ALARM_S_TYPE_ALARM, /* VG_ALARM_N_TYPE_ALARM */
+    VG_ALARM_S_TYPE_CLEAR, /* VG_ALARM_N_TYPE_CLEAR */
+};
+
+static char *sordermap[] = {
+    VG_ALARM_S_SO_NONE,     /* VG_ALARM_N_SO_NONE     */
+    VG_ALARM_S_SO_NORMAL,   /* VG_ALARM_N_SO_NORMAL   */
+    VG_ALARM_S_SO_OVERRIDE, /* VG_ALARM_N_SO_OVERRIDE */
+};
+
+static char buf_scope[3 * DDSSZ_rec_dq_dt_alarm_scope];
+static char buf_alarmid[3 * DDSSZ_rec_dq_dt_alarm_alarmid];
+static char buf_ccid[3 * DDSSZ_rec_dq_dt_alarm_ccid];
+static char buf_variables[3 * DDSSZ_rec_dq_dt_alarm_variables];
+static char buf_level1[3 * DDSSZ_rec_dq_dt_alarm_level1];
+static char buf_id1[3 * DDSSZ_rec_dq_dt_alarm_id1];
+static char buf_level2[3 * DDSSZ_rec_dq_dt_alarm_level2];
+static char buf_id2[3 * DDSSZ_rec_dq_dt_alarm_id2];
+static char buf_text[3 * DDSSZ_rec_dq_dt_alarm_text];
+static char buf_comment[3 * DDSSZ_rec_dq_dt_alarm_comment];
+static char buf_origmsg[3 * DDSSZ_rec_dq_dt_alarm_origmsg];
+
+static char *sep;
+static int mode, first = TRUE;
+
+#define MODE_CSV 1
+#define MODE_XML 2
+#define MODE_JSN 3
+}
+BEGIN{
+    char *modestr;
+
+    modestr = getenv ("MODE");
+    if (strcasecmp (modestr, "xml") == 0)
+        mode = MODE_XML;
+    else if (strcasecmp (modestr, "jsn") == 0)
+        mode = MODE_JSN;
+    else
+        mode = MODE_CSV, sep = "|";
+
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (
+            sfstdout,
+            "scope%salarmid%sccid%sstate%ssmode%svariables%sdateissued%s"
+            "hourissued%stimecleared%stimeissued%stype%ssortorder%spmode%s"
+            "level1%sid1%slevel2%sid2%stmode%sseverity%stext%scomment%sorigmsg"
+            "\n",
+            sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep,
+            sep, sep, sep, sep, sep, sep, sep, sep
+        );
+        break;
+    case MODE_JSN:
+        sfprintf (sfstdout, "\"alarms\":[\n");
+        break;
+    }
+}
+{
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (
+            sfstdout,
+            "%s%s%s%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%d%s%s%s%s%s"
+            "%s%s%s%s%d%s%d%s%s%s%s%s%s\n",
+            scope, sep, alarmid, sep, ccid, sep, state, sep, smode, sep,
+            variables, sep, dateissued, sep, hourissued, sep, timecleared, sep,
+            timeissued, sep, type, sep, sortorder, sep, pmode, sep, level1, sep,
+            id1, sep, level2, sep, id2, sep, tmode, sep, severity, sep, text,
+            sep, comment, sep, origmsg
+        );
+        break;
+    case MODE_XML:
+        VG_urlenc (scope, buf_scope, sizeof (buf_scope));
+        VG_urlenc (alarmid, buf_alarmid, sizeof (buf_alarmid));
+        VG_urlenc (ccid, buf_ccid, sizeof (buf_ccid));
+        VG_urlenc (variables, buf_variables, sizeof (buf_variables));
+        VG_urlenc (level1, buf_level1, sizeof (buf_level1));
+        VG_urlenc (id1, buf_id1, sizeof (buf_id1));
+        VG_urlenc (level2, buf_level2, sizeof (buf_level2));
+        VG_urlenc (id2, buf_id2, sizeof (buf_id2));
+        VG_urlenc (text, buf_text, sizeof (buf_text));
+        VG_urlenc (comment, buf_comment, sizeof (buf_comment));
+        VG_urlenc (origmsg, buf_origmsg, sizeof (buf_origmsg));
+        sfprintf (
+            sfstdout,
+            "<alarm>"
+            "<sid>%s</sid><aid>%s</aid>"
+            "<ccid>%s</ccid><st>%s</st><sm>%s</sm>"
+            "<vars>%s</vars>"
+            "<di>%s</di><hi>%s</hi>"
+            "<tc>%d</tc><ti>%d</ti>"
+            "<tp>%s</tp><so>%s</so><pm>%s</pm>"
+            "<lv1>%s</lv1><id1>%s</id1><lv2>%s</lv2><id2>%s</id2>"
+            "<tm>%s</tm><sev>%d</sev>"
+            "<txt>%s</txt><com>%s</com><origmsg>%s</origmsg>"
+            "</alarm>\n",
+            buf_scope, buf_alarmid,
+            buf_ccid, statemap[state], modemap[smode],
+            buf_variables,
+            dateissued, hourissued,
+            timecleared, timeissued,
+            typemap[type], sordermap[sortorder], VG_ALARM_S_PMODE_PASSTHROUGH,
+            buf_level1, buf_id1, buf_level2, buf_id2,
+            modemap[tmode], severity,
+            buf_text, buf_comment, buf_origmsg
+        );
+        break;
+    case MODE_JSN:
+        VG_simpleenc (scope, buf_scope, sizeof (buf_scope), "\"\\");
+        VG_simpleenc (alarmid, buf_alarmid, sizeof (buf_alarmid), "\"\\");
+        VG_simpleenc (ccid, buf_ccid, sizeof (buf_ccid), "\"\\");
+        VG_simpleenc (variables, buf_variables, sizeof (buf_variables), "\"\\");
+        VG_simpleenc (level1, buf_level1, sizeof (buf_level1), "\"\\");
+        VG_simpleenc (id1, buf_id1, sizeof (buf_id1), "\"\\");
+        VG_simpleenc (level2, buf_level2, sizeof (buf_level2), "\"\\");
+        VG_simpleenc (id2, buf_id2, sizeof (buf_id2), "\"\\");
+        VG_simpleenc (text, buf_text, sizeof (buf_text), "\"\\");
+        VG_simpleenc (comment, buf_comment, sizeof (buf_comment), "\"\\");
+        VG_simpleenc (origmsg, buf_origmsg, sizeof (buf_origmsg), "\"\\");
+        sfprintf (
+            sfstdout,
+            "%s{"
+            "\"sid\":\"%s\",\"aid\":\"%s\","
+            "\"ccid\":\"%s\",\"st\":\"%s\",\"sm\":\"%s\","
+            "\"vars\":\"%s\","
+            "\"di\":\"%s\",\"hi\":\"%s\","
+            "\"tc\":%d,\"ti\":%d,"
+            "\"tp\":\"%s\",\"so\":\"%s\",\"pm\":\"%s\","
+            "\"lv1\":\"%s\",\"id1\":\"%s\",\"lv2\":\"%s\",\"id2\":\"%s\","
+            "\"tm\":\"%s\",\"sev\":%d,"
+            "\"txt\":\"%s\",\"com\":\"%s\",\"origmsg\":\"%s\""
+            "}\n",
+            first ? "" : ",", buf_scope, buf_alarmid,
+            buf_ccid, statemap[state], modemap[smode],
+            buf_variables,
+            dateissued, hourissued,
+            timecleared, timeissued,
+            typemap[type], sordermap[sortorder], VG_ALARM_S_PMODE_PASSTHROUGH,
+            buf_level1, buf_id1, buf_level2, buf_id2,
+            modemap[tmode], severity,
+            buf_text, buf_comment, buf_origmsg
+        );
+        break;
+    }
+    first = FALSE;
+}
+END{
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (sfstdout, "\n");
+        break;
+    case MODE_JSN:
+        sfprintf (sfstdout, "]\n");
+        break;
+    }
+}

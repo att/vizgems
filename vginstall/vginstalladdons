@@ -1,0 +1,267 @@
+#!/bin/ksh
+
+PATH=$PATH:/usr/sbin:/sbin
+
+exec 3> vginstalladdons.log
+
+function msg { # $@ = message
+    print -u2 "$@"
+    print -u3 "$@"
+}
+
+function askyn { # $1 = variable $2 = prompt $3 = default
+    typeset -l ynq
+
+    if [[ $automode == y ]] then
+        msg auto: $1:$2:$3
+        ynq=$3
+    else
+        read ynq?"$2($3) "
+    fi
+    if [[ $ynq == '' ]] then
+        ynq=$3
+    fi
+    typeset -n ans=$1; ans=$ynq; typeset +n ans
+}
+
+typeset -A addonsstate
+
+function loadstate {
+    if [[ -f vginstalladdons.state ]] then
+        . ./vginstalladdons.state
+    fi
+}
+
+vars2save=
+
+function savestate {
+    typeset v
+
+    for v in $vars2save; do
+        typeset -n vr=$v
+        print "$v=\"$vr\""
+        typeset +n vr
+    done > vginstalladdons.state
+    for v in ${!addonsstate[@]}; do
+        print "addonsstate[$v]=${addonsstate[$v]}"
+    done >> vginstalladdons.state
+}
+
+function filterfile { # $1 = src $2 = dst
+    typeset src=$1 dst=$2
+    typeset ifs line tmp
+
+    tmp=/tmp/vginstalladdons.$$
+    case $1 in
+    */parameter.txt)
+        ifs="$IFS"
+        IFS='|'
+        while read -r line; do
+            if [[ $line == {2}(*([!|])'|')* ]] then
+                print -r "${.sh.match[1]}"
+            fi
+        done < $src | sort -u > $tmp
+        (
+            fgrep -v -f $tmp $dst
+            cat $src
+        ) > $dst.tmp && cp $dst $dst.old && mv $dst.tmp $dst
+        IFS="$ifs"
+        ;;
+    */statlist.txt)
+        ifs="$IFS"
+        IFS='|'
+        while read -r line; do
+            if [[ $line == {1}(*([!|])'|')* ]] then
+                print -r "${.sh.match[1]}"
+            fi
+        done < $src | sort -u > $tmp
+        (
+            fgrep -v -f $tmp $dst
+            cat $src
+        ) > $dst.tmp && cp $dst $dst.old && mv $dst.tmp $dst
+        IFS="$ifs"
+        ;;
+    *)
+        msg ERROR: no filter for file $1
+        exit 1
+        ;;
+    esac
+}
+
+automode=n
+if [[ $1 == -auto || $VGINSTALLAUTO == y ]] then
+    automode=y
+fi
+
+if [[ ! -f vginstall.state ]] then
+    msg ERROR: cannot find main package installation state file
+    exit 1
+fi
+
+. ./vginstall.state
+
+if [[ $version == '' ]] then
+    msg ERROR: version of main package not specified
+    exit 1
+fi
+if [[ $rootdir == '' || ! -d $rootdir ]] then
+    msg ERROR: root directory not present
+    exit 1
+fi
+
+loadstate
+
+typeset -A dstnames files
+typeset -u u
+
+for dir in $rootdir/data/*; do
+    [[ ! -d $dir ]] && continue
+    [[ ! -f $dir/etc/file.list ]] && continue
+    sdir=${dir#"$rootdir/"}
+    while read file; do
+        files[$sdir/${file#'./'}]=y
+    done < $dir/etc/file.list
+    u=$sdir
+    dstnames[${u//'/'}DIR]=$sdir
+    dstnames[${u#DATA/}DIR]=$sdir
+done
+for dir in $rootdir/sw/*; do
+    [[ ! -d $dir/current ]] && continue
+    [[ ! -f $dir/current/etc/file.list ]] && continue
+    sdir=${dir#"$rootdir/"}
+    while read file; do
+        files[$sdir/current/${file#'./'}]=y
+    done < $dir/current/etc/file.list
+    u=$sdir
+    dstnames[${u//'/'}DIR]=$sdir/current
+done
+
+alladdons=
+arch1=$(uname -m)
+for addon in vg.addons-*.*.$version.tar; do
+    [[ ! -f $addon ]] && continue
+    case $addon in
+    *linux.i386-64*) arch2=x86_64 ;;
+    *linux.i386*)    arch2=i686   ;;
+    *linux.ia64*)    arch2=ia64   ;;
+    *sgi.*)          arch2=sgi6   ;;
+    *win32.i386*)    arch2=$arch1 ;;
+    *)               arch2=$arch1 ;;
+    esac
+    if [[ $arch1 != $arch2 ]] then
+        msg package $addon is not compatible with this operating system
+        continue
+    fi
+    addonname=${addon#vg.addons-}
+    addonname=${addonname%.$version.*}
+    addonname=${addonname%%.*}
+    askyn addonsstate[$addonname] "install addon $addonname package" ${addonsstate[$addonname]:-y}
+    [[ ${addonsstate[$addonname]} != y ]] && continue
+    alladdons+=" $addon"
+done
+
+savestate
+
+if [[ $VGINSTALLSTOPPED != y ]] then
+    # stop processing
+    askyn yn "stop all running processes" y
+    if [[ $yn != y ]] then
+        msg cannot proceed without stopping running processes
+        askyn yn "stop all running processes (last chance)" y
+        if [[ $yn != y ]] then
+            msg aborting
+            exit 0
+        fi
+    fi
+    for comp in $rootdir/data/*; do
+        [[ ! -f $comp/active || ! -x $comp/etc/${comp##*/}_control ]] && continue
+        msg stopping ${comp##*/} component
+        $comp/etc/${comp##*/}_control stop
+    done
+    sleep 5
+fi
+
+for addon in $alladdons; do
+    [[ ! -f $addon ]] && continue
+    msg installing $addon
+    rm -rf ___tmp___/addons/$addon
+    mkdir -p ___tmp___/addons/$addon
+    ( cd ___tmp___/addons/$addon && tar xf ../../../$addon )
+    if [[ ! -f ___tmp___/addons/$addon/files.map ]] then
+        msg ERROR: no files.map present in addon $addon
+        continue
+    fi
+    while read line; do
+        src=${line%'|'*}
+        src=${src##+('/')}; src=${src%%+('/')}; src=${src//+('/')/'/'}
+        dst=${line##*'|'}
+        dst=${dst##+('/')}; dst=${dst%%+('/')}; dst=${dst//+('/')/'/'}
+        dstname=${dst%%/*}
+        if [[ ${dstnames[$dstname]} == '' ]] then
+            msg ERROR: unknown destination name $dstname
+            continue
+        fi
+        if [[ $src == */../* || $dst == */../* ]] then
+            msg ERROR: source and destination paths cannot include '..'
+            continue
+        fi
+        sdir=${dstnames[$dstname]}/${dst#*/}
+        dir=$rootdir/$sdir
+        if [[ ! -d $dir ]] then
+            msg ERROR: destination directory $dir does not exist
+        fi
+        if [[ -d ___tmp___/addons/$addon/files/$src ]] then
+            msg ERROR: source files cannot be directories
+            continue
+        fi
+        if [[ $src == */* ]] then
+            mkdir -p $dir/${src%/*}
+            if [[ ! -d $dir/${src%/*} ]] then
+                msg ERROR: cannot create directory $dir/${src%/*}
+                continue
+            fi
+        fi
+        if [[ $src == @(parameter.txt|statlist.txt) ]] then
+            filterfile ___tmp___/addons/$addon/files/$src $dir/$src
+        else
+            if [[ $src != @(tools.txt) ]] then
+                if [[ ${files[$sdir/$src]} == y ]] then
+                    msg ERROR: cannot overwrite base file $src
+                    continue
+                fi
+            fi
+            cp ___tmp___/addons/$addon/files/$src $dir/$src
+            if [[ $dir/$src == *_@(sample|initial) ]] then
+                VGCOMPPREFIX=$dstname ___tmp___/vgfileconfig $dir/$src
+            fi
+        fi
+    done < ___tmp___/addons/$addon/files.map
+done
+
+if [[ $VGINSTALLSTOPPED != y ]] then
+    # restart processing
+    askyn yn "restart all processes" y
+    if [[ $yn != y ]] then
+        msg it is recommended to restart processing
+        askyn yn "restart all processes (last chance)" y
+        if [[ $yn != y ]] then
+            msg exiting
+            exit 0
+        fi
+    fi
+    > vginstall.cron.new
+    for comp in ${!comps[@]}; do
+        [[ ${comps[$comp]} == n ]] && continue
+        [[ ! -f $rootdir/data/$comp/active ]] && continue
+        msg starting $comp component
+        $rootdir/data/$comp/etc/${comp}_control setup
+        $rootdir/data/$comp/etc/${comp}_control start
+    done
+fi
+
+msg "attempting to delete this installation script to avoid"
+msg "using an outdated script when installing these packages"
+askyn yn "delete $0 (y/n)" y
+if [[ $yn == y ]] then
+    rm $0
+fi

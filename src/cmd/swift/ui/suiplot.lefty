@@ -1,0 +1,1001 @@
+#
+# SUIPLOT
+#
+
+suiplot = [
+    'insuiplot' = 'y';
+    'names' = [];
+    'namen' = 0;
+    'order' = [];
+    'framei' = 0;
+    'framen' = 1;
+    'framelabels' = [0 = '0';];
+    'colori' = 2;
+    'colors' = [];
+    'ds' = [
+        'plotinit' = 0;
+        'allowinsert' = 0;
+        'numtostr' = 0;
+        'showtitle' = 0;
+        'title' = 'SWIFTUI - 2D View';
+        'showcontrol' = 1;
+        'showlegends' = 1;
+        'viewcolor' = [0 = 'gray'; 1 = 'black';];
+        'canvascolor' = [0 = 'black'; 1 = 'white';];
+        'vieworigin' = ['x' = 0; 'y' = 0;];
+        'viewsize' = ['x' = 710; 'y' = 200;];
+        'textheight' = 25;
+        'linewidth' = 1;
+        'yaxisintervals' = 1;
+        'axisfontname' = '-*-times-medium-r-*--%d-*-*-*-*-*-*-1';
+        'axisfontsize' = 14;
+        'fps' = 0;
+        'setframelabel' = function (framei) { return concat (framei); };
+        'getframelabel' = 0;
+    ];
+];
+
+#
+# startup functions
+#
+
+suiplot.init = function (dataspecific) {
+    local dst, dsi, nds;
+
+    for (dsi in dataspecific)
+        dst[dsi] = 1;
+    for (dsi in suiplot.ds)
+        if (dst[concat ('plot', dsi)])
+            nds[dsi] = dataspecific[concat ('plot', dsi)];
+        else if (dst[dsi])
+            nds[dsi] = dataspecific[dsi];
+    for (dsi in nds)
+        suiplot.ds[dsi] = nds[dsi];
+    if (suiplot.ds.plotinit)
+        suiplot.ds.plotinit ();
+    monitorfile = suiplot.monitorfile;
+};
+
+suiplot.main = function (mserver, dserver, localdir, prefprefix) {
+    local t;
+
+    suiplot.mserver = mserver;
+    suiplot.dserver = dserver;
+    suiplot.localdir = localdir;
+    suiplot.prefprefix = prefprefix;
+    t = split (mserver, '/');
+    suiplot.qsuffix = concat ('.query.', t[3], '.', t[4]);
+    if (~((suiplot.mpfd = suiutil.getserver (mserver, 'SWIFTMSERVER')) >= 0))
+        exit ();
+    monitor ('on', suiplot.mpfd);
+    suiutil.writecmd (suiplot.mpfd, 'echoon', null);
+    suiutil.writecmd (suiplot.mpfd, 'syncon', null);
+    suiplot.createview ();
+    suiutil.writecmd (suiplot.mpfd, 'history', []);
+};
+
+#
+# command handling functions
+#
+
+suiplot.insert = function (cmd) {
+    local namet, name;
+
+    if (suiplot.names[cmd.name]) {
+        if (cmd.replay ~= 1)
+            suiutil.msg (1, concat ('name ', cmd.name, ' already loaded'));
+        return;
+    };
+    namet.name = cmd.name;
+    namet.outcmd = copy (cmd);
+    remove ('cmd', namet.outcmd);
+    if (~(namet.cmd = suiplot.allowinsert (cmd)))
+        return;
+    namet.namei = suiplot.namen;
+    suiutil.setbusy (suiplot.widgets.canvas);
+    if (suiutil.updatefile (namet.cmd, suiplot) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        suiutil.unsetbusy (suiplot.widgets.canvas);
+        return;
+    }
+    suiutil.unsetbusy (suiplot.widgets.canvas);
+    if (~((namet.value = loadvalue (['name' = namet.cmd.localfile;])) >= 0)) {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        return;
+    }
+    namet.totvalues = suiplot.getvalues (namet, '');
+    namet.curvalues = copy (namet.totvalues);
+    namet.colori = suiplot.getcolor (namet.cmd.color);
+    suiplot.names[cmd.name] = namet;
+    suiplot.order[suiplot.namen] = namet.cmd.name;
+    suiplot.namen = suiplot.namen + 1;
+    suiplot.insertlegend (namet);
+    for (name in suiplot.names)
+        if (suiplot.framen < suiplot.names[name].totvalues.framen)
+            suiplot.framen = suiplot.names[name].totvalues.framen;
+    for (name in suiplot.names)
+        suiplot.names[name].framescale = (
+            suiplot.framen / suiplot.names[name].totvalues.framen
+        );
+    suiplot.drawall (1);
+};
+
+suiplot.remove = function (cmd) {
+    if (~suiplot.names[cmd.name])
+        return;
+    unloadvalue (suiplot.names[cmd.name].value);
+    suiplot.removelegend (suiplot.names[cmd.name]);
+    remove (suiplot.names[cmd.name].namei, suiplot.order);
+    remove (cmd.name, suiplot.names);
+    suiplot.drawall (1);
+};
+
+suiplot.reload = function (cmd) {
+    local namet;
+
+    if (~(namet = suiplot.names[cmd.name]))
+        return;
+    suiutil.setbusy (suiplot.widgets.canvas);
+    if (suiutil.updatefile (namet.cmd, suiplot) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.file));
+        suiutil.unsetbusy (suiplot.widgets.canvas);
+        return;
+    }
+    suiutil.unsetbusy (suiplot.widgets.canvas);
+    unloadvalue (namet.value);
+    if (~((namet.value = loadvalue (['name' = namet.cmd.localfile;])) >= 0)) {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        return;
+    }
+    namet.totvalues = suiplot.getvalues (namet, '');
+    namet.curvalues = copy (namet.totvalues);
+    suiplot.changelegend (namet);
+};
+
+suiplot.removeall = function () {
+    local name, names;
+
+    for (name in suiplot.names)
+        names[name] = suiplot.names[name];
+    for (name in names)
+        suiplot.remove (['name' = name;]);
+};
+
+suiplot.reloadall = function () {
+    local name;
+
+    for (name in suiplot.names)
+        suiplot.reload (suiplot.names[name]);
+    suiplot.drawall (1);
+};
+
+suiplot.removemany = function (cmd) {
+    local i;
+
+    if (cmd.name & strlen (cmd.name) > 0)
+        suiplot.remove (cmd);
+    else if (cmd.names)
+        for (i in cmd.names)
+            suiplot.remove (suiplot.names[cmd.names[i]]);
+    else
+        suiplot.removeall ();
+};
+
+suiplot.reloadmany = function (cmd) {
+    local i;
+
+    if (cmd.name & strlen (cmd.name) > 0)
+        suiplot.reload (cmd);
+    else if (cmd.names)
+        for (i in cmd.names)
+            suiplot.reload (suiplot.names[cmd.names[i]]);
+    else
+        suiplot.reloadall ();
+};
+
+suiplot.setframe = function (cmd) {
+    suiplot.drawframe (suiplot.widgets.canvas);
+    suiplot.framei = ston (cmd.framef);
+    if (suiplot.framei >= suiplot.framen)
+        suiplot.framei = suiplot.framen - 1;
+    suiplot.setframelabel ();
+    suiplot.drawframe (suiplot.widgets.canvas);
+};
+
+suiplot.focus = function (cmd) {
+    local name;
+
+    if (cmd.coords | tablesize (cmd.items) > 1)
+        return;
+    for (name in suiplot.names)
+        if (
+            suiplot.names[name].cmd.class ~= cmd.class |
+            ~(suiplot.names[name].curvalues = suiplot.getvalues (
+                suiplot.names[name], cmd.items[0]
+            ))
+        )
+            remove ('curvalues', suiplot.names[name]);
+    if (suiplot.ds.showcontrol)
+        setwidgetattr (suiplot.widgets.itemt, ['text' = cmd.items[0];]);
+    suiplot.drawall (1);
+};
+
+suiplot.unfocus = function (cmd) {
+    local name;
+
+    for (name in suiplot.names)
+        suiplot.names[name].curvalues = copy (suiplot.names[name].totvalues);
+    if (suiplot.ds.showcontrol)
+        setwidgetattr (suiplot.widgets.itemt, ['text' = '';]);
+    suiplot.drawall (1);
+};
+
+suiplot.settitle = function (cmd) {
+    local color;
+
+    if (cmd.colorvalue)
+        color = suiutil.parsecolorcmd (cmd.colorvalue);
+    if (suiplot.ds.showtitle)
+        setwidgetattr (suiplot.widgets.title, [
+            'text' = cmd.title;
+            'color' = color;
+        ]);
+    setwidgetattr (suiplot.widgets.view, ['name' = cmd.title;]);
+};
+
+#
+# command handling support functions
+#
+
+suiplot.allowinsert = function (cmd) {
+    if (suiplot.ds.allowinsert)
+        if (~(cmd = suiplot.ds.allowinsert (cmd)))
+            return;
+    if (~cmd.label)
+        cmd.label = cmd.name;
+    if (~cmd.color)
+        cmd.color = [
+            'name' = suiplot.ds.canvascolor[1];
+            'value' = suiplot.ds.canvascolor[1];
+        ];
+    if (~cmd.file)
+        cmd.file = cmd.name;
+    return cmd;
+};
+
+suiplot.getvalues = function (namet, itemi) {
+    local values, attr, seti;
+
+    values.sum = 0;
+    if (itemi == '') {
+        attr = ['sumitems' = 1;];
+        values.key = 'sum';
+    } else {
+        attr = ['keys' = [0 = itemi;];];
+        values.key = itemi;
+    }
+    if (~(values.items = getvalueitems (namet.value, attr)))
+        return;
+    values.sets = [];
+    suiplot.linksets (values, values.items);
+    values.min = values.sets[0].minvalue;
+    values.max = values.sets[0].maxvalue;
+    values.framen = tablesize (values.sets[0].data);
+    for (seti = 1; values.sets[seti]; seti = seti + 1) {
+        if (values.max < values.sets[seti].maxvalue)
+            values.max = values.sets[seti].maxvalue;
+        if (values.min > values.sets[seti].minvalue)
+            values.min = values.sets[seti].minvalue;
+        if (values.framen < tablesize (values.sets[seti].data))
+            values.framen = tablesize (values.sets[seti].data);
+    }
+    values.sum = values.sets[0].sumvalue;
+    return values;
+};
+
+suiplot.linksets = function (values, items) {
+    local childi;
+
+    if (items.data) {
+        values.sets[tablesize (values.sets)] = items;
+        return;
+    }
+    for (childi = 0; items.children[childi]; childi = childi + 1)
+        suiplot.linksets (values, items.children[childi]);
+};
+
+suiplot.legendlabel = function (namet) {
+    local s;
+
+    if (namet.curvalues.selsum >= 0 | namet.curvalues.selsum < 0)
+        s = concat (
+            namet.cmd.color.name, ': ', namet.cmd.label, ' (',
+            suiplot.numtostr (namet.curvalues.selsum, 'long'), ' / ',
+            suiplot.numtostr (namet.curvalues.sum, 'long'), ')'
+        );
+    else
+        s = concat (
+            namet.cmd.color.name, ': ', namet.cmd.label, ' (',
+            suiplot.numtostr (namet.curvalues.sum, 'long'), ')'
+        );
+    return s;
+};
+
+suiplot.numtostr = function (num, mode) {
+    if (suiplot.ds.numtostr)
+        return suiplot.ds.numtostr (num, mode);
+    return concat (num);
+};
+
+suiplot.startplay = function (first, last, mode) {
+    if (last <= first)
+        return;
+    suiplot.play.first = first;
+    suiplot.play.last = last;
+    suiplot.play.current = first;
+    suiplot.play.mode = mode;
+    if (~(suiplot.syncpending == 1)) {
+        suiutil.writecmd (suiplot.mpfd, 'syncall', null);
+        suiplot.syncpending = 1;
+    }
+};
+
+suiplot.doplay = function () {
+    if (suiplot.play.current > suiplot.play.last) {
+        if (suiplot.play.mode ~= 'loop') {
+            suiplot.stopplay ();
+            return;
+        }
+        suiplot.play.current = suiplot.play.first;
+    }
+    if (suiplot.ds.fps > 0)
+        sleep (1.0 / suiplot.ds.fps);
+    suiutil.writecmd (suiplot.mpfd, 'play', ['framef' = suiplot.play.current;]);
+    if (~(suiplot.syncpending == 1)) {
+        suiutil.writecmd (suiplot.mpfd, 'syncall', null);
+        suiplot.syncpending = 1;
+    }
+    suiplot.play.current = suiplot.play.current + 1;
+    return data;
+};
+
+suiplot.stopplay = function () {
+    remove ('play', suiplot);
+};
+
+suiplot.sumup = function () {
+    local name, namet, totvalues, curvalues, totitems, curitems;
+    local framef, framel, framei;
+
+    for (name in suiplot.names) {
+        namet = suiplot.names[name];
+        totvalues = namet.totvalues;
+        curvalues = namet.curvalues;
+        totitems = totvalues.items;
+        while (totitems.children)
+            totitems = totitems.children[0];
+        curitems = curvalues.items;
+        while (curitems.children)
+            curitems = curitems.children[0];
+        if (suiplot.framef >= 0)
+            framef = toint (suiplot.framef / namet.framescale);
+        else
+            framef = suiplot.framef;
+        if (suiplot.framel >= 0)
+            framel = toint (suiplot.framel / namet.framescale);
+        else
+            framel = suiplot.framel;
+        if (framef >= 0 & framel >= 0) {
+            totvalues.selsum = 0;
+            curvalues.selsum = 0;
+            for (
+                framei = framef; framei <= framel; framei = framei + 1
+            ) {
+                totvalues.selsum = totvalues.selsum + totitems.data[
+                    framei
+                ][totvalues.key];
+                curvalues.selsum = curvalues.selsum + curitems.data[
+                    framei
+                ][curvalues.key];
+            }
+        } else {
+            totvalues.selsum = totitems.data[framef][totvalues.key];
+            curvalues.selsum = curitems.data[framef][curvalues.key];
+        }
+        suiplot.changelegend (namet);
+    }
+};
+
+suiplot.dotopn = function (namet, mode) {
+    local cmd;
+
+    cmd = copy (namet.outcmd);
+    cmd.name = concat (cmd.name, suiplot.qsuffix);
+    if (mode == 0) {
+        cmd.framef = suiplot.framei;
+        cmd.framel = suiplot.framei;
+    } else if (mode == 1) {
+        if (suiplot.framef >= 0) {
+            cmd.framef = suiplot.framef;
+            cmd.framel = suiplot.framel;
+        } else {
+            cmd.framef = suiplot.framei;
+            cmd.framel = suiplot.framei;
+        }
+    } else {
+        cmd.framef = 0;
+        cmd.framel = suiplot.framen - 1;
+    }
+    cmd.query = 'topn';
+    cmd.format = 'text';
+    cmd.n = 10;
+    suiutil.writecmd (suiplot.mpfd, 'load', cmd);
+};
+
+suiplot.dounload = function (namet) {
+    local cmd;
+
+    cmd = copy (namet.outcmd);
+    cmd.query = 'unload';
+    cmd.format = 'text';
+    suiutil.writecmd (suiplot.mpfd, 'unload', cmd);
+};
+
+#
+# user interface functions
+#
+
+suiplot.createview = function () {
+    local widgett;
+
+    widgett.view = createwidget (-1, [
+        'type' = 'view'; 'name' = suiplot.ds.title;
+        'origin' = suiplot.ds.vieworigin; 'size' = suiplot.ds.viewsize;
+        'color' = suiplot.ds.viewcolor;
+    ]);
+    widgets[widgett.view].closeview = suiplot.cb.closeview;
+
+    widgett.areas = createwidget (widgett.view, [
+        'type' = 'array'; 'mode' = 'vertical';
+        'color' = suiplot.ds.viewcolor;
+    ]);
+
+    if (suiplot.ds.showtitle) {
+        widgett.title = createwidget (widgett.areas, [
+            'type' = 'label'; 'text' = suiplot.ds.title;
+            'size' = ['x' = 200; 'y' = suiplot.ds.textheight;];
+            'color' = suiplot.ds.viewcolor;
+        ]);
+    }
+
+    if (suiplot.ds.showcontrol) {
+        widgett.control = createwidget (widgett.areas, [
+            'type' = 'array'; 'mode' = 'horizontal';
+            'color' = suiplot.ds.viewcolor;
+        ]);
+        widgett.framel = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Showing Frame:';
+            'size' = ['x' = 200; 'y' = suiplot.ds.textheight;];
+            'color' = suiplot.ds.viewcolor;
+        ]);
+        widgets[widgett.framel].leftdown = suiplot.cb.playselection;
+        widgett.framet = createwidget (widgett.control, [
+            'type' = 'text'; 'text' = ''; 'mode' = 'oneline';
+            'size' = ['x' = 200; 'y' = suiplot.ds.textheight;];
+            'color' = suiplot.ds.viewcolor;
+        ]);
+        widgets[widgett.framet].oneline = suiplot.cb.frame;
+        widgett.iteml = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Showing Location:';
+            'size' = ['x' = 200; 'y' = suiplot.ds.textheight;];
+            'color' = suiplot.ds.viewcolor;
+        ]);
+        widgets[widgett.iteml].leftdown = suiplot.cb.resetitem;
+        widgett.itemt = createwidget (widgett.control, [
+            'type' = 'text'; 'text' = ''; 'mode' = 'oneline';
+            'size' = ['x' = 200; 'y' = suiplot.ds.textheight;];
+            'color' = suiplot.ds.viewcolor;
+        ]);
+        widgets[widgett.itemt].oneline = suiplot.cb.item;
+    }
+
+    widgett.canvas = createwidget (widgett.areas, [
+        'type' = 'canvas';
+        'size' = suiplot.ds.viewsize;
+        'color' = suiplot.ds.canvascolor;
+    ]);
+    setgfxattr (widgett.canvas, ['width' = suiplot.ds.linewidth;]);
+    widgets[widgett.canvas].leftdown = suiplot.cb.leftdown;
+    widgets[widgett.canvas].leftmove = suiplot.cb.leftmove;
+    widgets[widgett.canvas].leftup = suiplot.cb.leftup;
+    widgets[widgett.canvas].keyup = suiplot.cb.keyup;
+    widgets[widgett.canvas].redraw = suiplot.cb.redraw;
+
+    if (suiplot.ds.showlegends) {
+        widgett.legends = createwidget (widgett.areas, [
+            'type' = 'array'; 'mode' = 'vertical';
+            'color' = suiplot.ds.viewcolor;
+        ]);
+        widgett.legendlist = [];
+    }
+
+    suiplot.widgets = widgett;
+    widgets[widgett.areas].resize = suiplot.cb.areasresize;
+    setwidgetattr (widgett.canvas, ['size' = ['x' = 200; 'y' = 200;];]);
+    if (suiplot.ds.showcontrol) {
+        widgets[widgett.control].resize = suiplot.cb.controlresize;
+        setwidgetattr (widgett.framel, ['size' = ['x' = 200; 'y' = 200;];]);
+    }
+    if (suiplot.ds.showlegends) {
+        widgets[widgett.legends].resize = suiplot.cb.legendsresize;
+        setwidgetattr (widgett.legends, ['size' = ['x' = 200; 'y' = 200;];]);
+    }
+};
+
+suiplot.destroyview = function () {
+    destroywidget (suiplot.widgets.view);
+    remove ('widgets', suiplot);
+};
+
+suiplot.getcolor = function (color) {
+    local cid;
+
+    for (cid in suiplot.colors) {
+        if (suiplot.colors[cid].name == color.name)
+            return suiplot.colors[cid].colori;
+    }
+    setwidgetattr (suiplot.widgets.canvas, [
+        'color' = [suiplot.colori = color.value;];
+    ]);
+    color.colori = suiplot.colori;
+    suiplot.colors[tablesize (suiplot.colors)] = copy (color);
+    suiplot.colori = suiplot.colori + 1;
+    return color.colori;
+};
+
+suiplot.insertlegend = function (namet) {
+    local widgett, widgeti;
+
+    if (~suiplot.ds.showlegends)
+        return;
+    widgett = suiplot.widgets;
+    widgeti = createwidget (widgett.legends, [
+        'type' = 'label'; 'text' = suiplot.legendlabel (namet);
+        'size' = ['x' = 200; 'y' = suiplot.ds.textheight;];
+        'color' = suiplot.viewcolor;
+    ]);
+    widgett.legendlist[widgeti] = namet.namei;
+    widgets[widgeti].leftdown = suiplot.cb.legend;
+    setwidgetattr (widgett.canvas, ['size' = suiplot.ds.viewsize;]);
+};
+
+suiplot.changelegend = function (namet) {
+    local widgett, widgeti;
+
+    if (~suiplot.ds.showlegends)
+        return;
+    widgett = suiplot.widgets;
+    for (widgeti in widgett.legendlist)
+        if (widgett.legendlist[widgeti] == namet.namei) {
+            setwidgetattr (widgeti, ['text' = suiplot.legendlabel (namet);]);
+            break;
+        }
+};
+
+suiplot.removelegend = function (namet) {
+    local widgett, widgeti;
+
+    if (~suiplot.ds.showlegends)
+        return;
+    widgett = suiplot.widgets;
+    for (widgeti in widgett.legendlist)
+        if (widgett.legendlist[widgeti] == namet.namei) {
+            destroywidget (widgeti);
+            remove (widgeti, widgett.legendlist);
+            break;
+        }
+    setwidgetattr (widgett.canvas, ['size' = suiplot.ds.viewsize;]);
+};
+
+suiplot.drawall = function (clearflag) {
+    local canvas, min, max, name, namei, namet, values;
+
+    canvas = suiplot.widgets.canvas;
+    if (clearflag)
+        clear (canvas);
+    min = 0;
+    max = 1;
+    for (name in suiplot.names) {
+        namet = suiplot.names[name];
+        if (~(values = namet.curvalues))
+            continue;
+        if (values.min < min)
+            min = values.min;
+        if (values.max > max)
+            max = values.max;
+    }
+    suiplot.drawbg (canvas, min, max, suiplot.framen, suiplot.framelabels);
+    for (namei = 0; namei < suiplot.namen; namei = namei + 1) {
+        if (~(namet = suiplot.names[suiplot.order[namei]]))
+            continue;
+        suiplot.drawone (namet, canvas, min, max);
+    }
+    suiplot.setframelabel ();
+    suiplot.drawframe (canvas);
+};
+
+suiplot.drawbg = function (canvas, min, max, framen, framelabels) {
+    local attr, ivali, ivaln, ivals, ts, maxts, framei, prect, psize;
+
+    attr = getwidgetattr (canvas, [0 = 'size';]);
+    setwidgetattr (canvas, ['viewport' = attr.size;]);
+    setwidgetattr (canvas, ['window' = [
+        0 = ['x' = 0; 'y' = 0;]; 1 = attr.size;
+    ];]);
+    if ((ivaln = suiplot.ds.yaxisintervals) < 1)
+        ivaln = 1;
+    maxts = ['x' = 0; 'y' = 0;];
+    for (ivali = 0; ivali <= ivaln; ivali = ivali + 1) {
+        ivals[ivali].s = suiplot.numtostr (
+            (ivali * max + (ivaln - ivali) * min) / ivaln, 'short'
+        );
+        ts = textsize (
+            canvas, concat (ivals[ivali].s),
+            suiplot.ds.axisfontname, suiplot.ds.axisfontsize
+        );
+        if (maxts.x < ts.x)
+            maxts.x = ts.x;
+        if (maxts.y < ts.y)
+            maxts.y = ts.y;
+    }
+    suiplot.coords.prect = [
+        0 = ['x' = maxts.x + 20; 'y' = maxts.y + 5;];
+        1 = ['x' = attr.size.x - 10; 'y' = attr.size.y - 10;];
+    ];
+    suiplot.coords.psize = [
+        'x' = attr.size.x - maxts.x - 30; 'y' = attr.size.y - maxts.y - 20;
+    ];
+    prect = suiplot.coords.prect;
+    psize = suiplot.coords.psize;
+    for (ivali = 0; ivali <= ivaln; ivali = ivali + 1)
+        ivals[ivali].p = [
+            'x' = prect[0].x - 10;
+            'y' = (
+                ivali * prect[1].y + (ivaln - ivali) * prect[0].y
+            ) / ivaln;
+        ];
+    line (canvas, null, [
+        'x' = prect[0].x; 'y' = prect[0].y;
+    ], [
+        'x' = prect[1].x; 'y' = prect[0].y;
+    ]);
+    line (canvas, null, [
+        'x' = prect[0].x - 1; 'y' = prect[0].y;
+    ], [
+        'x' = prect[0].x - 1; 'y' = prect[1].y;
+    ]);
+    for (ivali = 0; ivali <= ivaln; ivali = ivali + 1) {
+        text (
+            canvas, null, ivals[ivali].p, concat (ivals[ivali].s),
+            suiplot.ds.axisfontname, suiplot.ds.axisfontsize, 'rc'
+        );
+    }
+    for (framei = 0; framei < framen; framei = framei + 1)
+        text (
+            canvas, null, [
+                'x' = prect[0].x + (psize.x / framen) * framei;
+                'y' = prect[0].y / 2;
+            ], framelabels[framei],
+            suiplot.ds.axisfontname, suiplot.ds.axisfontsize, 'cc'
+        );
+    suiplot.drawselection (canvas);
+};
+
+suiplot.drawselection = function (canvas) {
+    local prect, psize;
+
+    prect = suiplot.coords.prect;
+    psize = suiplot.coords.psize;
+    if (suiplot.framef >= 0 & suiplot.framel >= 0) {
+        box (canvas, null, [
+            0 = [
+                'x' = prect[0].x + (
+                    psize.x / suiplot.framen
+                ) * suiplot.framef - 1;
+                'y' = prect[0].y - 1;
+            ];
+            1 = [
+                'x' = prect[0].x + (
+                    psize.x / suiplot.framen
+                ) * suiplot.framel + 1;
+                'y' = prect[1].y + 1;
+            ];
+        ], ['mode' = 'xor';]);
+    }
+};
+
+suiplot.drawone = function (namet, canvas, min, max) {
+    local values, framen, framei, prect, psize, seti, itemi, poly;
+
+    values = namet.curvalues;
+    framen = suiplot.framen;
+    prect = suiplot.coords.prect;
+    psize = suiplot.coords.psize;
+    for (seti = 0; values.sets[seti]; seti = seti + 1) {
+        for (itemi in values.sets[seti].data[0])
+            break;
+        for (framei = 0; framei < framen; framei = framei + 1)
+            poly[framei] = [
+                'x' = prect[0].x + (psize.x / framen) * framei;
+                'y' = prect[0].y + psize.y * (
+                    values.sets[seti].data[
+                        toint (framei / namet.framescale)
+                    ][itemi] - min
+                ) / (max - min);
+            ];
+        polygon (canvas, null, poly, [
+            'color' = namet.colori;
+            'style' = namet.cmd.style;
+        ]);
+    }
+};
+
+suiplot.drawframe = function (canvas) {
+    local prect, psize;
+
+    prect = suiplot.coords.prect;
+    psize = suiplot.coords.psize;
+    line (canvas, null, [
+        'x' = prect[0].x + (psize.x / suiplot.framen) * suiplot.framei;
+        'y' = prect[0].y;
+    ], [
+        'x' = prect[0].x + (psize.x / suiplot.framen) * suiplot.framei;
+        'y' = prect[1].y;
+    ], ['mode' = 'xor';]);
+};
+
+suiplot.xy2framei = function (data) {
+    local framei;
+
+    framei = (
+        (data.pos.x - suiplot.coords.prect[0].x) / suiplot.coords.psize.x
+    ) * suiplot.framen;
+    if (framei < 0)
+        framei = 0;
+    else if (framei >= suiplot.framen)
+        framei = suiplot.framen - 1;
+    framei = toint (framei);
+    return framei;
+};
+
+suiplot.setframelabel = function () {
+    if (suiplot.ds.showcontrol)
+        setwidgetattr (suiplot.widgets.framet, [
+            'text' = suiplot.ds.setframelabel (suiplot.framei);
+        ]);
+};
+
+#
+# Callbacks
+#
+
+suiplot.cb.closeview = function (data) {
+    exit ();
+};
+
+suiplot.cb.selectionmenu = [
+    0 = 'once';
+    1 = 'loop';
+];
+
+suiplot.cb.playselection = function (data) {
+    local i;
+
+    if (~((i = displaymenu (data.widget, suiplot.cb.selectionmenu)) >= 0))
+        return;
+    if (i == 0)
+        suiplot.startplay (suiplot.framef, suiplot.framel, 'once');
+    else
+        suiplot.startplay (suiplot.framef, suiplot.framel, 'loop');
+};
+
+suiplot.cb.frame = function (data) {
+    local attr, framei;
+
+    attr = getwidgetattr (data.widget, [0 = 'text';]);
+    if (attr.text) {
+        if (suiplot.ds.getframelabel)
+            framei = suiplot.ds.setframelabel (attr.text);
+        else
+            framei = ston (attr.text);
+        if ((framei = ston (attr.text)))
+            suiutil.writecmd (suiplot.mpfd, 'play', ['framef' = framei;]);
+    }
+};
+
+suiplot.cb.resetitem = function (data) {
+    suiutil.writecmd (suiplot.mpfd, 'unfocus', []);
+};
+
+suiplot.cb.item = function (data) {
+    local attr, menu, menunames, menui, namei, name, namet, cmd, t;
+
+    attr = getwidgetattr (data.widget, [0 = 'text';]);
+    if (attr.text & strlen (attr.text) > 1) {
+        if (tablesize (suiplot.names) > 1) {
+            menu[0] = 'Select Dataset:';
+            menui = 1;
+            for (namei = 0; namei < suiplot.namen; namei = namei + 1) {
+                if (~(name = suiplot.order[namei]))
+                    continue;
+                menu[menui] = suiplot.names[name].cmd.label;
+                menunames[menui] = name;
+                menui = menui + 1;
+            }
+            if (~((menui = displaymenu (suiplot.widgets.canvas, menu)) >= 1))
+                return;
+            namet = suiplot.names[menunames[menui]];
+        } else
+            for (name in suiplot.names)
+                namet = suiplot.names[name];
+        cmd = copy (namet.outcmd);
+        t = split (attr.text, '\n');
+        cmd.items[0] = t[0];
+        cmd.framef = suiplot.framei;
+        cmd.framel = suiplot.framei;
+        suiutil.writecmd (suiplot.mpfd, 'focus', cmd);
+    } else
+        suiutil.writecmd (suiplot.mpfd, 'unfocus', []);
+};
+
+suiplot.cb.leftdown = function (data) {
+    local framei;
+
+    if (suiplot.play)
+        suiplot.stopplay ();
+    framei = suiplot.xy2framei (data);
+    suiplot.drawselection (data.widget);
+    suiplot.framef = framei;
+    suiplot.framel = framei;
+    suiplot.drawselection (data.widget);
+};
+
+suiplot.cb.leftmove = function (data) {
+    local framei;
+
+    framei = suiplot.xy2framei (data);
+    suiplot.drawselection (data.widget);
+    suiplot.framel = framei;
+    suiplot.drawselection (data.widget);
+};
+
+suiplot.cb.leftup = function (data) {
+    local framei;
+
+    framei = suiplot.xy2framei (data);
+    suiplot.drawselection (data.widget);
+    if (framei < suiplot.framef) {
+        suiplot.framel = suiplot.framef;
+        suiplot.framef = framei;
+    } else if (suiplot.framef == suiplot.framel)
+        suiplot.framel = -1;
+    else
+        suiplot.framel = framei;
+    suiplot.sumup ();
+    suiplot.drawselection (data.widget);
+    suiutil.writecmd (suiplot.mpfd, 'play', ['framef' = suiplot.framef;]);
+};
+
+suiplot.cb.keyup = function (data) {
+    if (data.key == 't')
+        txtview ('on');
+};
+
+suiplot.cb.redraw = function (data) {
+    suiplot.drawall (1);
+};
+
+suiplot.cb.legendmenu = [
+    0 = 'top 10 this frame';
+    1 = 'top 10 this range';
+    2 = 'top 10 all frames';
+    3 = 'unload';
+];
+
+suiplot.cb.legend = function (data) {
+    local namei, i;
+
+    namei = suiplot.widgets.legendlist[data.widget];
+    if (~((i = displaymenu (data.widget, suiplot.cb.legendmenu)) >= 0))
+        return;
+    if (i <= 2)
+        suiplot.dotopn (suiplot.names[suiplot.order[namei]], i);
+    else
+        suiplot.dounload (suiplot.names[suiplot.order[namei]]);
+};
+
+#
+# resize functions
+#
+
+suiplot.cb.areasresize = function (data) {
+    local t, n, h, ret;
+
+    t = suiplot.widgets;
+    h = 0;
+    if (suiplot.ds.showtitle) {
+        ret[t.title] = ['x' = data.size.x; 'y' = suiplot.ds.textheight;];
+        h = h + suiplot.ds.textheight + 2;
+    }
+    if (suiplot.ds.showcontrol) {
+        ret[t.control] = ['x' = data.size.x; 'y' = suiplot.ds.textheight;];
+        h = h + suiplot.ds.textheight + 2;
+    }
+    if (suiplot.ds.showlegends) {
+        if ((n = tablesize (t.legendlist)) == 0)
+            n = 1;
+        ret[t.legends] = [
+            'x' = data.size.x; 'y' = n * (suiplot.ds.textheight + 2);
+        ];
+        h = h + n * (suiplot.ds.textheight + 2);
+    }
+    ret[t.canvas] = ['x' = data.size.x; 'y' = data.size.y - h;];
+    return ret;
+};
+
+suiplot.cb.controlresize = function (data) {
+    local t, ret;
+
+    t = suiplot.widgets;
+    ret = [
+        t.framel = ['x' = 3 * data.size.x / 8; 'y' = data.size.y;];
+        t.framet = ['x' = data.size.x / 8; 'y' = data.size.y;];
+        t.iteml = ['x' = 3 * data.size.x / 8; 'y' = data.size.y;];
+        t.itemt = ['x' = data.size.x / 8; 'y' = data.size.y;];
+    ];
+    return ret;
+};
+
+suiplot.cb.legendsresize = function (data) {
+    local t, legendi, ret;
+
+    t = suiplot.widgets;
+    for (legendi in t.legendlist)
+        ret[legendi] = ['x' = data.size.x; 'y' = suiplot.ds.textheight;];
+    return ret;
+};
+
+#
+# communication function
+#
+
+suiplot.monitorfile = function (data) {
+    local cmd;
+
+    if (~(cmd = suiutil.readcmd (suiplot.mpfd)))
+        exit ();
+    if (cmd.cmd == 'load')
+        suiplot.insert (cmd);
+    else if (cmd.cmd == 'unload')
+        suiplot.removemany (cmd);
+    else if (cmd.cmd == 'reload')
+        suiplot.reloadmany (cmd);
+    else if (cmd.cmd == 'play')
+        suiplot.setframe (cmd);
+    else if (cmd.cmd == 'focus') {
+        suiplot.setframe (cmd);
+        suiplot.focus (cmd);
+    } else if (cmd.cmd == 'unfocus')
+        suiplot.unfocus (cmd);
+    else if (cmd.cmd == 'settitle')
+        suiplot.settitle (cmd);
+    else if (cmd.cmd == 'plotcntl')
+        run (cmd.run);
+    else if (cmd.cmd == 'sync')
+        suiutil.writecmd (suiplot.mpfd, concat ('sync ', cmd.id), null);
+    else if (cmd.cmd == 'synced') {
+        suiplot.syncpending = 0;
+        if (suiplot.play)
+            suiplot.doplay ();
+    }
+};

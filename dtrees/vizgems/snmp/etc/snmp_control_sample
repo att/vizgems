@@ -1,0 +1,31 @@
+#!/bin/ksh
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH
+
+case $1 in
+setup)
+    ;;
+start)
+    if [[ ! -f SWIFT_CFG_DSNMPDIR/active ]] then
+        exit 0
+    fi
+    rm -f SWIFT_CFG_DSNMPDIR/exit.snmp
+    mkdir -p SWIFT_CFG_DSNMPDIR/logs
+    ;;
+stop)
+    if [[ ! -f SWIFT_CFG_DSNMPDIR/active ]] then
+        exit 0
+    fi
+    touch SWIFT_CFG_DSNMPDIR/exit.snmp
+    while [[ -f SWIFT_CFG_DSNMPDIR/lock.snmp ]] do
+        sleep 1
+    done
+    n=0
+    while [[ $(fuser SWIFT_CFG_DSNMPDIR/etc/*job 2> /dev/null) != '' ]] do
+        print waiting for these processes to finish:
+        fuser SWIFT_CFG_DSNMPDIR/etc/*job
+        sleep 1
+        (( n++ > 30 )) && break
+    done
+    ;;
+esac

@@ -1,0 +1,53 @@
+suiplot=(
+  label="Plot Viewer"
+  langs="lefty java"
+  uselang=lefty
+  launch=yes
+  groups="default"
+  default=(
+    label="Plot Viewer Preferences"
+    entrylist=" \
+      vieworigin viewsize viewcolor showtitle title \
+      showcontrol showlegends canvascolor axisfontname axisfontsize \
+    "
+    entries=(
+      vieworigin=(
+        type=coord var=vieworigin val="0 0" label="Window Position"
+      )
+      viewsize=(
+        type=coord var=viewsize val="800 200" label="Window Size"
+      )
+      viewcolor=(
+        type=2colors var=viewcolor val="gray black"
+        label="Window Colors"
+      )
+
+      showtitle=(
+        type=yesno var=showtitle val=no label="Show Title"
+      )
+      title=(
+        type=text var=title val="SWIFTUI - Plot View" label="Title"
+      )
+
+      showcontrol=(
+        type=yesno var=showcontrol val=yes label="Show Controls"
+      )
+      showlegends=(
+        type=yesno var=showlegends val=yes label="Show Legends"
+      )
+
+      canvascolor=(
+        type=2colors var=canvascolor val="black white"
+        label="Canvas Colors"
+      )
+      axisfontname=(
+        type=fontname var=axisfontname
+        val="-*-times-medium-r-*--%d-*-*-*-*-*-*-1"
+        label="Axis Font Name"
+      )
+      axisfontsize=(
+        type=fontsize var=axisfontsize val=14 label="Axis Font Size"
+      )
+    )
+  )
+)

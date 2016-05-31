@@ -1,0 +1,36 @@
+VARS{
+#include <ctype.h>
+#include <time.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "vgthreshold_pub.h"
+
+#define SZ_id DDSSZ_rec_inv_node_id
+}
+LIBS{
+-lvgthreshold
+}
+BEGIN{
+    if (thresholdload (
+        getenv ("THRESHOLDFILE"), getenv ("ACCOUNTFILE")
+    ) == -1)
+        SUwarning (0, "vg_inv_threshold", "cannot load threshold data");
+}
+{
+    threshold_t *thresholdp;
+
+    DROP;
+
+    for (
+        thresholdp = thresholdfindfirst (level, id);
+        thresholdp;
+        thresholdp = thresholdfindnext (level, id)
+    ) {
+        sfprintf (
+            sfstdout, "%s|%s|%s|%s|%s|%s|%s\n",
+            thresholdp->cid, thresholdp->account,
+            level, id,
+            thresholdp->sname, thresholdp->sstatus, thresholdp->svalue
+        );
+    }
+}

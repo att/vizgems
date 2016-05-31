@@ -1,0 +1,206 @@
+load ('def.lefty');
+
+init = function () {
+    definit ();
+    canvas = defcanvas;
+    wrect = [0 = ['x' = 0; 'y' = 0;]; 1 = ['x' = 1; 'y' = 1;];];
+    setwidgetattr (canvas, ['window' = wrect;]);
+#    fd = openio ("file", concat ("/dev/tcp/", getenv ("S")), "r+");
+    fd = openio ("pipe", "suixclient", "r+", concat ("%e ", getenv ("S")));
+    monitor ('on', fd);
+    writeline (fd, concat ("open ", getenv ("D")));
+    if (~(s = readline (fd)) | s == "FAILURE")
+        exit ();
+    if (~(id = readline (fd)))
+        exit ();
+    boxes = [];
+    rw = 100; rh = 100;
+    drawboxes ();
+    lasttime = time ();
+    idlerun ('on');
+};
+
+drawbox = function (b) {
+    local rect;
+
+    rect = copy (b.rect);
+    rect[0] = map1 (rect[0]);
+    rect[1] = map1 (rect[1]);
+    box (canvas, b, rect, ['color' = 0; 'fill' = 'on';]);
+    box (canvas, b, rect, ['color' = 1;]);
+};
+
+drawboxes = function () {
+    local i;
+
+    for (i = 0; boxes[i]; i = i + 1)
+        drawbox (boxes[i]);
+};
+
+map1 = function (p) {
+    return ['x' = p.x / rw; 'y' = (rh - p.y - 1) / (rh - 1);];
+};
+
+map2 = function (p) {
+    return ['x' = p.x; 'y' = (1 - p.y);];
+};
+
+redraw = function (data) {
+    attr = getwidgetattr (canvas, [0 = 'size';]);
+    setwidgetattr (canvas, ['viewport' = attr.size;]);
+    setwidgetattr (canvas, ['window' = wrect;]);
+    clear (canvas);
+    drawboxes ();
+};
+
+monitorfile = function (data) {
+    if (~(s = readline (data.fd)))
+        exit ();
+    if (s == "INFO") {
+        if (~(s = readline (fd)))
+            exit ();
+        if (s ~= id) {
+            echo ('cannot handle multiple displays yet');
+            exit ();
+        }
+        nboxes = [];
+        while (1) {
+            if (~(s = readline (fd)))
+                exit ();
+            t = split (s, ' ');
+            if (t[0] == 'root') {
+                rw = ston (t[3]);
+                rh = ston (t[4]);
+                break;
+            } else
+                nboxes[tablesize (nboxes)] = [
+                    'id' = t[0];
+                    'rect' = [
+                        0 = ['x' = ston (t[1]); 'y' = ston (t[2]);];
+                        1 = ['x' = ston (t[3]); 'y' = ston (t[4]);];
+                    ];
+                ];
+        }
+        if (cmp () == -1) {
+            boxes = nboxes;
+            clear (canvas);
+            drawboxes ();
+        }
+        lasttime = time ();
+    }
+};
+
+cmp = function () {
+    if (tablesize (boxes) ~= tablesize (nboxes))
+        return -1;
+    for (i = 0; boxes[i]; i = i + 1)
+        if (
+            boxes[i].rect[0].x ~= nboxes[i].rect[0].x |
+            boxes[i].rect[0].y ~= nboxes[i].rect[0].y |
+            boxes[i].rect[1].x ~= nboxes[i].rect[1].x |
+            boxes[i].rect[1].y ~= nboxes[i].rect[1].y |
+            boxes[i].id ~= nboxes[i].id
+        )
+            return -1;
+    return 0;
+};
+
+idle = function (data) {
+    tim = time ();
+    if (tim - lasttime > 10) {
+        writeline (fd, concat ("getinfo ", id));
+        lasttime = tim;
+    } else
+        sleep (1);
+};
+
+#
+# user interface functions
+#
+# left mouse button creates new box
+# middle button moves a box
+# right button deletes a box
+#
+leftdown = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    writeline (fd, concat ("button ", id, " 0 1"));
+    pp = p;
+};
+leftmove = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    if (p.x == pp.x & p.y == pp.y)
+        return;
+    pp = p;
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+};
+leftup = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    writeline (fd, concat ("button ", id, " 0 0"));
+};
+middledown = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    writeline (fd, concat ("button ", id, " 1 1"));
+    pp = p;
+};
+middlemove = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    if (p.x == pp.x & p.y == pp.y)
+        return;
+    pp = p;
+};
+middleup = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    writeline (fd, concat ("button ", id, " 1 0"));
+};
+rightdown = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    writeline (fd, concat ("button ", id, " 2 1"));
+    pp = p;
+};
+rightmove = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    if (p.x == pp.x & p.y == pp.y)
+        return;
+    pp = p;
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+};
+rightup = function (data) {
+    lasttime = time ();
+    p = map2 (data.pos);
+    writeline (fd, concat ("pointer ", id, " ", p.x, " ", p.y));
+    writeline (fd, concat ("button ", id, " 2 0"));
+};
+keydown = function (data) {
+    writeline (fd, concat ("key ", id, " ", quote (data.key, '\"', '"'), " 2"));
+};
+keyup = function (data) {
+};
+
+dops = function () {
+    local s;
+
+    s = ['x' = 8 * 300; 'y' = 10.5 * 300;];
+    canvas = createwidget (-1, ['type' = 'ps'; 'size' = s;]);
+    setwidgetattr (canvas, ['window' = wrect;]);
+    redraw (canvas);
+    destroywidget (canvas);
+    canvas=defcanvas;
+};
+
+
+
+init ();

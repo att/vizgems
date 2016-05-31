@@ -1,0 +1,111 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+. SWIFT_CFG_DSYSTEMDIR/etc/confmgr.info
+
+if [[ ! -f $VGCM_FILTERFILE ]] then
+    print -u2 ERROR cannot access filter file: $VGCM_FILTERFILE
+    exit 1
+fi
+
+ct=$(printf '%(%#)T')
+
+typeset -A fs
+
+while read -r line; do
+    rest=$line
+    for (( i = 0; i < 13; i++ )) do
+        fs[$i]=${rest%%\|+\|*}
+        rest=${rest#"${fs[$i]}"\|+\|}
+    done
+    show=n
+
+    (( st = ${fs[3]} * 60 ))
+    (( et = ${fs[4]} * 60 ))
+    (( dt = et - st ))
+
+    case ${fs[7]} in
+    once)
+        if (( ${fs[5]} == ${fs[6]} && dt < 0 )) then
+            (( dt += (24 * 60 * 60) ))
+        fi
+        if (( ct < ${fs[5]} + st )) then
+            show=n
+        elif [[
+            ${fs[6]} == indefinitely
+        ]] || (( ct <= ${fs[6]} + st + dt )) then
+            show=y
+        fi
+        ;;
+    *)
+        if (( dt < 0 )) then
+            (( dt += (24 * 60 * 60) ))
+        fi
+        if (( ct < ${fs[5]} + st )) then
+            show=n
+        elif [[
+            ${fs[6]} == indefinitely
+        ]] || (( ct <= ${fs[6]} + st + dt )) then
+            (( t = ${fs[5]} + st ))
+            set -A l1 -- $(printf '%(%Y %m %d %H %M %S %a)T\n' \#$t)
+            (( t = ${fs[5]} + st + dt ))
+            set -A l2 -- $(printf '%(%Y %m %d %H %M %S %a)T\n' \#$t)
+            set -A lc -- $(printf '%(%Y %m %d %H %M %S %a)T\n' \#$ct)
+            (( t = ${lc[3]} * 3600 + ${lc[4]} * 60 ))
+            case ${fs[7]} in
+            monthly)
+                if (( ${lc[2]} == ${l1[2]} && t >= st && t <= st + dt )) then
+                    show=y
+                elif ((
+                    ${l1[2]} != ${l2[2]} && ${lc[2]} == ${l2[2]} && t <= et
+                )) then
+                    show=y
+                fi
+                ;;
+            weekly)
+                if (( ${lc[6]} == ${l1[6]} && t >= st && t <= st + dt )) then
+                    show=y
+                elif ((
+                    ${l1[6]} != ${l2[6]} && ${lc[6]} == ${l2[6]} && t <= et
+                )) then
+                    show=y
+                fi
+                ;;
+            daily)
+                if (( et >= st )) then
+                    if (( t >= st && t <= st + dt )) then
+                        show=y
+                    fi
+                elif (( t >= st || t <= et )) then
+                    show=y
+                fi
+                ;;
+            esac
+        fi
+    esac
+
+    if [[ $show == y ]] then
+        print -r "object=${fs[0]}.*${fs[2]}"
+    fi
+done < $VGCM_FILTERFILE

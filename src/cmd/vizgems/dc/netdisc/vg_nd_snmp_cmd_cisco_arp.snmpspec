@@ -1,0 +1,30 @@
+rec=(
+    keys=ATIP
+    walk0=(
+        name='.1.3.6.1.2.1.3.1.1.1.${ATIP}' # atIfIndex
+        type=INTEGER
+        value='${IFACE}'
+    )
+    walk1=(
+        name='.1.3.6.1.2.1.3.1.1.2.${ATIP}' # atPhysAddress
+        type=STRING
+        value='${ATMAC}'
+    )
+    outkey=ATIP
+    output='${IFACE}|${ATIP}|${ATMAC}'
+    outfilter='(
+        IFS="|"
+        while read -r iface atip atmac; do
+            atmac=$(
+                printf "%02..16d:%02..16d:%02..16d:%02..16d:%02..16d:%02..16d" \
+                16#${atmac:0:2} 16#${atmac:3:2} 16#${atmac:6:2} \
+                16#${atmac:9:2} 16#${atmac:12:2} 16#${atmac:15:2}
+            )
+            while [[ $atip == *.*.*.*.* ]] do
+                atip=${atip#*.}
+            done
+            print "ip2mac2[$atip]+=\" $atmac\""
+            print "mac2ip2[$atmac]+=\" $atip\""
+        done
+    )'
+)

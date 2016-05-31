@@ -1,0 +1,81 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+aemailfile=$VGMAINDIR/dpfiles/alarm/alarmemail.filter
+
+if [[ ! -f $aemailfile ]] then
+    print -u2 ERROR cannot access alarm email file: $aemailfile
+    exit 1
+fi
+
+ct=$(printf '%(%#)T')
+date=$(printf '%(%Y%m%d.%H%M%S)T')
+
+typeset -A fs
+
+while read -r line; do
+    rest=$line
+    for (( i = 0; i < 15; i++ )) do
+        fs[$i]=${rest%%\|+\|*}
+        rest=${rest#"${fs[$i]}"\|+\|}
+    done
+    keep=n
+
+    (( st = fs[5] * 60 ))
+    (( et = fs[6] * 60 ))
+    if (( fs[6] < fs[5] )) then
+        (( et += (24 * 60 * 60) ))
+    fi
+    (( dt = et - st + 1 ))
+
+    case ${fs[9]} in
+    once)
+        if \
+            [[ ${fs[8]} == 'indefinitely' ]] || \
+            (( ct <= fs[8] + st + dt )) \
+        then
+            keep=y
+        fi
+        ;;
+    *)
+        if \
+            [[ ${fs[8]} == 'indefinitely' ]] || \
+            (( ct <= fs[8] + st + dt )) \
+        then
+            keep=y
+        fi
+        ;;
+    esac
+    if [[ $keep == y ]] then
+        print -r "$line"
+    fi
+done < $aemailfile > $aemailfile.tmp
+
+if ! cmp $aemailfile $aemailfile.tmp > /dev/null; then
+    cp $aemailfile \
+    $VGMAINDIR/data/cm/0000/00/00/processed/save/${aemailfile##*/}.$date.prune
+    mv $aemailfile.tmp $aemailfile
+else
+    rm $aemailfile.tmp
+fi

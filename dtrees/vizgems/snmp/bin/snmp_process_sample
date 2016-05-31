@@ -1,0 +1,79 @@
+#!/bin/ksh
+
+exec > SWIFT_CFG_DSNMPDIR/logs/trapd.log 2>&1
+
+exitfile=SWIFT_CFG_DSNMPDIR/exit.snmp
+lockfile=SWIFT_CFG_DSNMPDIR/lock.snmp
+pidfile=SWIFT_CFG_DSNMPDIR/pid.snmp
+
+if [[ -f $exitfile ]] then
+    exit
+fi
+set -o noclobber
+if ! command exec 3> ${lockfile}; then
+    if kill -0 $(< ${lockfile}); then
+        exit 0
+    elif [[ $(fuser ${lockfile}) != '' ]] then
+        exit 0
+    else
+        rm -f ${lockfile}
+        exit 0
+    fi
+fi
+print -u3 $$
+set +o noclobber
+
+trap 'rm -f ${lockfile}' HUP QUIT TERM KILL EXIT
+
+mkdir -p SWIFT_CFG_DSNMPDIR/data
+cd SWIFT_CFG_DSNMPDIR/data || {
+    echo ERROR: cannot cd SWIFT_CFG_DSNMPDIR/data; exit 1
+}
+rm -f alarms.[0-9]*.tmp
+rm -f $pidfile
+
+float totsec=0 sec=0
+file1=alarms.$(date -s -f '%Y.%m.%d.%H.%M.%S').1.snmp.tmp
+file2=ppalarms.$(date -s -f '%Y.%m.%d.%H.%M.%S').2.snmp.tmp
+havealarms1=n
+havealarms2=n
+snmptrapd \
+    -c SWIFT_CFG_DSNMPDIR/etc/trapd.conf \
+    -f -M SWIFT_CFG_SSNMPDIR/current/mibs -m all -Lo -p $pidfile \
+| while true; do
+    SECONDS=0; line=; read -t10 line; sec=$SECONDS
+    if [[ $line == *SWIFTSNMP* ]] then
+        print -r "${line}" >> $file2
+        havealarms2=y
+    elif [[ $line != '' ]] then
+        print -r "${line}" >> $file1
+        havealarms1=y
+    fi
+    (( totsec += sec ))
+    if (( $totsec >= 30 )) then
+        if [[ $havealarms1 == y ]] then
+            mv $file1 ${file1%.tmp}
+            #chown SWIFT_CFG_USR ${file1%.tmp}
+            file1=alarms.$(date -s -f '%Y.%m.%d.%H.%M.%S').1.snmp.tmp
+            havealarms1=n
+            totsec=0
+        fi
+        if [[ $havealarms2 == y ]] then
+            mv $file2 ${file2%.tmp}
+            #chown SWIFT_CFG_USR ${file2%.tmp}
+            file2=ppalarms.$(date -s -f '%Y.%m.%d.%H.%M.%S').2.snmp.tmp
+            havealarms2=n
+            totsec=0
+        fi
+        for file in *alarms*snmp; do
+            [[ ! -f $file ]] && continue
+            mv $file SWIFT_CFG_DSYSTEMDIR/incoming/alarm
+        done
+        if [[ -f $exitfile ]] then
+            [[ -s $pidfile ]] && kill $(< $pidfile)
+            fuser -k $(whence snmptrapd) \
+            > /dev/null 2>&1
+            break
+        fi
+    fi
+done

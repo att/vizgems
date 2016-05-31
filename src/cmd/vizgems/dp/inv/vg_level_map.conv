@@ -1,0 +1,318 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include "vg_hdr.h"
+#include "sl_level_node.c"
+
+#define SZ_id1 DDSSZ_outrec_level_map_id1
+#define SZ_id2 DDSSZ_outrec_level_map_id2
+
+typedef struct node_t {
+    Dtlink_t link;
+    /* begin key */
+    char id[SZ_id1];
+    /* end key */
+    int transflag;
+} node_t;
+
+static Dt_t *nodedict;
+static Dtdisc_t nodedisc = {
+    sizeof (Dtlink_t), SZ_id1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+typedef struct map_t {
+    Dtlink_t link;
+    /* begin key */
+    char id1[SZ_id1], id2[SZ_id2];
+    /* end key */
+    struct __outrec_level_map_t *recs;
+    int reci, recn;
+} map_t;
+
+static Dt_t *donedict;
+static Dtdisc_t donedisc = {
+    sizeof (Dtlink_t), SZ_id1 + SZ_id2, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static Dt_t *tododict;
+static Dtdisc_t tododisc = {
+    sizeof (Dtlink_t), SZ_id1 + SZ_id2, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static int (*wfunc) (Sfio_t *, void *, DDSschema_t *, size_t);
+static Sfio_t *wfp;
+static DDSschema_t *wschemap;
+
+static node_t *insertnode (char *id) {
+    node_t *np, *nmem;
+    sl_level_node_t *lnp;
+
+    if (!(np = dtmatch (nodedict, id))) {
+        if (!(nmem = vmalloc (Vmheap, sizeof (node_t)))) {
+            SUwarning (0, "vg_level_map", "cannot allocate nmem");
+            return NULL;
+        }
+        memset (nmem, 0, sizeof (node_t));
+        memcpy (nmem->id, id, SZ_id1);
+        if ((np = dtinsert (nodedict, nmem)) != nmem) {
+            SUwarning (0, "vg_level_map", "cannot insert node");
+            vmfree (Vmheap, nmem);
+            return NULL;
+        }
+        if (!(lnp = sl_level_nodefind (id))) {
+            SUwarning (0, "vg_level_map", "cannot find node %s", id);
+            return NULL;
+        }
+        np->transflag = (lnp->sl_class == 1) ? TRUE : FALSE;
+    }
+    return np;
+}
+
+static map_t *insertmap (Dt_t *dict, char *id1, char *id2) {
+    map_t m, *mp, *mmem;
+
+    memcpy (m.id1, id1, SZ_id1);
+    memcpy (m.id2, id2, SZ_id2);
+    mp = NULL;
+    if (!dtsearch (dict, &m)) {
+        if (!(mmem = vmalloc (Vmheap, sizeof (map_t)))) {
+            SUwarning (0, "vg_level_map", "cannot allocate mmem");
+            return NULL;
+        }
+        memset (mmem, 0, sizeof (map_t));
+        memcpy (mmem->id1, id1, SZ_id1);
+        memcpy (mmem->id2, id2, SZ_id2);
+        if ((mp = dtinsert (dict, mmem)) != mmem) {
+            SUwarning (0, "vg_level_map", "cannot insert map");
+            vmfree (Vmheap, mmem);
+            return NULL;
+        }
+    }
+    return mp;
+}
+
+static map_t *findmap (Dt_t *dict, char *id1, char *id2) {
+    map_t m;
+
+    memcpy (m.id1, id1, SZ_id1);
+    memcpy (m.id2, id2, SZ_id2);
+    return dtsearch (dict, &m);
+}
+
+static map_t *removemap (Dt_t *dict, char *id1, char *id2) {
+    map_t m, *mp;
+
+    memcpy (m.id1, id1, SZ_id1);
+    memcpy (m.id2, id2, SZ_id2);
+    if ((mp = dtsearch (dict, &m))) {
+        if (!dtdelete (dict, mp)) {
+            SUwarning (0, "vg_level_map", "cannot remove map");
+            return NULL;
+        }
+    }
+    return mp;
+}
+
+static map_t *insertdone (
+    char *id1, char *id2, int mode, map_t *mp1, map_t *mp2, int fwdflag
+) {
+    map_t *mp;
+    struct __outrec_level_map_t *recp, *irecp;
+    int reci, recj;
+
+    if ((mp = findmap (donedict, id1, id2)))
+        return mp;
+    if (!(mp = insertmap (donedict, id1, id2))) {
+        SUwarning (0, "vg_level_map", "cannot insert done map");
+        return NULL;
+    }
+    switch (mode) {
+    case 1:
+        mp->reci = 0;
+        break;
+    case 2:
+    case 3:
+        mp->reci = 0, mp->recn = 1;
+        if (!(mp->recs = vmalloc (
+            Vmheap, mp->recn * sizeof (struct __outrec_level_map_t)
+        ))) {
+            SUwarning (0, "vg_level_map", "cannot allocate direct rec");
+            return NULL;
+        }
+        memset (mp->recs, 0, sizeof (struct __outrec_level_map_t));
+        recp = &mp->recs[mp->reci++];
+        memcpy (recp->id1, mp->id1, SZ_id1);
+        memcpy (recp->id2, mp->id2, SZ_id2);
+        switch (mode) {
+        case 2: recp->dir = VG_INV_N_LEVELMAP_DIR_FWD; break;
+        case 3: recp->dir = VG_INV_N_LEVELMAP_DIR_REV; break;
+        }
+        recp->index = 0;
+        memcpy (recp->iid1, mp->id1, SZ_id1);
+        memcpy (recp->iid2, mp->id2, SZ_id2);
+        recp->orig = TRUE;
+        break;
+    case 4:
+        mp->reci = 0, mp->recn = mp1->recn + mp2->recn;
+        if (!(mp->recs = vmalloc (
+            Vmheap, mp->recn * sizeof (struct __outrec_level_map_t)
+        ))) {
+            SUwarning (0, "vg_level_map", "cannot allocate direct rec");
+            return NULL;
+        }
+        memset (mp->recs, 0, sizeof (struct __outrec_level_map_t));
+        for (reci = 0; reci < mp->recn; reci++) {
+            recp = &mp->recs[mp->reci];
+            if (fwdflag) {
+                memcpy (recp->id1, id1, SZ_id1);
+                memcpy (recp->id2, id2, SZ_id2);
+                recp->index = mp->reci;
+                if (reci < mp1->recn)
+                    irecp = &mp1->recs[reci];
+                else
+                    irecp = &mp2->recs[reci - mp1->recn];
+                recp->dir = irecp->dir;
+                memcpy (recp->iid1, irecp->iid1, SZ_id1);
+                memcpy (recp->iid2, irecp->iid2, SZ_id2);
+            } else {
+                memcpy (recp->id1, id1, SZ_id1);
+                memcpy (recp->id2, id2, SZ_id2);
+                recp->index = mp->reci;
+                if (reci < mp2->recn)
+                    irecp = &mp2->recs[mp->recn - mp1->recn - reci - 1];
+                else
+                    irecp = &mp1->recs[mp->recn - reci - 1];
+                switch (irecp->dir) {
+                case VG_INV_N_LEVELMAP_DIR_REV:
+                    recp->dir = VG_INV_N_LEVELMAP_DIR_FWD;
+                    break;
+                case VG_INV_N_LEVELMAP_DIR_FWD:
+                    recp->dir = VG_INV_N_LEVELMAP_DIR_REV;
+                    break;
+                }
+                memcpy (recp->iid1, irecp->iid2, SZ_id1);
+                memcpy (recp->iid2, irecp->iid1, SZ_id2);
+            }
+            for (recj = 0; recj < mp->reci; recj++) {
+                if (strcmp (recp->iid2, mp->recs[recj].iid2) == 0) {
+                    mp->reci = recj;
+                    break;
+                }
+            }
+            mp->reci++;
+        }
+        break;
+    }
+    return mp;
+}
+}
+BEGIN{
+    if (!nodedict && !(nodedict = dtopen (&nodedisc, Dtset)))
+        SUerror ("vg_level_map", "cannot create nodedict");
+    if (!donedict && !(donedict = dtopen (&donedisc, Dtset)))
+        SUerror ("vg_level_map", "cannot create donedict");
+    if (!tododict && !(tododict = dtopen (&tododisc, Dtset)))
+        SUerror ("vg_level_map", "cannot create tododict");
+    sl_level_nodeopen (getenv ("LEVELNODEFILE"));
+}
+{
+    DROP;
+
+    OUT->dir = 0;
+    wfunc = __emitfunc;
+    wfp = __emitfp;
+    wschemap = __outschemap;
+
+    if (!insertnode (IN->id1)) {
+        SUwarning (0, "vg_level_map", "cannot insert node1");
+        return __result;
+    }
+    if (!insertnode (IN->id2)) {
+        SUwarning (0, "vg_level_map", "cannot insert node2");
+        return __result;
+    }
+
+    if (!insertdone (IN->id1, IN->id1, 1, NULL, NULL, TRUE)) {
+        SUwarning (0, "vg_level_map", "cannot insert node1 identity map");
+        return __result;
+    }
+    if (!insertdone (IN->id2, IN->id2, 1, NULL, NULL, TRUE)) {
+        SUwarning (0, "vg_level_map", "cannot insert node2 identity map");
+        return __result;
+    }
+    if (!insertdone (IN->id1, IN->id2, 2, NULL, NULL, TRUE)) {
+        SUwarning (0, "vg_level_map", "cannot insert fwd map");
+        return __result;
+    }
+#ifdef FULLCLOSURE
+    if (!insertdone (IN->id2, IN->id1, 3, NULL, NULL, TRUE)) {
+        SUwarning (0, "vg_level_map", "cannot insert bwd map");
+        return __result;
+    }
+#endif
+}
+END{
+    node_t *ns, *np;
+    int nn, ni, nj;
+    map_t *tp, *dp, *mp1, *mp2;
+    int reci, progress;
+
+    if (!(ns = vmalloc (Vmheap, dtsize (nodedict) * sizeof (node_t)))) {
+        SUwarning (0, "vg_level_map", "cannot allocate node array");
+        exit (1);
+    }
+    for (nn = 0, np = dtfirst (nodedict); np; np = dtnext (nodedict, np))
+        memcpy (&ns[nn++], np, sizeof (node_t));
+    for (ni = 0; ni < nn; ni++) {
+        if (!ns[ni].transflag)
+            continue;
+        for (nj = 0; nj < nn; nj++) {
+            if (!ns[nj].transflag)
+                continue;
+            if (findmap (donedict, ns[ni].id, ns[nj].id))
+                continue;
+            if (!insertmap (tododict, ns[ni].id, ns[nj].id)) {
+                SUwarning (0, "vg_level_map", "cannot insert todo map");
+                exit (1);
+            }
+        }
+    }
+    progress = TRUE;
+    while (dtsize (tododict) > 0 && progress) {
+        progress = FALSE;
+        for (tp = dtfirst (tododict); tp; tp = dtnext (tododict, tp)) {
+            for (ni = 0; ni < nn; ni++) {
+                if (
+                    (mp1 = findmap (donedict, tp->id1, ns[ni].id)) &&
+                    (mp2 = findmap (donedict, ns[ni].id, tp->id2))
+                ) {
+                    if (
+                        !insertdone (tp->id1, tp->id2, 4, mp1, mp2, TRUE)
+#ifdef FULLCLOSURE
+                        || !insertdone (tp->id2, tp->id1, 4, mp1, mp2, FALSE)
+#endif
+                    ) {
+                        SUwarning (0, "vg_level_map", "cannot insert ind map");
+                        exit (1);
+                    }
+                    removemap (tododict, tp->id1, tp->id2);
+#ifdef FULLCLOSURE
+                    removemap (tododict, tp->id2, tp->id1);
+#endif
+                    progress = TRUE;
+                    break;
+                }
+            }
+            if (progress)
+                break;
+        }
+    }
+    if (dtsize (tododict) > 0)
+        SUwarning (1, "vg_level_map", "cannot compute full object graph");
+    for (dp = dtfirst (donedict); dp; dp = dtnext (donedict, dp))
+        for (reci = 0; reci < dp->reci; reci++)
+            (*wfunc) (
+                wfp, &dp->recs[reci], wschemap,
+                sizeof (struct __outrec_level_map_t)
+            );
+}

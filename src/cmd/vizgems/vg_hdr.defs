@@ -1,0 +1,407 @@
+#
+# VG definitions
+#
+# DO NOT CHANGE THE NUMERIC IDS IN ANY OF THESE FIELDS
+#
+VAR|S_VERSION|all|"8.12"
+
+VAR|EDGESEP|all|"_swsep_"
+
+VAR|INV_N_LEVELMAP_DIR_FWD|all|1
+VAR|INV_N_LEVELMAP_DIR_REV|all|2
+
+VAR|QUERY_N_CAT_RESULT|all|1
+VAR|QUERY_N_CAT_ACTUAL|all|2
+
+VAR|QUERY_N_TYPE_NODE|all|1
+VAR|QUERY_N_TYPE_EDGE|all|2
+VAR|QUERY_N_TYPE_NONE|all|3
+
+VAR|STATQUERY_N_IMAGEMODE_LIK|all|1
+VAR|STATQUERY_N_IMAGEMODE_LI|all|2
+VAR|STATQUERY_N_IMAGEMODE_L|all|3
+VAR|STATQUERY_N_IMAGEMODE_NONE|all|4
+
+VAR|STATQUERY_N_VALUEMODE_ACTUAL|all|1
+VAR|STATQUERY_N_VALUEMODE_PERCENT|all|2
+VAR|STATQUERY_N_VALUEMODE_NOCAP|all|3
+
+VAR|QUERY_N_CLASS_PRIMARY|all|1
+VAR|QUERY_N_CLASS_SECONDARY|all|2
+
+VAR|ALARM_N_TYPE_NONE|all|0
+VAR|ALARM_N_TYPE_ALARM|all|1
+VAR|ALARM_N_TYPE_CLEAR|all|2
+
+VAR|ALARM_S_TYPE_NONE|all|"none"
+VAR|ALARM_S_TYPE_ALARM|all|"alarm"
+VAR|ALARM_S_TYPE_CLEAR|all|"clear"
+
+VAR|ALARM_N_STATE_NONE|all|0
+VAR|ALARM_N_STATE_INFO|all|1
+VAR|ALARM_N_STATE_DEG|all|2
+VAR|ALARM_N_STATE_DOWN|all|3
+VAR|ALARM_N_STATE_UP|all|4
+VAR|ALARM_N_STATE_MAX|all|4
+
+VAR|ALARM_S_STATE_NONE|all|"none"
+VAR|ALARM_S_STATE_INFO|all|"info"
+VAR|ALARM_S_STATE_DEG|all|"degraded"
+VAR|ALARM_S_STATE_DOWN|all|"down"
+VAR|ALARM_S_STATE_UP|all|"up"
+
+VAR|ALARM_N_MODE_NONE|all|0
+VAR|ALARM_N_MODE_KEEP|all|1
+VAR|ALARM_N_MODE_DEFER|all|2
+VAR|ALARM_N_MODE_DROP|all|3
+VAR|ALARM_N_MODE_MAX|all|3
+
+VAR|ALARM_S_MODE_NONE|all|"none"
+VAR|ALARM_S_MODE_KEEP|all|"keep"
+VAR|ALARM_S_MODE_DEFER|all|"defer"
+VAR|ALARM_S_MODE_DROP|all|"drop"
+
+VAR|ALARM_N_REP_ONCE|all|1
+VAR|ALARM_N_REP_DAILY|all|2
+VAR|ALARM_N_REP_WEEKLY|all|3
+VAR|ALARM_N_REP_MONTHLY|all|4
+VAR|ALARM_N_REP_MAX|all|4
+
+VAR|ALARM_S_REP_ONCE|all|"once"
+VAR|ALARM_S_REP_DAILY|all|"daily"
+VAR|ALARM_S_REP_WEEKLY|all|"weekly"
+VAR|ALARM_S_REP_MONTHLY|all|"monthly"
+
+VAR|ALARM_ALLMODE|all|1
+VAR|ALARM_OPENMODE|all|2
+
+VAR|ALARM_N_SO_NONE|all|0
+VAR|ALARM_N_SO_NORMAL|all|1
+VAR|ALARM_N_SO_OVERRIDE|all|2
+VAR|ALARM_N_SO_MAX|all|2
+
+VAR|ALARM_S_SO_NONE|all|"none"
+VAR|ALARM_S_SO_NORMAL|all|"normal"
+VAR|ALARM_S_SO_OVERRIDE|all|"override"
+
+VAR|ALARM_N_PMODE_NONE|all|0
+VAR|ALARM_N_PMODE_PROCESS|all|1
+VAR|ALARM_N_PMODE_PASSTHROUGH|all|2
+VAR|ALARM_N_PMODE_MAX|all|2
+
+VAR|ALARM_S_PMODE_NONE|all|"none"
+VAR|ALARM_S_PMODE_PROCESS|all|"process"
+VAR|ALARM_S_PMODE_PASSTHROUGH|all|"passthrough"
+
+VAR|ACCOUNT_TYPE_ATT|all|1
+VAR|ACCOUNT_TYPE_CUST|all|2
+
+FUN|warning|C|void (int level, char *type, char *fmt, ...) {
+    va_list args;
+    char *s, *fmt2;
+
+    static int warnlevel = -9999;
+
+    if (warnlevel == -9999) {
+        if (!(s = getenv ("VGWARNLEVEL")))
+            warnlevel = 0;
+        else
+            warnlevel = atoi (s);
+    }
+    if (level > warnlevel)
+        return;
+    va_start(args, fmt);
+    fmt2 = sfprints ("VGMSG|%ld|%s|%s\\n", time (NULL), type, fmt);
+    sfvprintf (sfstderr, fmt2, args);
+    va_end(args);
+}
+
+FUN|warning|KSH|{
+    if (( $1 > ${VGWARNLEVEL:-0} )) then
+        return
+    fi
+    print -u2 -f "VGMSG|%(%#)T"
+    print -u2 -f "|%s|%s\\n" "$2" "$3"
+}
+
+FUN|simpleenc|C|int (char *istr, char *ostr, int size, char *sstr) {
+    char *is, *os, *s1;
+
+    for (is = istr, os = ostr; *is; is++) {
+        if (os - ostr + 2 > size)
+            return -1;
+        for (s1 = sstr; *s1; s1++)
+            if (*is == *s1)
+                break;
+        if (*s1)
+            *os++ = '\\\\', *os++ = *is;
+        else
+            *os++ = *is;
+    }
+    *os = 0;
+    return os - ostr;
+}
+
+FUN|simpledec|C|int (char *istr, char *ostr, int size, char *sstr) {
+    char *is, *os, *s1;
+
+    for (is = istr, os = ostr; *is; is++) {
+        if (os - ostr > size)
+            return -1;
+        if (*is == '\\\\') {
+            for (s1 = sstr; *s1; s1++)
+                if (*(is + 1) == *s1)
+                    break;
+            if (*s1)
+                continue;
+        }
+        *os++ = *is;
+    }
+    *os = 0;
+    return os - ostr;
+}
+
+FUN|urlenc|C|int (char *istr, char *ostr, int size) {
+    char *is, *os;
+
+    static char hm[16] = {
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+    };
+
+    for (is = istr, os = ostr; *is; is++) {
+        if (os - ostr + 3 > size)
+            return -1;
+        switch (*is) {
+        case ' ':
+            *os++ = '%', *os++ = '2', *os++ = '0';
+            break;
+        case '+':
+            *os++ = '%', *os++ = '2', *os++ = 'B';
+            break;
+        case '%':
+            *os++ = '%', *os++ = '2', *os++ = '5';
+            break;
+        case ';':
+            *os++ = '%', *os++ = '3', *os++ = 'B';
+            break;
+        case '&':
+            *os++ = '%', *os++ = '2', *os++ = '6';
+            break;
+        case '|':
+            *os++ = '%', *os++ = '7', *os++ = 'C';
+            break;
+        case '\'':
+            *os++ = '%', *os++ = '2', *os++ = '7';
+            break;
+        case '"':
+            *os++ = '%', *os++ = '2', *os++ = '2';
+            break;
+        case '<':
+            *os++ = '%', *os++ = '3', *os++ = 'C';
+            break;
+        case '>':
+            *os++ = '%', *os++ = '3', *os++ = 'E';
+            break;
+        case '\\\\':
+            *os++ = '%', *os++ = '5', *os++ = 'C';
+            break;
+        case '\\n':
+        case '\\r':
+            *os++ = ' ';
+            break;
+        default:
+            if (*is < 32 || *is > 126)
+                *os++ = '%', *os++ = hm[(*is / 16)], *os++ = hm[(*is % 16)];
+            else
+                *os++ = *is;
+            break;
+        }
+    }
+    *os = 0;
+    return os - ostr;
+}
+
+FUN|urldec|C|int (char *istr, char *ostr, int size) {
+    char *is, *os, c1, c2;
+    int i1, i2;
+
+    for (is = istr, os = ostr; *is; ) {
+        if (os - ostr > size)
+            return -1;
+        if (*is == '%' && *(is + 1) && *(is + 2)) {
+            c1 = *(is + 1), c2 = *(is + 2);
+            if (c1 >= '0' && c1 <= '9')
+                i1 = c1 - '0';
+            else if (c1 >= 'A' && c1 <= 'F')
+                i1 = 10 + c1 - 'A';
+            else if (c1 >= 'a' && c1 <= 'f')
+                i1 = 10 + c1 - 'a';
+            else {
+                *os++ = *is++;
+                continue;
+            }
+            if (c2 >= '0' && c2 <= '9')
+                i2 = c2 - '0';
+            else if (c2 >= 'A' && c2 <= 'F')
+                i2 = 10 + c2 - 'A';
+            else if (c2 >= 'a' && c2 <= 'f')
+                i2 = 10 + c2 - 'a';
+            else {
+                *os++ = *is++;
+                continue;
+            }
+            *os++ = i1 * 16 + i2;
+            is += 3;
+        } else
+            *os++ = *is++;
+    }
+    *os = 0;
+    return os - ostr;
+}
+
+FUN|urlenc|KSH|{
+    typeset s=$1
+
+    if [[ $s == *[!$' '-$'\176']* ]] then
+        typeset os c i
+        for (( i = 0; i < ${#s}; i++ )) do
+            c=${s:$i:1}
+            if [[ $c != [a-zA-Z0-9_.] ]] then
+                os+="%$(printf '%02x' \'"$c"\')"
+            else
+                os+=$c
+            fi
+        done
+        s=$os
+    else
+        s=${s//%/__P__}
+        s=${s//' '/%20}
+        s=${s//'+'/%2B}
+        s=${s//';'/%3B}
+        s=${s//'&'/%26}
+        s=${s//'|'/%7C}
+        s=${s//\'/%27}
+        s=${s//\"/%22}
+        s=${s//'<'/%3C}
+        s=${s//'>'/%3E}
+        s=${s//\\\\/%5C}
+        s=${s//$'\\n'/' '}
+        s=${s//$'\\r'/' '}
+        s=${s//__P__/%25}
+    fi
+
+
+    print -r -- "$s"
+}
+
+FUN|urldec|KSH|{
+    typeset s=$1
+
+    s=${s//'+'/' '}
+    s=${s//@([\'\\\])/'\'\1}
+    eval "s=\$'${s//'%'@(??)/'\x'\1"'\$'"}'"
+    print -r -- "$s"
+}
+
+FUN|htmlenc|C|int (char *istr, char *ostr, int size, int metaflag) {
+    char *is, *os;
+
+    for (is = istr, os = ostr; *is; is++) {
+        if (os - ostr + 3 > size)
+            return -1;
+        switch (*is) {
+        case 2:
+            if (*(is + 1))
+                is++, *os++ = *is;
+            break;
+        case '%':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '2', *os++ = '5';
+            *os++ = ';';
+            break;
+        case ';':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '3', *os++ = 'B';
+            *os++ = ';';
+            break;
+        case '&':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '2', *os++ = '6';
+            *os++ = ';';
+            break;
+        case '|':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '7', *os++ = 'C';
+            *os++ = ';';
+            break;
+        case '\'':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '2', *os++ = '7';
+            *os++ = ';';
+            break;
+        case '"':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '2', *os++ = '2';
+            *os++ = ';';
+            break;
+        case '<':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '3', *os++ = 'C';
+            *os++ = ';';
+            break;
+        case '>':
+            *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '3', *os++ = 'E';
+            *os++ = ';';
+            break;
+        case '\\\\':
+            if (metaflag && *(is + 1) == 'n') {
+                *os++ = '<', *os++ = 'b', *os++ = 'r', *os++ = '>';
+                is++;
+            } else {
+                *os++ = '&', *os++ = '#', *os++ = 'x', *os++ = '5', *os++ = 'C';
+                *os++ = ';';
+            }
+            break;
+        default:
+            *os++ = *is;
+            break;
+        }
+    }
+    *os = 0;
+    return os - ostr;
+}
+
+FUN|htmldec|C|int (char *istr, char *ostr, int size) {
+    char *is, *os, c1, c2;
+    int i1, i2;
+
+    for (is = istr, os = ostr; *is; ) {
+        if (os - ostr > size)
+            return -1;
+        if (
+            *is == '&' && *(is + 1) == '#' && *(is + 2) == 'x' &&
+            *(is + 3) && *(is + 4)
+        ) {
+            c1 = *(is + 3), c2 = *(is + 4);
+            if (c1 >= '0' && c1 <= '9')
+                i1 = c1 - '0';
+            else if (c1 >= 'A' && c1 <= 'F')
+                i1 = 10 + c1 - 'A';
+            else if (c1 >= 'a' && c1 <= 'f')
+                i1 = 10 + c1 - 'a';
+            else {
+                *os++ = *is++;
+                continue;
+            }
+            if (c2 >= '0' && c2 <= '9')
+                i2 = c2 - '0';
+            else if (c2 >= 'A' && c2 <= 'F')
+                i2 = 10 + c2 - 'A';
+            else if (c2 >= 'a' && c2 <= 'f')
+                i2 = 10 + c2 - 'a';
+            else {
+                *os++ = *is++;
+                continue;
+            }
+            *os++ = i1 * 16 + i2;
+            is += 5;
+        } else
+            *os++ = *is++;
+    }
+    *os = 0;
+    return os - ostr;
+}

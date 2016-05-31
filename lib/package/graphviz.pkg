@@ -1,0 +1,11 @@
+graphviz :PACKAGE: ast \
+	INITgraphviz dotty gv lefty libXaw3d libgd libgraph libgv
+
+:REQUIRES: ast
+
+:INDEX: AT&T Graph Visualization commands and libraries.
+
+:DESCRIPTION:
+	The AT&T Labs Research ast-graphviz package is a collection of
+	commands and libraries for the manipulation and layout of graphs
+	(as in nodes and edges, not as in barcharts).

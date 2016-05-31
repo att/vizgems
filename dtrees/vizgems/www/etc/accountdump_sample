@@ -1,0 +1,21 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_DWWWDIR
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+
+export LC_ALL=C LANG=C
+
+SWMROOT=SWIFT_CFG_DWWWDIR $SHELL vg_accountinfo -dump \
+> SWIFT_CFG_DSYSTEMDIR/dpfiles/account.filter

@@ -1,0 +1,366 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+#define VG_STATMAP_MAIN
+#include "vg_statmap.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, maxpix, framen;
+static char *metricorder, *sortorder, *grouporder;
+static char *rendermode, *displaymode, *pagemode;
+
+static SCHmetric_t **attrms;
+static int attrmn;
+static int attrmmode;
+static char statbuf[10240];
+static Sfio_t *strfp;
+
+static char *statattr (
+    char *level1, char *id1, char *level2, char *id2, char *key
+) {
+    SCHmetric_t *mp;
+    int mi;
+    int framei, framej, havedeflabel, haveinvlabel;
+    char *s1, *s2, *sep;
+
+    if (strcmp (key, "stat_key") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mi > 0)
+                sfprintf (strfp, "|");
+            sfprintf (strfp, "%s", mp->key);
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_unit") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            sfprintf (strfp, "%s", mp->unit);
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_deflabel") == 0) {
+        havedeflabel = FALSE;
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mp->deflabel[0])
+                havedeflabel = TRUE;
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            sfprintf (strfp, "%s", mp->deflabel);
+        }
+        return havedeflabel ? sfstruse (strfp) : (
+            sfstruse (strfp), (char *) NULL
+        );
+    }
+    if (strcmp (key, "stat_invlabel") == 0) {
+        haveinvlabel = FALSE;
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mp->invlabel[0])
+                haveinvlabel = TRUE;
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            sfprintf (strfp, "%s", mp->invlabel);
+        }
+        return haveinvlabel ? sfstruse (strfp) : (
+            sfstruse (strfp), (char *) NULL
+        );
+    }
+    if (strcmp (key, "stat_baselabel") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            s1 = strchr (mp->deflabel, '(');
+            if (s1 && s1 - 1 >= mp->deflabel && *(s1 - 1) == ' ')
+                *(s1 - 1) = 0;
+            sfprintf (strfp, "%s", mp->deflabel);
+            if (s1)
+                *(s1 - 1) = ' ';
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_fulllabel") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (attrmmode)
+                sfprintf (strfp, "%c", '\001');
+            if (!mp->labels) {
+                if (mp->label[0])
+                    sfprintf (strfp, "%s", mp->label);
+                else if (mp->deflabel[0])
+                    sfprintf (strfp, "%s", mp->deflabel);
+                continue;
+            }
+            for (framei = 0; framei < framen; framei++)
+                mp->marks[framei] = (mp->labels[framei]) ? TRUE : FALSE;
+            sfprintf (strfp, "%s (", mp->deflabel);
+            sfprintf (strfp, "%s", mp->label);
+            sep = " ";
+            for (framei = 0; framei < framen; framei++) {
+                if (!mp->marks[framei])
+                    continue;
+                if (
+                    (s1 = strchr (mp->labels[framei], '(')) &&
+                    (s2 = strchr (s1 + 1, ')'))
+                )
+                    sfprintf (strfp, "%s%.*s", sep, s2 - s1, s1);
+                else
+                    sfprintf (strfp, "%s%s", sep, mp->labels[framei]);
+                for (framej = framei + 1; framej < framen; framej++) {
+                    if (!mp->marks[framej])
+                        continue;
+                    if (strcmp (mp->labels[framei], mp->labels[framej]) == 0)
+                        mp->marks[framej] = FALSE;
+                }
+            }
+            sfprintf (strfp, ")");
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_level") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mi > 0)
+                sfprintf (strfp, "|");
+            sfprintf (strfp, "%s", mp->level);
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "stat_id") == 0) {
+        for (mi = 0; mi < attrmn; mi++) {
+            mp = attrms[mi];
+            if (mi > 0)
+                sfprintf (strfp, "|");
+            sfprintf (strfp, "%s", mp->id);
+        }
+        return sfstruse (strfp);
+    }
+    return NULL;
+}
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("STATCHARTATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot load attr file");
+    attrsetfunc (statattr);
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_statchart", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_MAXPIXEL].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find maxpixel");
+    maxpix = atoi (attrs[ATTR_MAXPIXEL].str);
+    if (!attrs[ATTR_FRAMEN].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find framen");
+    framen = atoi (attrs[ATTR_FRAMEN].str);
+    if (!attrs[ATTR_METRICORDER].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find metricorder");
+    metricorder = attrs[ATTR_METRICORDER].str;
+    if (!attrs[ATTR_SORTORDER].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find sortorder");
+    sortorder = attrs[ATTR_SORTORDER].str;
+    if (!attrs[ATTR_GROUPORDER].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find grouporder");
+    grouporder = attrs[ATTR_GROUPORDER].str;
+    if (!attrs[ATTR_DISPLAYMODE].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find displaymode");
+    displaymode = attrs[ATTR_DISPLAYMODE].str;
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_statchart", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    if (statmapload (getenv ("STATMAPFILE"), TRUE, TRUE, TRUE) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot load statmap file");
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot init UT");
+    if (RIinit (fprefix, iprefix, maxpix) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot init RI");
+    if (EMinit (getenv ("STATCHARTEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot init EM");
+    if (SCHinit (
+        framen, atoi (getenv ("STATORDERSIZE")), getenv ("STATORDERFILE"),
+        pagemode
+    ) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot init SCH");
+
+    strfp = sfstropen ();
+}
+{
+    SCHmetric_t *mp;
+    sl_inv_nodeattr_t ina, *inap;
+    char invlabelbuf[SZ_val], *invlabel, *deflabel, *ip;
+    int smi, nai, havecapv, amode;
+    float capv;
+
+    DROP;
+
+    if (!(mp = SCHinsert (
+        ilevel, iid, level, id, key, frame, val, unit, label
+    )))
+        SUerror ("vg_dq_vt_statchart", "cannot insert metric");
+    if (!SCHmetricexists) {
+        deflabel = NULL;
+        invlabel = NULL;
+        havecapv = FALSE, capv = 0.0;
+        if ((smi = statmapfind (key)) >= 0)
+            deflabel = statmaps[smi].clabel;
+        if (
+            smi >= 0 && statmaps[smi].flabel && (ip = strchr (key, '.')) &&
+            statmaps[smi].nattrn > 0
+        ) {
+            for (nai = 0; nai < statmaps[smi].nattrn; nai++) {
+                memset (ina.sl_key, 0, sizeof (ina.sl_key));
+                sfsprintf (
+                    ina.sl_key, sizeof (ina.sl_key), "%s%s",
+                    statmaps[smi].nattrs[nai], ip + 1
+                );
+                if ((inap = sl_inv_nodeattrfind (level, id, ina.sl_key))) {
+                    memset (invlabelbuf, 0, SZ_val);
+                    sfsprintf (
+                        invlabelbuf, SZ_val, statmaps[smi].flabel, inap->sl_val
+                    );
+                    invlabel = &invlabelbuf[0];
+                    break;
+                }
+            }
+        }
+        if (smi >= 0 && statmaps[smi].havemaxv)
+            havecapv = TRUE, capv = statmaps[smi].maxv;
+        else {
+            memset (ina.sl_key, 0, sizeof (ina.sl_key));
+            sfsprintf (
+                ina.sl_key, sizeof (ina.sl_key), "si_sz_%s", key
+            );
+            if ((inap = sl_inv_nodeattrfind (level, id, ina.sl_key)))
+                havecapv = TRUE, capv = atof (inap->sl_val);
+            else {
+                memset (ina.sl_key, 0, sizeof (ina.sl_key));
+                sfsprintf (
+                    ina.sl_key, sizeof (ina.sl_key), "scopeinv_size_%s", key
+                );
+                if ((inap = sl_inv_nodeattrfind (level, id, ina.sl_key)))
+                    havecapv = TRUE, capv = atof (inap->sl_val);
+            }
+        }
+        if (smi >= 0 && statmaps[smi].aggrmode > 0)
+            amode = statmaps[smi].aggrmode;
+        else
+            amode = VG_STATMAP_AGGRMODE_AVG;
+        if (SCHattachdata (mp, deflabel, invlabel, havecapv, capv, amode))
+            SUerror ("vg_dq_vt_statchart", "cannot attach metric data");
+    }
+}
+END{
+    int ci, mi, mj;
+    char churl[ATTRBUFLEN], tlurl[ATTRBUFLEN], mturl[ATTRBUFLEN];
+    char xaurl[ATTRBUFLEN], yaurl[ATTRBUFLEN];
+    char tlattr[ATTRBUFLEN];
+
+    attrms = NULL, attrmn = 0;
+    attrmmode = FALSE;
+    if (SCHflatten (metricorder, sortorder, grouporder, displaymode) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot flatten");
+    if (SCHsetupdraw (
+        rendermode, attrs[ATTR_STATCHARTATTR].str,
+        attrs[ATTR_XAXISATTR].str, attrs[ATTR_YAXISATTR].str
+    ) == -1)
+        SUerror ("vg_dq_vt_statchart", "cannot setup drawing");
+
+    for (ci = 0, mi = 0; ci < SCHchartn; ci++) {
+        for (mj = mi; mj < SCHmetricn; mj++)
+            if (SCHmetrics[mj]->chartid != ci)
+                break;
+        attrms = &SCHmetrics[mi], attrmn = mj - mi;
+        attrmmode = FALSE;
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_STATCHARTURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get chart url");
+        strncpy (churl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_TITLEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get title url");
+        strncpy (tlurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_METRICURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get metric url");
+        strncpy (mturl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_XAXISURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get xaxis url");
+        strncpy (xaurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_YAXISURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get yaxis url");
+        strncpy (yaurl, attrstr, ATTRBUFLEN);
+
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_TITLEATTR, ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get title attr");
+        strncpy (tlattr, attrstr, ATTRBUFLEN);
+        attrmmode = TRUE;
+        if (attreval (
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid, NULL, NULL,
+            ATTR_METRICATTR, ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot get metric attr");
+
+        sfsprintf (
+            objstr, OBJLEN, "n|%s|%s",
+            SCHmetrics[mi]->ilevel, SCHmetrics[mi]->iid
+        );
+
+        if (mj > mi && SCHdrawchart (
+            fprefix, findex, ci, SCHchartn, &SCHmetrics[mi], mj - mi,
+            tlattr, attrstr, churl, tlurl, mturl, xaurl, yaurl, objstr
+        ) == -1)
+            SUerror ("vg_dq_vt_statchart", "cannot draw chart %d", ci);
+        mi = mj;
+        findex++;
+    }
+}

@@ -1,0 +1,208 @@
+rec=(
+    keys=IFACE
+    walk0=(
+        name='.1.3.6.1.2.1.2.2.1.8.${IFACE}' # ifOperStatus
+        type=STRING
+        value='${ISTATE}'
+    )
+    walk1=(
+        name='.1.3.6.1.2.1.31.1.1.1.1.${IFACE}' # ifName
+        type=STRING
+        value='${INAME}'
+    )
+    walk2=(
+        name='.1.3.6.1.2.1.2.2.1.2.${IFACE}' # ifDescr
+        type=STRING
+        value='${IDESCR}'
+    )
+    walk3=(
+        name='.1.3.6.1.2.1.31.1.1.1.18.${IFACE}' # ifAlias
+        type=SSTRING
+        value='${IALIAS}'
+        ifexpr='[[ $INVMODE == y ]]'
+    )
+    walk4=(
+        name='.1.3.6.1.2.1.31.1.1.1.15.${IFACE}' # ifHighSpeed
+        type=INTEGER
+        value='${S}'
+    )
+    walk5=(
+        name='.1.3.6.1.2.1.31.1.1.1.6.${IFACE}' # ifHCInOctets
+        type=INTEGER
+        value='${IB}'
+    )
+    walk6=(
+        name='.1.3.6.1.2.1.31.1.1.1.10.${IFACE}' # ifHCOutOctets
+        type=INTEGER
+        value='${OB}'
+    )
+    walk7=(
+        name='.1.3.6.1.2.1.2.2.1.13.${IFACE}' # ifInDiscards
+        type=INTEGER
+        value='${ID}'
+    )
+    walk8=(
+        name='.1.3.6.1.2.1.2.2.1.19.${IFACE}' # ifOutDiscards
+        type=INTEGER
+        value='${OD}'
+    )
+    walk9=(
+        name='.1.3.6.1.2.1.2.2.1.14.${IFACE}' # ifInErrors
+        type=INTEGER
+        value='${IE}'
+    )
+    walk10=(
+        name='.1.3.6.1.2.1.2.2.1.20.${IFACE}' # ifOutErrors
+        type=INTEGER
+        value='${OE}'
+    )
+    walk11=(
+        name='.1.3.6.1.2.1.2.2.1.10.${IFACE}' # ifInOctets
+        type=INTEGER
+        value='${IB32}'
+    )
+    walk12=(
+        name='.1.3.6.1.2.1.2.2.1.16.${IFACE}' # ifOutOctets
+        type=INTEGER
+        value='${OB32}'
+    )
+    outkey=IFACE
+    output='${IFACE}|${INAME}|${IDESCR}|${IALIAS}|${S}|${IB}|${OB}|${ID}|${OD}|${IE}|${OE}|${ISTATE}|${IB32}|${OB32}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r iface iname idescr ialias s ib64 ob64 id od ie oe st ib32 ob32; do
+                if [[ $st == up* ]] && (( s > 0 && ob64 + ib64 > 0 )) then
+                    print "node|o|$INV_TARGET|si_iface$iface|$iface"
+                    print -u3 "ifs[$iface]=1"
+                elif [[ $st == up* ]] && (( s > 0 && ob32 + ib32 > 0 )) then
+                    print "node|o|$INV_TARGET|si_iface$iface|$iface"
+                    print -u3 "ifs[$iface]=2"
+                fi
+                if [[ $st == up* ]] then
+                    print "node|o|$INV_TARGET|si_istatus$iface|up"
+                else
+                    print "node|o|$INV_TARGET|si_istatus$iface|down"
+                fi
+                [[ $idescr != *Ethernet* ]] && idescr="$iname-$idescr"
+                ialias=${ialias//[\"\|]/}
+                (( as = s * 1000000.0 ))
+                print "node|o|$INV_TARGET|si_iname$iface|$iname"
+                print "node|o|$INV_TARGET|si_idescr$iface|$idescr"
+                print "node|o|$INV_TARGET|si_ialias$iface|$ialias"
+                print "node|o|$INV_TARGET|si_ispeed$iface|$as"
+                print "node|o|$INV_TARGET|si_sz_tcpip_inbw.$iface|$s"
+                print "node|o|$INV_TARGET|si_sz_tcpip_outbw.$iface|$s"
+            done 3> aristaiface.list.new
+            mv aristaiface.list.new aristaiface.list
+            ;;
+        *)
+            fmt1="rt=STAT name=\"%s\" type=number num=%s unit=\"%s\" label=\"%s\"\\n"
+            fmt2="rt=STAT norep=y name=\"%s\" type=number num=%s unit=\"%s\" label=\"%s\"\\n"
+            typeset -A pvs ifs
+            [[ -f ./aristaiface.state ]] && . ./aristaiface.state
+            [[ -f ./aristaiface.list ]] && . ./aristaiface.list
+            typeset -F3 ibw obw dd de
+            ifn=0
+            while read -r iface iname idescr ialias s ib64 ob64 id od ie oe st ib32 ob32; do
+                if [[ $st != up* ]] || (( s == 0 || (ob64 + ib64 == 0 && ob32 + ib32 == 0) )) then
+                    continue
+                fi
+                if (( ifs[$iface] < 1 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+                [[ $idescr != *Ethernet* ]] && idescr="$iname-$idescr"
+                (( as = s * 1000000.0 ))
+
+                if [[ ${pvs[$iface].ts} != "" ]] then
+                    typeset -n pvr=pvs[$iface]
+                    (( dt = VG_JOBTS - pvr.ts ))
+                    if (( dt > 0 && dt <= 3 * $VG_JOBIV )) then
+                        if (( ifs[$iface] == 2 )) then
+                            ib=$ib32; ob=$ob32
+                            pib=${pvr.ib32}; pob=${pvr.ob32}
+                            bitn=32
+                        else
+                            ib=$ib64; ob=$ob64
+                            pib=${pvr.ib64}; pob=${pvr.ob64}
+                            bitn=64
+                        fi
+                        if [[ $ib != "" && $pib != "" ]] then
+                            (( (dib = ib - pib) < 0 )) && wrapcalc $bitn $s $dt $pib $ib dib
+                            if (( dib >= 0 )) then
+                                (( ibw = (dib * 8.0) / (dt * 1000000.0) ))
+                                print -f "$fmt1" "tcpip_inbw.${iface}" "$ibw" "mbps" "In BW ($idescr)"
+                            fi
+                        fi
+                        if [[ $ob != "" && $pob != "" ]] then
+                            (( (dob = ob - pob) < 0 )) && wrapcalc $bitn $s $dt $pob $ob dob
+                            if (( dob >= 0 )) then
+                                (( obw = (dob * 8.0) / (dt * 1000000.0) ))
+                                print -f "$fmt1" "tcpip_outbw.${iface}" "$obw" "mbps" "Out BW ($idescr)"
+                            fi
+                        fi
+                        if [[ $id != "" && $od != "" && ${pvr.id} != "" && ${pvr.od} != "" ]] then
+                            (( (did = id - pvr.id) < 0 )) && wrapcalc 32 $s $dt ${pvr.id} $id did
+                            (( (dod = od - pvr.od) < 0 )) && wrapcalc 32 $s $dt ${pvr.od} $od dod
+                            if (( did >= 0 && dod >= 0 )) then
+                                (( dd = did + dod ))
+                                print -f "$fmt2" "tcpip_disc.${iface}" "$dd" "" "Discards ($idescr)"
+                            fi
+                        fi
+                        if [[ $ie != "" && $oe != "" && ${pvr.ie} != "" && ${pvr.oe} != "" ]] then
+                            (( (die = ie - pvr.ie) < 0 )) && wrapcalc 32 $s $dt ${pvr.ie} $ie die
+                            (( (doe = oe - pvr.oe) < 0 )) && wrapcalc 32 $s $dt ${pvr.oe} $oe doe
+                            if (( die >= 0 && doe >= 0 )) then
+                                (( de = die + doe ))
+                                print -f "$fmt2" "tcpip_err.${iface}" "$de" "" "Errors ($idescr)"
+                            fi
+                        fi
+                    fi
+                fi
+
+                pstr="ts=$VG_JOBTS"
+                [[ $ib64 != "" ]] && pstr+=" ib64=$ib64"; [[ $ob64 != "" ]] && pstr+=" ob64=$ob64"
+                [[ $ib32 != "" ]] && pstr+=" ib32=$ib32"; [[ $ob32 != "" ]] && pstr+=" ob32=$ob32"
+                [[ $id != "" ]] && pstr+=" id=$id"; [[ $od != "" ]] && pstr+=" od=$od"
+                [[ $ie != "" ]] && pstr+=" ie=$ie"; [[ $oe != "" ]] && pstr+=" oe=$oe"
+                print -u3 "pvs[$iface]=($pstr)"
+
+                ifs[$iface]=3
+                (( ifn++ ))
+            done 3> aristaiface.state.new
+            mv aristaiface.state.new aristaiface.state
+
+            for iface in "${!ifs[@]}"; do
+                if (( ifn > 0 && ifs[$iface] != 3 )) then
+                    touch -d "14 day ago" inv.out
+                    break
+                fi
+            done
+            ;;
+        esac
+    }'
+    prepend='
+        typeset wraputs
+        function wrapcalc {
+            typeset bn=$1 s=$2 dt=$3 pv=$4 cv=$5 dvv=$6
+            typeset -n dvr=$dvv
+            typeset j v ifs
+            ifs="$IFS"
+            IFS=" "
+            if [[ $wraputs == "" ]] then
+                $SNMPCMD -On $SNMPARGS .1.3.6.1.2.1.1.3.0 | read -r j j j wraputs j
+                wraputs=${wraputs//[()]/}
+                [[ $wraputs != +([0-9]) ]] && return
+                (( wraputs /= 100 ))
+            fi
+            if (( dt > wraputs - 5 )) then
+                (( dvr = cv ))
+            else
+                (( v = dvr + (2 ** bn) ))
+                (( (s * 1000000 / 8) * dt >= v )) && dvr=$v
+            fi
+            IFS="$ifs"
+        }
+    '
+)

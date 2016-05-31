@@ -1,0 +1,32 @@
+rec=(
+    keys=VTPID
+    walk0=(
+        name='.1.3.6.1.4.1.9.9.46.1.3.1.1.3.${VTPID}' # vtpVlanType
+        type=INTEGER
+        value='${VTPTYPE}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.9.9.46.1.3.1.1.4.${VTPID}' # vtpVlanName
+        type=STRING
+        value='${VTPNAME}'
+    )
+    outkey=VTPID
+    output='${VTPID}|${VTPTYPE}|${VTPNAME}'
+    outfilter='(
+        IFS="|"
+        typeset -l vtpname
+        while read -r vtpid vtptype vtpname; do
+            [[ $vtptype != 1 ]] && continue
+            vtpid=${vtpid##*.}
+            set -A ls ${vtpip//" "/"|"}
+            case $MODE in
+            loop)
+                print $vtpid
+                ;;
+            *)
+                print -r "vtpid2name[$vtpid]=\"${vtpname//[\"\\]/}\""
+                ;;
+            esac
+        done
+    )'
+)

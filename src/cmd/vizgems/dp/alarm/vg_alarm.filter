@@ -1,0 +1,252 @@
+VARS{
+#include <ctype.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+#include "vgdb_pub.h"
+#include "vgfilter_pub.h"
+#include "sl_trans.c"
+
+#define SZ_id1 DDSSZ_rec_alarm_id1
+#define SZ_comment DDSSZ_rec_alarm_comment
+#define SZ_dateissued DDSSZ_rec_alarm_dateissued
+#define SZ_hourissued DDSSZ_rec_alarm_hourissued
+#define SZ_text DDSSZ_rec_alarm_text
+#define SZ_variables DDSSZ_rec_alarm_variables
+
+static char *modemap[VG_ALARM_N_MODE_MAX + 1];
+
+static time_t mint, maxt;
+static int pid;
+
+static void mytmfmt1 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+static void mytmfmt2 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+}
+LIBS{
+-lvgdb -lvgfilter
+}
+BEGIN{
+    char *s;
+
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_alarm", "cannot load sevmap file");
+    if (alarmdbload (getenv ("ALARMDBFILE")) == -1)
+        SUwarning (0, "vg_alarm", "cannot load alarm database");
+    if (filterload (getenv ("ALARMFILTERFILE"), getenv ("ACCOUNTFILE")) == -1)
+        SUwarning (0, "vg_alarm", "cannot load filter data");
+    sl_transopen (getenv ("OBJECTTRANSFILE"));
+    modemap[VG_ALARM_N_MODE_DROP]  = VG_ALARM_S_MODE_DROP;
+    modemap[VG_ALARM_N_MODE_KEEP]  = VG_ALARM_S_MODE_KEEP;
+    modemap[VG_ALARM_N_MODE_DEFER] = VG_ALARM_S_MODE_DEFER;
+    mint = strtoll (getenv ("MINTIME"), &s, 10);
+    maxt = strtoll (getenv ("MAXTIME"), &s, 10);
+    pid = getpid ();
+}
+{
+    alarm_t *alarmp;
+    filter_t *filterp;
+    sl_trans_t *otp;
+    char *s;
+    time_t t;
+    int l;
+
+    KEEP;
+
+    if (timeissued < mint) {
+        SUwarning (
+            0, "vg_alarm", "time older by %d than min time", mint - timeissued
+        );
+        timeissued = mint;
+    }
+    if (timeissued > maxt) {
+        SUwarning (
+            0, "vg_alarm", "time newer by %d than max time", timeissued - maxt
+        );
+        timeissued = maxt;
+    }
+    if (timecleared != 0 && timecleared < mint) {
+        SUwarning (
+            0, "vg_alarm", "time older by %d than min time", mint - timecleared
+        );
+        timecleared = mint;
+    }
+    if (timecleared != 0 && timecleared > maxt) {
+        SUwarning (
+            0, "vg_alarm", "time newer by %d than max time", timecleared - maxt
+        );
+        timecleared = maxt;
+    }
+    t = timeissued;
+    if (!dateissued[0])
+        mytmfmt1 (dateissued, SZ_dateissued, "%Y.%m.%d", &t);
+    if (!hourissued[0])
+        mytmfmt2 (hourissued, SZ_hourissued, "%H", &t);
+
+    VG_warning (0, "DATA INFO", "CONV %d alarm %s", pid, text);
+
+    if (pmode == VG_ALARM_N_PMODE_PROCESS) {
+        if (type == VG_ALARM_N_TYPE_CLEAR && strcmp (
+            id1, "__ce_svc_upd__"
+        ) == 0)
+            alarmp = NULL;
+        else {
+            alarmp = alarmdbfind (alarmid, text, id1);
+            if (!alarmp && id2[0])
+                alarmp = alarmdbfind (alarmid, text, id2);
+        }
+        if (alarmp) {
+            VG_warning (
+                0, "DATA INFO",
+                "DB %d match id=%s model=%s", pid, id1, alarmp->id
+            );
+            if (!alarmid[0])
+                strcpy (alarmid, alarmp->id);
+            state = alarmp->statenum;
+            if (alarmp->tm != -1 && tmode != alarmp->tm) {
+                if (tmode > 0)
+                    VG_warning (
+                        1, "DATA INFO",
+                        "DB %d overriding tmode '%s' -> '%s'",
+                        pid, modemap[tmode], modemap[alarmp->tm]
+                    );
+                else
+                    VG_warning (
+                        1, "DATA INFO", "DB %d setting tmode '%s'",
+                        pid, modemap[alarmp->tm]
+                    );
+                tmode = alarmp->tm;
+            }
+            if (alarmp->sm != -1 && smode != alarmp->sm) {
+                if (smode > 0)
+                    VG_warning (
+                        1, "DATA INFO",
+                        "DB %d overriding smode '%s' -> '%s'",
+                        pid, modemap[smode], modemap[alarmp->sm]
+                    );
+                else
+                    VG_warning (
+                        1, "DATA INFO", "DB %d setting smode '%s'",
+                        pid, modemap[alarmp->sm]
+                    );
+                smode = alarmp->sm;
+            }
+            if ((s = alarmdbvars (alarmp)) && *s) {
+                l = SZ_variables - (strlen (variables) + 1);
+                if (!variables[0])
+                    strncpy (variables, s, l);
+                else {
+                    strncat (variables, "		", l);
+                    l -= 2;
+                    strncat (variables, s, l);
+                }
+            }
+            if (alarmp->sevnum > 0 && severity != alarmp->sevnum) {
+                VG_warning (
+                    1, "DATA INFO",
+                    "DB %d overriding severity '%s' -> '%s'",
+                    pid, sevmaps[severity].name, sevmaps[alarmp->sevnum].name
+                );
+                severity = alarmp->sevnum;
+            }
+            if (alarmp->com) {
+                VG_warning (
+                    1, "DATA INFO", "DB %d adding comment '%s'",
+                    pid, alarmp->com
+                );
+                strcpy (comment, alarmp->com);
+            }
+        }
+        if ((otp = sl_transfind (id1))) {
+            memcpy (origmsg, id1, SZ_id1);
+            memset (id1, 0, strlen (id1));
+            strcpy (id1, otp->sl_outid);
+        }
+        if (id2[0] && (otp = sl_transfind (id2))) {
+            memset (id2, 0, strlen (id2));
+            strcpy (id2, otp->sl_outid);
+        }
+        if (!(filterp = filterfind (
+            level1, id1, (origmsg[0] ? origmsg : id1), alarmid, text, timeissued
+        )) && id2[0])
+            filterp = filterfind (
+                level2, id2, id2, alarmid, text, timeissued
+            );
+        if (filterp) {
+            VG_warning (
+                0, "DATA INFO",
+                "FILTER %d match %s,%s,%s",
+                pid, filterp->objstr, filterp->textstr, filterp->account
+            );
+            if (filterp->tm > 0 && tmode != filterp->tm) {
+                if (tmode > 0)
+                    VG_warning (
+                        1, "DATA INFO",
+                        "FILTER %d overriding tmode '%s' -> '%s'",
+                        pid, modemap[tmode], modemap[filterp->tm]
+                    );
+                tmode = filterp->tm;
+            }
+            if (filterp->sm > 0 && smode != filterp->sm) {
+                if (smode > 0)
+                    VG_warning (
+                        1, "DATA INFO",
+                        "FILTER %d overriding smode '%s' -> '%s'",
+                        pid, modemap[smode], modemap[filterp->sm]
+                    );
+                smode = filterp->sm;
+            }
+            if (filterp->sevnum > 0 && severity != filterp->sevnum) {
+                if (severity > 0)
+                    VG_warning (
+                        1, "DATA INFO",
+                        "FILTER %d overriding severity '%s' -> '%s'",
+                        pid, sevmaps[severity].name,
+                        sevmaps[filterp->sevnum].name
+                    );
+                severity = filterp->sevnum;
+            }
+            if (filterp->com) {
+                if (comment[0])
+                    VG_warning (
+                        1, "DATA INFO",
+                        "FILTER %d overriding comment '%s' -> '%s'",
+                        pid, comment, filterp->com
+                    );
+                memset (comment, 0, SZ_comment);
+                strcpy (comment, filterp->com);
+            }
+        }
+    }
+}

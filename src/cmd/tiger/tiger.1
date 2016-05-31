@@ -1,0 +1,60 @@
+.TH TIGER 1
+.SH NAME
+.I TIGER
+\- SWIFT Tiger Toolkit
+.SH SYNOPSIS
+tigercommand [flags] ...
+.SH DESCRIPTION
+.I TIGER
+is a toolkit for operating on files containing the geographic information in
+the Census Bureau's Tiger/Line dataset.
+The original ascii data is converted into a binary format using a variant of
+the winged-edge datastructure.
+.SH TOOLS
+.PP
+.B tigera2b
+.IP ""
+Converts the raw ascii data into the binary format used by the rest of the
+tools.
+.PP
+.B tigerinfo
+.IP ""
+Prints information about a specific dataset.
+.PP
+.B tigerprint
+.IP ""
+Generates an ascii dump (or postscript) of a specific dataset.
+.PP
+.B tigercat
+.IP ""
+Concatenates several datasets into one.
+.PP
+.B tigermerge
+.IP ""
+Merges adjacent polygons sharing a specific attribute into a single polygon.
+.PP
+.B tigerextract
+.IP ""
+Extracts elements of a dataset based on the value of a specific attribute.
+.PP
+.B tigerattrmap
+.IP ""
+Prints a mapping of one attribute to another in a specific dataset.
+.PP
+.B npanxx2tiger
+.IP ""
+Loads and assigns npanxx values to a specific dataset.
+.PP
+.B zip2tiger
+.IP ""
+Loads and assigns zip codes to a specific dataset.
+.SH SEE ALSO
+.IR tigera2b(1) ,
+.IR tigerinfo(1) ,
+.IR tigerprint(1) ,
+.IR tigercat(1) ,
+.IR tigermerge(1) ,
+.IR tigerextract(1) ,
+.IR tigerattrmap(1) ,
+.IR npanxx2tiger(1) ,
+.IR zip2tiger(1) .

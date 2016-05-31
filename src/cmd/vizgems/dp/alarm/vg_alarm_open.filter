@@ -1,0 +1,130 @@
+VARS{
+#include <cdt.h>
+#include "vg_hdr.h"
+
+typedef struct ccid_t {
+    Dtlink_t link;
+    /* begin key */
+    char *s;
+    /* end key */
+    VG_alarm_t s_alarm;
+    int seen;
+} ccid_t;
+
+static Dt_t *cciddict;
+static Dtdisc_t cciddisc = {
+    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+typedef struct seen_t {
+    Dtlink_t link;
+    /* begin key */
+    char *s;
+    /* end key */
+    int s_timecleared;
+} seen_t;
+
+static Dt_t *seendict;
+static Dtdisc_t seendisc = {
+    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static int allclear = FALSE, allcleartime = 0;
+
+static long lasttime, keepsec;
+}
+BEGIN{
+    keepsec = atoi (getenv ("MAXALARMKEEPMIN")) * 60;
+    if (!(cciddict = dtopen (&cciddisc, Dtset)))
+        SUerror ("vg_alarm_open", "ccid dtopen failed");
+    if (!(seendict = dtopen (&seendisc, Dtset)))
+        SUerror ("vg_alarm_open", "seen dtopen failed");
+}
+{
+    ccid_t *ccidp;
+    seen_t *sp[4];
+    char buf[4][100];
+    int keepflag, clearmode;
+
+    keepflag = TRUE;
+    if (!ccid[0])
+        ;
+    else if (sortorder == VG_ALARM_N_SO_OVERRIDE) {
+        if (!(ccidp = dtmatch (cciddict, ccid))) {
+            if (!(ccidp = vmalloc (Vmheap, sizeof (ccid_t))))
+                SUwarning (0, "vg_alarm_open", "malloc failed");
+            memset (ccidp, 0, sizeof (ccid_t));
+            if (!(ccidp->s = vmstrdup (Vmheap, ccid)))
+                SUwarning (0, "vg_alarm_open", "strdup failed");
+            if (dtinsert (cciddict, ccidp) != ccidp)
+                SUwarning (0, "vg_alarm_open", "dtinsert failed");
+        }
+        memcpy (&ccidp->s_alarm, __recp, sizeof (VG_alarm_t));
+        ccidp->s_alarm.s_sortorder = VG_ALARM_N_SO_NORMAL;
+    } else if ((ccidp = dtmatch (cciddict, ccid))) {
+        if (
+            !ccidp->seen &&
+            ccidp->s_alarm.s_timeissued == timeissued &&
+            ccidp->s_alarm.s_severity == severity &&
+            ccidp->s_alarm.s_state == state &&
+            ccidp->s_alarm.s_type == type &&
+            strcmp (ccidp->s_alarm.s_text, text) == 0
+        )
+            keepflag = FALSE, ccidp->seen = TRUE;
+    }
+
+    clearmode = FALSE;
+    if (type == VG_ALARM_N_TYPE_CLEAR) {
+        clearmode = TRUE;
+        buf[0][0] = 0;
+        if (strcmp (id1, "__ce_svc_upd__") == 0)
+            ;
+        else if (strcmp (id1, "__all_clear__") == 0)
+            allclear = TRUE, allcleartime = timeissued;
+        else if (ccid[0])
+            sfsprintf (buf[0], 100, "c:%s", ccid);
+        else if (alarmid[0] && id1[0])
+            sfsprintf (buf[0], 100, "i:%s:%s", id1, alarmid);
+        else if (timecleared > 0 && id1[0])
+            sfsprintf (buf[0], 100, "a:%s:%d", id1, timecleared);
+        else if (id1[0])
+            sfsprintf (buf[0], 100, "o:%s", id1);
+        if (timecleared == 0)
+            timecleared = timeissued;
+        if (buf[0][0] && !dtmatch (seendict, buf[0])) {
+            if (!(sp[0] = vmalloc (Vmheap, sizeof (seen_t))))
+                SUwarning (0, "vg_alarm_open", "malloc failed");
+            if (!(sp[0]->s = vmstrdup (Vmheap, buf[0])))
+                SUwarning (0, "vg_alarm_open", "strdup failed");
+            if (dtinsert (seendict, sp[0]) != sp[0])
+                SUwarning (0, "vg_alarm_open", "dtinsert failed");
+            sp[0]->s_timecleared = timecleared;
+        }
+    }
+
+    if (timecleared == 0) {
+        if (allclear)
+            timecleared = allcleartime;
+        else if (clearmode)
+            timecleared = timeissued;
+        else {
+            sfsprintf (buf[0], 100, "c:%s", ccid);
+            sfsprintf (buf[1], 100, "i:%s:%s", id1, alarmid);
+            sfsprintf (buf[2], 100, "a:%s:%d", id1, timeissued);
+            sfsprintf (buf[3], 100, "o:%s", id1);
+            sp[0] = dtmatch (seendict, buf[0]);
+            sp[1] = sp[0] ? sp[0] : dtmatch (seendict, buf[1]);
+            sp[2] = sp[1] ? sp[1] : dtmatch (seendict, buf[2]);
+            sp[3] = sp[2] ? sp[2] : dtmatch (seendict, buf[3]);
+            if (sp[3])
+                timecleared = sp[3]->s_timecleared;
+        }
+    }
+
+    if (timeissued > lasttime)
+        lasttime = timeissued;
+    if (!keepflag || timecleared > 0 || lasttime - timeissued > keepsec)
+        DROP;
+    else
+        KEEP;
+}

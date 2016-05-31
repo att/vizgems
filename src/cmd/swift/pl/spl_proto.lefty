@@ -1,0 +1,203 @@
+#
+# SWIFTPL
+#
+#     this file implements the view of prototype nodes
+#
+spl.proto.protogt = [
+    'layoutmode' = 'sync';
+    'actions' = copy (dotty.protogt.actions);
+];
+spl.proto.protovt = [
+    'name' = "SWIFTPL: objects";
+    'orig' = spl.coords.pview.origin;
+    'size' = spl.coords.pview.size;
+    'type' = 'birdseye';
+    'menus' = [
+        'general' = [
+            0 = "do layout";
+            1 = "redraw";
+        ];
+        'node' = [
+            0 = "select";
+        ];
+        'edge' = [
+            0 = "select";
+        ];
+    ];
+    'keys' = [
+        'general' = [
+            'l' = "do layout";
+            ' ' = "redraw";
+        ];
+        'node' = [
+            's' = "select";
+        ];
+        'edge' = [
+            's' = "select";
+        ];
+    ];
+];
+spl.proto.init = function () {
+    local gt, i, id, aid, pobj, sgraph, node1, node2, edge;
+
+    spl.proto.gnvt = dotty.createviewandgraph (null, 'file',
+            spl.proto.protogt, spl.proto.protovt);
+    gt = spl.proto.gnvt.gt;
+    for (i = 0; spl.data.objorder[i]; i = i + 1) {
+        id = spl.data.objorder[i];
+        if (spl.data.nodes[id]) { # it's a node
+            pobj = spl.data.nodes[id];
+            node1 = gt.insertnode (gt, null, null, null, null, 0);
+            spl.proto.nodes[id] = node1;
+            node1.attr.type = id;
+            node1.attr.shape = pobj.gattr.shape;
+            for (aid in pobj.pattr)
+                node1.attr[aid] = pobj.pattr[aid];
+        } else { # it's an edge
+            pobj = spl.data.edges[id];
+            sgraph = gt.insertsgraph (gt, null, null, 0);
+            sgraph.graphattr.rank = 'same';
+            node1 = gt.insertnode (gt, null, null, null, null, 0);
+            node1.attr.width = 0.1;
+            node1.attr.height = 0.1;
+            node1.attr.label = '';
+            node1.attr.style = 'invis';
+            sgraph.nodes[node1.nid] = node1;
+            node2 = gt.insertnode (gt, null, null, null, null, 0);
+            node2.attr.width = 0.1;
+            node2.attr.height = 0.1;
+            node2.attr.label = '';
+            node2.attr.style = 'invis';
+            sgraph.nodes[node2.nid] = node2;
+            edge = gt.insertedge (gt, node1, null, node2, null, null, 0);
+            spl.proto.nodes[id] = edge;
+            edge.attr.type = id;
+            for (aid in pobj.pattr)
+                edge.attr[aid] = pobj.pattr[aid];
+        }
+    }
+    gt.graph.graphattr.nodesep = 0.2;
+    spl.nodetype = gt.graph.nodes[0].attr.type;
+    spl.edgetype = gt.graph.edges[0].attr.type;
+    gt.unpackattr (gt);
+    gt.layoutgraph (gt);
+    spl.proto.highlightnode (gt.graph.nodes[0]);
+    spl.proto.highlightedge (gt.graph.edges[0]);
+};
+spl.proto.highlightnode = function (node) {
+    local gt, pos, size, rect, vid;
+
+    gt = spl.proto.gnvt.gt;
+    pos = node.pos;
+    size = node.size;
+    rect[0] = [
+        'x' = pos.x - size.x / 2 - 4;
+        'y' = pos.y - size.y / 2 - 4;
+    ];
+    rect[1] = [
+        'x' = rect[0].x + size.x + 8;
+        'y' = rect[0].y + size.y + 8;
+    ];
+    gt.highlightnoderect = rect;
+    for (vid in gt.views)
+        box (gt.views[vid].canvas, null, rect, [
+            'mode' = 'xor'; 'width' = 2;
+        ]);
+    gt.highlightnode = node;
+};
+spl.proto.highlightedge = function (edge) {
+    local gt, rect, vid;
+
+    gt = spl.proto.gnvt.gt;
+    rect[0] = [
+        'x' = (edge.points[1].x + edge.points[2].x) / 2 - 10;
+        'y' = (edge.points[1].y + edge.points[2].y) / 2 - 10;
+    ];
+    rect[1] = [
+        'x' = rect[0].x + 20;
+        'y' = rect[0].y + 20;
+    ];
+    gt.highlightedgerect = rect;
+    for (vid in gt.views)
+        box (gt.views[vid].canvas, null, rect, [
+            'mode' = 'xor'; 'width' = 2;
+        ]);
+    gt.highlightedge = edge;
+};
+spl.proto.unhighlightnode = function () {
+    local gt, vid;
+
+    gt = spl.proto.gnvt.gt;
+    if (~gt.highlightnode)
+        return;
+    for (vid in gt.views)
+        box (gt.views[vid].canvas, null, gt.highlightnoderect, [
+            'mode' = 'xor'; 'width' = 2;
+        ]);
+    remove ('highlightnode', gt);
+};
+spl.proto.unhighlightedge = function () {
+    local gt, vid;
+
+    gt = spl.proto.gnvt.gt;
+    if (~gt.highlightedge)
+        return;
+    for (vid in gt.views)
+        box (gt.views[vid].canvas, null, gt.highlightedgerect, [
+            'mode' = 'xor'; 'width' = 2;
+        ]);
+    remove ('highlightedge', gt);
+};
+#
+# callbacks
+#
+spl.proto.protogt.actions.node["select"] = function (gt, vt, obj, data) {
+    if (data.obj.nid >= 0) {
+        spl.proto.unhighlightnode ();
+        spl.proto.highlightnode (data.obj);
+        spl.nodetype = data.obj.attr.type;
+    } else if (data.obj.eid >= 0) {
+        spl.proto.unhighlightedge ();
+        spl.proto.highlightedge (data.obj);
+        spl.edgetype = data.obj.attr.type;
+    }
+};
+spl.proto.protogt.actions.edge["select"] =
+        spl.proto.protogt.actions.node["select"];
+spl.proto.protovt.uifuncs = [
+    'leftup' = function (data) {
+        local vt, gt;
+
+        vt = dotty.views[data.widget];
+        gt = dotty.graphs[vt.gtid];
+        gt.doaction (data, 'select');
+    };
+    'rightdown' = dotty.protovt.normal.uifuncs.rightdown;
+    'keyup' = dotty.protovt.normal.uifuncs.keyup;
+    'redraw' = function (data) {
+        local vt, gt;
+
+        vt = dotty.views[data.widget];
+        gt = dotty.graphs[vt.gtid];
+        if (gt.highlightnode)
+            box (vt.canvas, null, gt.highlightnoderect, [
+                'width' = 2; 'color' = 0;
+            ]);
+        if (gt.highlightedge)
+            box (vt.canvas, null, gt.highlightedgerect, [
+                'width' = 2; 'color' = 0;
+            ]);
+        gt.drawgraph (gt, [vt.vtid = vt;]);
+        if (gt.highlightnode)
+            box (vt.canvas, null, gt.highlightnoderect, [
+                'width' = 2; 'mode' = 'xor';
+            ]);
+        if (gt.highlightedge)
+            box (vt.canvas, null, gt.highlightedgerect, [
+                'width' = 2; 'mode' = 'xor';
+            ]);
+    };
+    'closeview' = function (data) {
+        spl.view.quit ();
+    };
+];

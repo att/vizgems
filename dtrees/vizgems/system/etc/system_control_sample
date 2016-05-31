@@ -1,0 +1,45 @@
+#!/bin/ksh
+
+export TZ=SWIFT_CFG_SYSTZ
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+[[ $1 == stop ]] && touch $VGMAINDIR/exit.scopemgr
+
+$SHELL vg_control "$@" wait
+
+if [[ $1 == stop ]] then
+    while [[ -f $VGMAINDIR/lock.scopemgr ]] do
+        sleep 1
+    done
+    n=0
+    while [[ $(fuser $VGMAINDIR/etc/*job 2> /dev/null) != '' ]] do
+        print waiting for these processes to finish:
+        fuser $VGMAINDIR/etc/*job
+        sleep 1
+        (( n++ > 30 )) && break
+    done
+    while [[ $(fuser $VGMAINDIR/tmp/inuse.* 2> /dev/null) != '' ]] do
+        print waiting for these processes to finish:
+        fuser $VGMAINDIR/tmp/inuse.*
+        sleep 1
+        (( n++ > 30 )) && break
+    done
+elif [[ $1 == start ]] then
+    rm -f $VGMAINDIR/exit.scopemgr
+fi

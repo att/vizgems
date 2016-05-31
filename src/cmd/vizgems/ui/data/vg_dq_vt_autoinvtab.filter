@@ -1,0 +1,338 @@
+VARS{
+#include <regex.h>
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#include <option.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+#define FILTERLISTONLY 1
+#define EMAILLISTONLY 1
+#define PROFILELISTONLY 1
+#define THRESHOLDLISTONLY 1
+#include "vgfilter_pub.h"
+#include "vgemail_pub.h"
+#include "vgprofile_pub.h"
+#include "vgthreshold_pub.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_node.c"
+#include "sl_transrev.c"
+
+#define SZ_id DDSSZ_rec_dq_dt_inv_id1
+#define SZ_level DDSSZ_rec_dq_dt_inv_level1
+
+typedef struct node_t {
+    Dtlink_t link;
+    /* begin key */
+    char s_level[SZ_level];
+    char s_id[SZ_id];
+    /* end key */
+    int s_li;
+} node_t;
+
+static Dt_t *nodedict;
+static Dtdisc_t nodedisc = {
+    sizeof (Dtlink_t), SZ_level + SZ_id, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+typedef struct level_t {
+    char s_level[SZ_level];
+} level_t;
+
+static level_t *ls;
+static int ln;
+
+static int showemails, showfilters, showprofiles, showthresholds;
+
+static char *modemap[VG_ALARM_N_MODE_MAX + 1];
+static char *repmap[VG_ALARM_N_REP_MAX + 1];
+static char *stylemap[4];
+#define BUFLEN 100
+static char stbuf[BUFLEN], etbuf[BUFLEN], sdbuf[BUFLEN], edbuf[BUFLEN];
+static char tbuf[BUFLEN], sbuf[BUFLEN];
+}
+LIBS{
+-lvgfilter -lvgemail -lvgprofile -lvgthreshold
+}
+BEGIN{
+    Sfio_t *fp;
+    char *line;
+    int lm;
+
+    if (!(nodedict = dtopen (&nodedisc, Dtset)))
+        SUerror ("vg_dq_vt_autoinvtab", "cannot create nodedict");
+
+    showemails = atoi (getenv ("SHOWEMAILS"));
+    showfilters = atoi (getenv ("SHOWFILTERS"));
+    showprofiles = atoi (getenv ("SHOWPROFILES"));
+    showthresholds = atoi (getenv ("SHOWTHRESHOLDS"));
+
+    lm = 0, ln = atoi (getenv ("LEVELLISTSIZE"));
+    if (ln > 0) {
+        if (!(ls = vmalloc (Vmheap, sizeof (level_t) * ln)))
+            SUerror ("vg_dq_vt_autoinvtab", "cannot allocate ls");
+        memset (ls, 0, sizeof (level_t) * ln);
+        if (!(fp = sfopen (NULL, getenv ("LEVELLISTFILE"), "r")))
+            SUerror (
+                "vg_dq_vt_autoinvtab", "cannot open level filter file"
+            );
+        while ((line = sfgetr (fp, '\n', 1))) {
+            strcpy (ls[lm].s_level, line);
+            lm++;
+        }
+        sfclose (fp);
+    }
+    if (lm != ln)
+        ln = -1;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    sl_inv_nodeopen (getenv ("INVNODEATTRFILE"));
+    sl_transrevopen (getenv ("OBJECTTRANSREVFILE"));
+
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_dq_vt_autoinvtab", "cannot load sevmap file");
+    if (filterload (getenv ("ALARMFILTERFILE"), getenv ("ACCOUNTFILE")) == -1)
+        SUerror ("vg_dq_vt_autoinvtab", "cannot load filter data");
+    if (emailload (getenv ("ALARMEMAILFILE"), getenv ("ACCOUNTFILE")) == -1)
+        SUerror ("vg_dq_vt_autoinvtab", "cannot load email data");
+    if (profileload (
+        getenv ("PROFILEFILE"), NULL, getenv ("ACCOUNTFILE")
+    ) == -1)
+        SUerror ("vg_dq_vt_autoinvtab", "cannot load profile data");
+    if (thresholdload (getenv ("THRESHOLDFILE"), getenv ("ACCOUNTFILE")) == -1)
+        SUerror ("vg_dq_vt_autoinvtab", "cannot load threshold data");
+
+    modemap[VG_ALARM_N_MODE_DROP]  = VG_ALARM_S_MODE_DROP;
+    modemap[VG_ALARM_N_MODE_KEEP]  = VG_ALARM_S_MODE_KEEP;
+    modemap[VG_ALARM_N_MODE_DEFER] = VG_ALARM_S_MODE_DEFER;
+    repmap[VG_ALARM_N_REP_ONCE]  = VG_ALARM_S_REP_ONCE;
+    repmap[VG_ALARM_N_REP_DAILY]  = VG_ALARM_S_REP_DAILY;
+    repmap[VG_ALARM_N_REP_WEEKLY] = VG_ALARM_S_REP_WEEKLY;
+    repmap[VG_ALARM_N_REP_MONTHLY] = VG_ALARM_S_REP_MONTHLY;
+    stylemap[STYLE_SMS] = "sms";
+    stylemap[STYLE_TEXT] = "text";
+    stylemap[STYLE_HTML] = "html";
+}
+{
+    node_t n, *np, *nmem;
+    char *m1p;
+    int li;
+
+    DROP;
+
+    if (cat != VG_QUERY_N_CAT_RESULT)
+        return __result;
+
+    if (
+        ln < 0 ||
+        type != VG_QUERY_N_TYPE_NODE || class1 != VG_QUERY_N_CLASS_PRIMARY
+    )
+        return __result;
+
+    for (li = 0; li < ln; li++) {
+        for (
+            m1p = M1F (level1, id1, ls[li].s_level); m1p;
+            m1p = M1N (level1, id1, ls[li].s_level)
+        ) {
+            memcpy (n.s_level, ls[li].s_level, SZ_level);
+            memcpy (n.s_id, m1p, SZ_id);
+            if (!(np = dtsearch (nodedict, &n))) {
+                if (!(nmem = vmalloc (Vmheap, sizeof (node_t))))
+                    SUerror ("vg_dq_vt_autoinvtab", "cannot allocate nmem");
+                memset (nmem, 0, sizeof (node_t));
+                memcpy (nmem->s_level, ls[li].s_level, SZ_level);
+                memcpy (nmem->s_id, m1p, SZ_id);
+                if ((np = dtinsert (nodedict, nmem)) != nmem)
+                    SUerror ("vg_dq_vt_autoinvtab", "cannot insert node");
+                np->s_li = li;
+            }
+        }
+    }
+}
+END{
+    node_t *np;
+    sl_inv_node_t *inp;
+    sl_transrev_t *otrp;
+    filter_t *filterp;
+    email_t *emailp;
+    profile_t *profilep;
+    threshold_t *thresholdp;
+    char buf[6][4000];
+    char **ids;
+    int idn, idi;
+
+    for (np = dtfirst (nodedict); np; np = dtnext (nodedict, np)) {
+        for (
+            inp = sl_inv_nodefindfirst (np->s_level, np->s_id);
+            inp;
+            inp = sl_inv_nodefindnext (np->s_level, np->s_id)
+        ) {
+            if (!inp->sl_val[0] || !inp->sl_key[0])
+                continue;
+            VG_htmlenc (inp->sl_val, buf[0], 4000, FALSE);
+            sfprintf (
+                sfstdout, "I|%s|%s|%s|%s\n",
+                np->s_level, np->s_id, inp->sl_key, buf[0]
+            );
+        }
+        if (showfilters) {
+            if (!(ids = vmalloc (Vmheap, 10 * sizeof (char *))))
+                SUerror ("vg_dq_vt_autoinvtab", "cannot grow id array");
+            idn = 10;
+            idi = 0;
+            if (!(ids[idi++] = vmstrdup (Vmheap, np->s_id)))
+                SUerror ("vg_dq_vt_autoinvtab", "cannot copy main id");
+            for (
+                otrp = sl_transrevfindfirst (np->s_id); otrp;
+                otrp = sl_transrevfindnext (np->s_id)
+            ) {
+                if (!otrp->sl_inid[0])
+                    continue;
+                if (idi + 1 >= idn) {
+                    if (!(ids = vmresize (
+                        Vmheap, ids, (idi + 10) * sizeof (char *), VM_RSCOPY
+                    )))
+                        SUerror ("vg_dq_vt_autoinvtab", "cannot grow id array");
+                    idn = idi + 10;
+                }
+                sfprintf (
+                    sfstdout, "I|%s|%s|trans%d|%s\n",
+                    np->s_level, np->s_id, idi - 1, otrp->sl_inid
+                );
+                if (!(ids[idi++] = vmstrdup (Vmheap, otrp->sl_inid)))
+                    SUerror ("vg_dq_vt_autoinvtab", "cannot copy trans id");
+            }
+            for (
+                filterp = filterlistfirst (np->s_level, ids, idi);
+                filterp;
+                filterp = filterlistnext (np->s_level, ids, idi)
+            ) {
+                stbuf[0] = etbuf[0] = sdbuf[0] = edbuf[0] = sbuf[0] = '?';
+                stbuf[1] = etbuf[1] = sdbuf[1] = edbuf[1] = sbuf[1] = 0;
+                sfsprintf (
+                    stbuf, BUFLEN, "%02d:%02d",
+                    filterp->st / 60, filterp->st % 60
+                );
+                sfsprintf (
+                    etbuf, BUFLEN, "%02d:%02d",
+                    filterp->et / 60, filterp->et % 60
+                );
+                if (filterp->sdate > 0)
+                    tmfmt (sdbuf, BUFLEN, "%Y/%m/%d", &filterp->sdate);
+                if (filterp->edate > 0)
+                    tmfmt (edbuf, BUFLEN, "%Y/%m/%d", &filterp->edate);
+                else
+                    sfsprintf (edbuf, BUFLEN, "%s", "indefinitely");
+                if (filterp->sevnum == -1)
+                    sfsprintf (sbuf, BUFLEN, "%s", "unchanged");
+                else
+                    sfsprintf (
+                        sbuf, BUFLEN, "%s", sevmaps[filterp->sevnum].name
+                    );
+                VG_htmlenc (filterp->objstr, buf[1], 4000, FALSE);
+                VG_htmlenc (filterp->idstr, buf[2], 4000, FALSE);
+                VG_htmlenc (filterp->textstr, buf[3], 4000, FALSE);
+                VG_htmlenc (filterp->com, buf[4], 4000, FALSE);
+                VG_htmlenc (filterp->account, buf[5], 4000, FALSE);
+                sfprintf (
+                    sfstdout,
+                    "F|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n",
+                    np->s_level, np->s_id,
+                    buf[1], buf[2], buf[3],
+                    modemap[filterp->tm], modemap[filterp->sm], sbuf,
+                    stbuf, etbuf, sdbuf, edbuf, repmap[filterp->repeat],
+                    buf[4], buf[5]
+                );
+            }
+        }
+        if (showemails) {
+            for (
+                emailp = emaillistfirst (np->s_level, np->s_id);
+                emailp;
+                emailp = emaillistnext (np->s_level, np->s_id)
+            ) {
+                stbuf[0] = etbuf[0] = sdbuf[0] = edbuf[0] = sbuf[0] = '?';
+                stbuf[1] = etbuf[1] = sdbuf[1] = edbuf[1] = sbuf[1] = 0;
+                sfsprintf (
+                    stbuf, BUFLEN, "%02d:%02d",
+                    emailp->st / 60, emailp->st % 60
+                );
+                sfsprintf (
+                    etbuf, BUFLEN, "%02d:%02d",
+                    emailp->et / 60, emailp->et % 60
+                );
+                if (emailp->sdate > 0)
+                    tmfmt (sdbuf, BUFLEN, "%Y/%m/%d", &emailp->sdate);
+                if (emailp->edate > 0)
+                    tmfmt (edbuf, BUFLEN, "%Y/%m/%d", &emailp->edate);
+                else
+                    sfsprintf (edbuf, BUFLEN, "%s", "indefinitely");
+                if (emailp->tmode == -1)
+                    sfsprintf (tbuf, BUFLEN, "%s", "any");
+                else
+                    sfsprintf (tbuf, BUFLEN, "%s", modemap[emailp->tmode]);
+                if (emailp->sevnum == -1)
+                    sfsprintf (sbuf, BUFLEN, "%s", "any");
+                else
+                    sfsprintf (
+                        sbuf, BUFLEN, "%s", sevmaps[emailp->sevnum].name
+                    );
+                VG_htmlenc (emailp->objstr, buf[1], 4000, FALSE);
+                VG_htmlenc (emailp->idstr, buf[2], 4000, FALSE);
+                VG_htmlenc (emailp->textstr, buf[3], 4000, FALSE);
+                VG_htmlenc (emailp->account, buf[4], 4000, FALSE);
+                sfprintf (
+                    sfstdout,
+                    "E|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n",
+                    np->s_level, np->s_id,
+                    buf[1], buf[2], buf[3],
+                    tbuf, sbuf,
+                    stbuf, etbuf, sdbuf, edbuf, repmap[emailp->repeat],
+                    emailp->faddr, emailp->taddr, emailp->subject,
+                    stylemap[emailp->style], buf[4]
+                );
+            }
+        }
+        if (showprofiles) {
+            for (
+                profilep = profilelistfirst (np->s_level, np->s_id);
+                profilep;
+                profilep = profilelistnext (np->s_level, np->s_id)
+            ) {
+                VG_htmlenc (profilep->idstr, buf[1], 4000, FALSE);
+                VG_htmlenc (profilep->sname, buf[2], 4000, FALSE);
+                VG_htmlenc (profilep->sstatus, buf[3], 4000, FALSE);
+                VG_htmlenc (profilep->svalue, buf[4], 4000, FALSE);
+                VG_htmlenc (profilep->account, buf[5], 4000, FALSE);
+                sfprintf (
+                    sfstdout, "P|%s|%s|%s|%s|%s|%s|%s\n",
+                    np->s_level, np->s_id,
+                    buf[1], buf[2], buf[3], buf[4], buf[5]
+                );
+            }
+        }
+        if (showthresholds) {
+            for (
+                thresholdp = thresholdlistfirst (np->s_level, np->s_id);
+                thresholdp;
+                thresholdp = thresholdlistnext (np->s_level, np->s_id)
+            ) {
+                VG_htmlenc (thresholdp->idstr, buf[1], 4000, FALSE);
+                VG_htmlenc (thresholdp->sname, buf[2], 4000, FALSE);
+                VG_htmlenc (thresholdp->sstatus, buf[3], 4000, FALSE);
+                VG_htmlenc (thresholdp->svalue, buf[4], 4000, FALSE);
+                VG_htmlenc (thresholdp->account, buf[5], 4000, FALSE);
+                sfprintf (
+                    sfstdout, "T|%s|%s|%s|%s|%s|%s|%s\n",
+                    np->s_level, np->s_id,
+                    buf[1], buf[2], buf[3], buf[4], buf[5]
+                );
+            }
+        }
+    }
+}

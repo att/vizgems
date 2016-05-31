@@ -1,0 +1,301 @@
+#
+# SWIFTPL
+#
+#     this file defines the possible objects
+#     and some object-specific procedures
+#
+spl.data = [
+    'attr' = [
+        0 = 'name';
+        1 = 'comments';
+        2 = 'args';
+        3 = 'fontsize';
+        4 = 'fontname';
+        5 = 'finishedfontcolor';
+        6 = 'unfinishedfontcolor';
+        7 = 'finishedcolor';
+        8 = 'unfinishedcolor';
+        9 = 'finishedstyle';
+        10 = 'unfinishedstyle';
+    ];
+    'objorder' = [
+        0 = 'directory';
+        1 = 'ddstool';
+        2 = 'maketool';
+        3 = 'othertool';
+        4 = 'edgea';
+    ];
+    'nodes' = [
+        'directory' = [
+            'gattr' = [
+                'shape' = 'ellipse';
+                'label' = 'directory';
+            ];
+            'pattr' = [
+                'label' = 'directory';
+            ];
+            'dattr' = [
+                'name' = '';
+                'checkinterval' = '';
+                'comments' = '';
+            ];
+        ];
+        'ddstool' =  [
+            'gattr' = [
+                'shape' = 'box';
+                'label' = 'dds tool';
+            ];
+            'pattr' = [
+                'label' = 'ddstool';
+            ];
+            'dattr' = [
+                'name' = '';
+                'args' = '';
+                'comments' = '';
+            ];
+        ];
+        'maketool' = [
+            'gattr' = [
+                'shape' = 'trapezium';
+                'label' = 'make';
+            ];
+            'pattr' = [
+                'label' = 'make';
+            ];
+            'dattr' = [
+                'name' = '';
+                'comments' = '';
+            ];
+        ];
+        'othertool' = [
+            'gattr' = [
+                'shape' = 'parallelogram';
+                'label' = 'other tool';
+            ];
+            'pattr' = [
+                'label' = 'othertool';
+            ];
+            'dattr' = [
+                'name' = '';
+                'args' = '';
+                'comments' = '';
+            ];
+        ];
+    ];
+    'edges' = [
+        'edgea' = [
+            'gattr' = [
+                'color' = 'red';
+            ];
+            'pattr' = [
+                'label' = 'fixed\norder';
+            ];
+            'dattr' = [
+                'name' = '';
+                'comments' = '';
+            ];
+        ];
+    ];
+    'labelsizes' = [
+        'name' = [
+            'node' = ['x' = 16; 'y' = 3;];
+            'edge' = ['x' = 10; 'y' = 3;];
+        ];
+        'name args' = [
+            'node' = ['x' = 30; 'y' = 120;];
+            'edge' = ['x' = 30; 'y' = 120;];
+        ];
+        'all' = [
+            'node' = ['x' = 16; 'y' = 6;];
+            'edge' = ['x' = 10; 'y' = 3;];
+        ];
+    ];
+    'global' = [
+        'node' = [
+            'attr' = [
+                'fontsize' = '14';
+                'fontname' = 'Times-Roman';
+                'finishedfontcolor' = 'black';
+                'unfinishedfontcolor' = 'white';
+                'finishedcolor' = 'green';
+                'unfinishedcolor' = 'red';
+                'finishedstyle' = 'filled';
+                'unfinishedstyle' = 'filled';
+            ];
+        ];
+        'edge' = [
+            'attr' = [
+                'fontsize' = '14';
+                'fontname' = 'Times-Roman';
+                'finishedfontcolor' = 'black';
+                'unfinishedfontcolor' = 'white';
+                'finishedcolor' = 'darkgreen';
+                'unfinishedcolor' = 'red';
+                'finishedstyle' = 'none';
+                'unfinishedstyle' = 'bold';
+            ];
+        ];
+    ];
+];
+spl.objects.init = function () {
+};
+#
+# actions
+#
+spl.objisfinished = function (obj) {
+    if (obj.nid >= 0) {
+        if (obj.attr.name & obj.attr.name ~= '')
+            return 1;
+    } else { # it's an edge
+        return 1;
+    }
+    return 0;
+};
+spl.setobj = function (t, obj) {
+    local s, size, gobj, attr, l1, l2, l3, l4;
+
+    if (obj.nid >= 0) {
+        gobj = spl.data.global.node;
+        size = spl.data.labelsizes[t.labelmode].node;
+        attr = obj.attr;
+        t.gt.undrawnode (t.gt, t.gt.views, obj);
+        if (t.labelmode == 'name')
+            l1 = spl.fmtlabel (attr.name, size.x, size.y, 'no');
+        else if (t.labelmode == 'name args')
+            l1 = spl.fmtlabel (concat (
+                attr.name, attr.args
+            ), size.x, size.y, 'no');
+        else if (t.labelmode == 'all') {
+            l1 = '';
+            l2 = '';
+            l3 = '';
+            if (attr.name & attr.name ~= '')
+                l1 = spl.fmtlabel (attr.name, size.x, size.y, 'no');
+            if (attr.args & attr.args ~= '')
+                l2 = spl.fmtlabel (attr.args, size.x, size.y, 'no');
+            if (attr.comments & attr.comments ~= '')
+                l3 = spl.fmtlabel (attr.comments, size.x, size.y, 'no');
+            l1 = concat (l1, '\n', l2, '\n', l3);
+        }
+        if (l1 ~= attr.label) {
+            attr.label = l1;
+            t.changed = 1;
+        }
+        remove ('style', attr);
+        attr.fontsize = gobj.attr.fontsize;
+        attr.fontname = gobj.attr.fontname;
+        if (spl.objisfinished (obj)) {
+            attr.fontcolor = gobj.attr.finishedfontcolor;
+            attr.color = gobj.attr.finishedcolor;
+            if (gobj.attr.finishedstyle ~= 'none')
+                attr.style = gobj.attr.finishedstyle;
+            else if (spl.data.nodes[obj.attr.type].gattr.style)
+                attr.style = spl.data.nodes[obj.attr.type].gattr.style;
+        } else {
+            attr.fontcolor = gobj.attr.unfinishedfontcolor;
+            attr.color = gobj.attr.unfinishedcolor;
+            if (gobj.attr.unfinishedstyle ~= 'none')
+                attr.style = gobj.attr.unfinishedstyle;
+            else if (spl.data.nodes[obj.attr.type].gattr.style)
+                attr.style = spl.data.nodes[obj.attr.type].gattr.style;
+        }
+        t.gt.unpacknodeattr (t.gt, obj);
+        t.gt.drawnode (t.gt, t.gt.views, obj);
+    } else {
+        gobj = spl.data.global.edge;
+        size = spl.data.labelsizes[t.labelmode].edge;
+        attr = obj.attr;
+        t.gt.undrawedge (t.gt, t.gt.views, obj);
+        # edge labels slow down dot, so if no description, no edge
+        if (t.labelmode == 'name')
+            l1 = spl.fmtlabel (attr.name, size.x, size.y, 'no');
+        else if (t.labelmode == 'name args')
+            l1 = spl.fmtlabel (concat (
+                attr.name, attr.args
+            ), size.x, size.y, 'no');
+        else if (t.labelmode == 'all') {
+            l1 = '';
+            l2 = '';
+            l3 = '';
+            if (attr.name & attr.name ~= '')
+                l1 = spl.fmtlabel (attr.name, size.x, size.y, 'no');
+            if (attr.args & attr.args ~= '')
+                l2 = spl.fmtlabel (attr.args, size.x, size.y, 'no');
+            if (attr.comments & attr.comments ~= '')
+                l3 = spl.fmtlabel (attr.comments, size.x, size.y, 'no');
+            l1 = concat (l1, '\n', l2, '\n', l3);
+        }
+        if (l1 ~= attr.label) {
+            attr.label = l1;
+            t.changed = 1;
+        }
+        remove ('style', attr);
+        attr.fontsize = gobj.attr.fontsize;
+        attr.fontname = gobj.attr.fontname;
+        if (spl.objisfinished (obj)) {
+            attr.fontcolor = gobj.attr.finishedfontcolor;
+            attr.color = gobj.attr.finishedcolor;
+            if (gobj.attr.finishedstyle ~= 'none')
+                attr.style = gobj.attr.finishedstyle;
+            else if (spl.data.edges[obj.attr.type].gattr.style)
+                attr.style = spl.data.edges[obj.attr.type].gattr.style;
+        } else {
+            attr.fontcolor = gobj.attr.unfinishedfontcolor;
+            attr.color = gobj.attr.unfinishedcolor;
+            if (gobj.attr.unfinishedstyle ~= 'none')
+                attr.style = gobj.attr.unfinishedstyle;
+            else if (spl.data.edges[obj.attr.type].gattr.style)
+                attr.style = spl.data.edges[obj.attr.type].gattr.style;
+        }
+        t.gt.unpackedgeattr (t.gt, obj);
+        t.gt.drawedge (t.gt, t.gt.views, obj);
+    }
+    t.changed = 1;
+};
+spl.setdef = function (t, obj) {
+    local nid, eid;
+
+    if (obj == spl.data.global.node)
+        for (nid in t.gt.graph.nodes)
+            spl.setobj (t, t.gt.graph.nodes[nid]);
+    else
+        for (eid in t.gt.graph.edges)
+            spl.setobj (t, t.gt.graph.edges[eid]);
+    spl.saverc ();
+};
+spl.orderattr = function (t, obj, attrs) {
+    if (obj.nid >= 0) { # it's a node
+        return [
+            0 = [
+                'label' = 'NECESSARY';
+                'order' = [
+                    0 = 'name';
+                    1 = 'args';
+                ];
+            ];
+            1 = [
+                'label' = 'OPTIONAL';
+                'order' = [
+                    0 = 'comments';
+                ];
+            ];
+        ];
+    } else if (obj.eid >= 0) { # it's an edge
+        return [
+            0 = [
+                'label' = 'NECESSARY';
+                'order' = [
+                    0 = 'name';
+                    1 = 'args';
+                ];
+            ];
+            1 = [
+                'label' = 'OPTIONAL';
+                'order' = [
+                    0 = 'comments';
+                ];
+            ];
+        ];
+    } else
+        return [0 = ['order' = spl.data.attr;];];
+};

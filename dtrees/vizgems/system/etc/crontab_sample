@@ -1,0 +1,21 @@
+#
+# data processing jobs
+#
+# alarmjob doesn't terminate
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/alarmjob
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/statjob
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/genericjob
+0,15,30,45 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/alarmjob aggregate
+0,15,30,45 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/statjob aggregate
+0,15,30,45 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/genericjob aggregate
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/invjob
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/propjob group1
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/propjob group2
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/confjob
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/scopejob
+0,15,30,45 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/cleanjob
+#
+# monitoring jobs
+0,15,30,45 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/checklogs critical fifteen
+0 * * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/checklogs important hourly
+0 0 * * * /bin/ksh SWIFT_CFG_DSYSTEMDIR/etc/checklogs all daily

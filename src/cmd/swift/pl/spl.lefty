@@ -1,0 +1,138 @@
+#
+# SWIFTPL
+#
+#     this file implements the main part of SWIFTPL
+#
+load ('dotty.lefty');
+spl = [];
+spl.version = '1.0';
+spl.coords = [
+    'qview' = [
+        'size' = ['x' = 400; 'y' = 300;]; 'origin' = ['x' = 100; 'y' = 200;];
+    ];
+    'pview' = [
+        'size' = ['x' = 500; 'y' = 60;]; 'origin' = ['x' = 1; 'y' = 1;];
+    ];
+    'cview' = [
+        'size' = ['x' = 400; 'y' = 400;]; 'origin' = ['x' = 640; 'y' = 1;];
+    ];
+    'mview' = [
+        'size' = ['x' = 640; 'y' = 500;]; 'origin' = ['x' = 1; 'y' = 140;];
+    ];
+    'label' = [
+        'size' = ['x' = 100; 'y' = 25;];
+    ];
+    'graph' = [
+        'size' = ['x' = 400; 'y' = 500;];
+    ];
+];
+spl.init = function (onlineflag) {
+    load ('spl_query.lefty');
+    load ('spl_proto.lefty');
+    load ('spl_objects.lefty');
+    load ('spl_view.lefty');
+    load ('spl_gen.lefty');
+    dotty.init ();
+    if (onlineflag == 1) {
+        spl.view.init ();
+        spl.proto.init ();
+    }
+    spl.loadrc ();
+};
+spl.main = function (name) {
+    spl.view.createview (name);
+};
+spl.loadrc = function () {
+    local s, fd;
+
+    if (~(s = getenv ('HOME')))
+        return;
+    s = concat (s, '/.splrc');
+    if (~((fd = openio ('file', s, 'r')) >= 0))
+        return;
+    closeio (fd);
+    load (s);
+};
+spl.saverc = function () {
+    local s, fd, aid;
+
+    if (~(s = getenv ('HOME')))
+        return;
+    s = concat (s, '/.splrc');
+    if (~((fd = openio ('file', s, 'w')) >= 0))
+        return;
+    for (aid in spl.data.global.node.attr)
+        writeline (fd, concat ('spl.data.global.node.attr.', aid,
+                '="', spl.data.global.node.attr[aid], '";'));
+    for (aid in spl.data.global.edge.attr)
+        writeline (fd, concat ('spl.data.global.edge.attr.', aid,
+                '="', spl.data.global.edge.attr[aid], '";'));
+    closeio (fd);
+};
+spl.canonname = function (name) {
+    local t, n, i;
+
+    t = split (name, '.');
+    if ((n = tablesize (t) - 2) < 0)
+        n = 0;
+    name = t[0];
+    for (i = 1; i <= n; i = i + 1)
+        name = concat (name, '.', t[i]);
+    return name;
+};
+spl.fmtlabel = function (des, w, h, pad) {
+    local t, n, firstpos, lastsep, i, l, s, j;
+
+    t = split (des, '');
+    n = tablesize (t);
+    firstpos = 0;
+    lastsep = 0;
+    i = 0;
+    l = 0;
+    s = '';
+    while (i < n) {
+        if (t[i] == ' ' | t[i] == '	' | t[i] == ',' | t[i] == ';')
+            lastsep = i;
+        if (i - firstpos >= w) {
+            if (lastsep == firstpos) {
+                for (j = i + 1; j < n; j = j + 1)
+                    if (t[j] == ' ' | t[j] == '	' | t[j] == ',' | t[j] == ';') {
+                        lastsep = j;
+                        break;
+                    }
+                if (j == n)
+                    lastsep = n;
+            }
+            for (j = firstpos; j < lastsep; j = j + 1)
+                s = concat (s, t[j]);
+            if (t[lastsep] == ',' | t[lastsep] == ';')
+                s = concat (s, t[lastsep]);
+            l = l + 1;
+            if (l == h) {
+                if (i < n - 1)
+                    s = concat (s, '...');
+                break;
+            }
+            s = concat (s, '\n');
+            firstpos = lastsep + 1;
+            lastsep = firstpos;
+            i = firstpos;
+        } else
+            i = i + 1;
+    }
+    if (l ~= h)
+        for (j = firstpos; j < n; j = j + 1)
+            s = concat (s, t[j]);
+    if (pad == 'yes')
+        for (j = l; j < h; j = j + 1)
+            if (j % 2 == 0)
+                s = concat (s, '\n');
+            else
+                s = concat ('\n', s);
+    return s;
+};
+spl.loadmodule = function (name) {
+    if (spl[name])
+        return;
+    load (concat ('spl_', name, '.lefty'));
+};

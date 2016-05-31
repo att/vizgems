@@ -1,0 +1,22 @@
+Alias SWIFT_CFG_WPREFIX/swift/ "SWIFT_CFG_DWWWDIR/htdocs/swift/"
+Alias SWIFT_CFG_WPREFIX/proj/ "SWIFT_CFG_DWWWDIR/htdocs/proj/"
+ScriptAlias /cgi-bin-vg-members/ SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members/
+ScriptAlias SWIFT_CFG_WPREFIX/cgi-bin-vg-members/ SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members/
+ScriptAlias /cgi-bin/ SWIFT_CFG_DWWWDIR/cgi-bin/
+ScriptAlias SWIFT_CFG_WPREFIX/cgi-bin/ SWIFT_CFG_DWWWDIR/cgi-bin/
+
+<Directory "SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members">
+    Options +ExecCGI
+    AllowOverride All
+    Order allow,deny
+    Allow from all
+</Directory>
+
+TraceEnable off
+
+RewriteEngine on
+RewriteRule ^/rest/dataquery/(.*) SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members/vg_rest_dataquery.cgi?$1 [H=cgi-script]
+RewriteRule ^/rest/dataupload/(.*) SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members/vg_rest_dataupload.cgi?$1 [H=cgi-script]
+RewriteRule ^/rest/confquery/(.*) SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members/vg_rest_confquery.cgi?$1 [H=cgi-script]
+RewriteRule ^/rest/confupdate/(.*) SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members/vg_rest_confupdate.cgi?$1 [H=cgi-script]
+RewriteRule ^/rest/services SWIFT_CFG_DWWWDIR/htdocs/proj/vg/rest/services.html

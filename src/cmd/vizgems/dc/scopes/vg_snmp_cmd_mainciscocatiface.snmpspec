@@ -1,0 +1,184 @@
+rec=(
+    keys='IFACE IPORT'
+    walk0=(
+        name='.1.3.6.1.2.1.2.2.1.8.${IFACE}' # ifOperStatus
+        type=STRING
+        value='${ISTATE}'
+    )
+    walk1=(
+        name='.1.3.6.1.2.1.31.1.1.1.1.${IFACE}' # ifName
+        type=STRING
+        value='${INAME}'
+    )
+    walk2=(
+        name='.1.3.6.1.2.1.2.2.1.2.${IFACE}' # ifDescr
+        type=STRING
+        value='${IDESCR}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.9.5.1.4.1.1.11.${IPORT}' # portIfIndex
+        type=INTEGER
+        value='${IFACE}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.9.5.1.4.1.1.4.${IPORT}' # portName
+        type=STRING
+        value='${IALIAS}'
+    )
+    walk5=(
+        name='.1.3.6.1.2.1.31.1.1.1.15.${IFACE}' # ifHighSpeed
+        type=INTEGER
+        value='${S}'
+    )
+    walk6=(
+        name='.1.3.6.1.2.1.31.1.1.1.6.${IFACE}' # ifHCInOctets
+        type=INTEGER
+        value='${IB}'
+    )
+    walk7=(
+        name='.1.3.6.1.2.1.31.1.1.1.10.${IFACE}' # ifHCOutOctets
+        type=INTEGER
+        value='${OB}'
+    )
+    walk8=(
+        name='.1.3.6.1.2.1.2.2.1.13.${IFACE}' # ifInDiscards
+        type=INTEGER
+        value='${ID}'
+    )
+    walk9=(
+        name='.1.3.6.1.2.1.2.2.1.19.${IFACE}' # ifOutDiscards
+        type=INTEGER
+        value='${OD}'
+    )
+    walk10=(
+        name='.1.3.6.1.2.1.2.2.1.14.${IFACE}' # ifInErrors
+        type=INTEGER
+        value='${IE}'
+    )
+    walk11=(
+        name='.1.3.6.1.2.1.2.2.1.20.${IFACE}' # ifOutErrors
+        type=INTEGER
+        value='${OE}'
+    )
+    walk12=(
+        name='.1.3.6.1.2.1.2.2.1.10.${IFACE}' # ifInOctets
+        type=INTEGER
+        value='${IB32}'
+    )
+    walk13=(
+        name='.1.3.6.1.2.1.2.2.1.16.${IFACE}' # ifOutOctets
+        type=INTEGER
+        value='${OB32}'
+    )
+    outkey=IFACE
+    output='${IFACE}|${INAME}|${IDESCR}|${IALIAS}|${S}|${IB}|${OB}|${ID}|${OD}|${IE}|${OE}|${ISTATE}|${IB32}|${OB32}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r iface iname idescr ialias s ib ob id od ie oe st ib32 ob32; do
+#                (( s == 0 )) && continue
+                if [[ $st == up* ]] && (( s > 0 && ob + ib > 0 )) then
+                    print "node|o|$INV_TARGET|si_iface$iface|$iface"
+                    print -u3 "ifs[$iface]=1"
+                elif [[ $st == up* ]] && (( s > 0 && ob32 + ib32 > 0 )) then
+                    print "node|o|$INV_TARGET|si_iface$iface|$iface"
+                    print -u3 "ifs[$iface]=2"
+                fi
+                if [[ $st == up* ]] then
+                    print "node|o|$INV_TARGET|si_istatus$iface|up"
+                else
+                    print "node|o|$INV_TARGET|si_istatus$iface|down"
+                fi
+                [[ $idescr != *Ethernet* ]] && idescr="$iname-$idescr"
+                ialias=${ialias//[\"\|]/}
+                (( as = s * 1000000.0 ))
+                print "node|o|$INV_TARGET|si_iname$iface|$iname"
+                print "node|o|$INV_TARGET|si_idescr$iface|$idescr"
+                print "node|o|$INV_TARGET|si_ialias$iface|$ialias"
+                print "node|o|$INV_TARGET|si_ispeed$iface|$as"
+                print "node|o|$INV_TARGET|si_sz_tcpip_inbw.$iface|$s"
+                print "node|o|$INV_TARGET|si_sz_tcpip_outbw.$iface|$s"
+            done 3> ciscocatiface.list.new
+            mv ciscocatiface.list.new ciscocatiface.list
+            ;;
+        *)
+            typeset -A pvs nvs ifs
+            [[ -f ./ciscocatiface.state ]] && . ./ciscocatiface.state
+            [[ -f ./ciscocatiface.list ]] && . ./ciscocatiface.list
+            typeset -F3 ibw obw
+            in=0
+            while read -r iface iname idescr ialias s ib ob id od ie oe st ib32 ob32; do
+#                (( s == 0 )) && continue
+                if [[ $st != up* ]] || (( s == 0 || (ob + ib == 0 && ob32 + ib32 == 0) )) then
+                    continue
+                fi
+                if (( ifs[$iface] < 1 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+                [[ $idescr != *Ethernet* ]] && idescr="$iname-$idescr"
+                if (( ifs[$iface] == 2 )) then
+                    ob=$ob32
+                    ib=$ib32
+                fi
+                ifs[$iface]=3
+                (( in++ ))
+                if [[ ${pvs[$iface]} != "" ]] then
+                    set -A vs -- ${pvs[$iface]}
+                    (( as = s * 1000000.0 ))
+                    ib=${ib:-${vs[1]}}
+                    ob=${ob:-${vs[2]}}
+                    if [[ $id == "" || $od == "" ]] then
+                        d=${vs[3]}
+                    else
+                        (( d = id + od ))
+                    fi
+                    if [[ $ie == "" || $oe == "" ]] then
+                        e=${vs[4]}
+                    else
+                        (( e = ie + oe ))
+                    fi
+                    (( dt = VG_JOBTS - vs[0] ))
+                    (( dib = ib - vs[1] ))
+                    (( dob = ob - vs[2] ))
+                    (( dd = d - vs[3] ))
+                    (( de = e - vs[4] ))
+                    baddt=0
+                    (( dt <= 0 || dt > 12 * 60 )) && baddt=1
+                    if (( baddt == 0 && dib >= 0 )) then
+                        (( ibw = (dib * 8.0) / (dt * 1000000.0) ))
+                        print "rt=STAT name=\"tcpip_inbw.${iface}\" type=number num=$ibw unit=mbps label=\"In BW ($idescr)\""
+                    elif (( baddt == 0 )) then
+                        print "rt=STAT name=\"tcpip_inbw.${iface}\" nodata=2"
+                    fi
+                    if (( baddt == 0 && dob >= 0 )) then
+                        (( obw = (dob * 8.0) / (dt * 1000000.0) ))
+                        print "rt=STAT name=\"tcpip_outbw.${iface}\" type=number num=$obw unit=mbps label=\"Out BW ($idescr)\""
+                    elif (( baddt == 0 )) then
+                        print "rt=STAT name=\"tcpip_outbw.${iface}\" nodata=2"
+                    fi
+                    if (( baddt == 0 && dd >= 0 )) then
+                        print "rt=STAT norep=y name=\"tcpip_disc.${iface}\" type=number num=$dd unit= label=\"Discards ($idescr)\""
+                    elif (( baddt == 0 )) then
+                        print "rt=STAT norep=y name=\"tcpip_disc.${iface}\" nodata=2"
+                    fi
+                    if (( baddt == 0 && de >= 0 )) then
+                        print "rt=STAT norep=y name=\"tcpip_err.${iface}\" type=number num=$de unit= label=\"Errors ($idescr)\""
+                    elif (( baddt == 0 )) then
+                        print "rt=STAT norep=y name=\"tcpip_err.${iface}\" nodata=2"
+                    fi
+                fi
+                if [[ $ib != "" && $ob != "" ]] then
+                    print -u3 "pvs[$iface]=\"$VG_JOBTS|$ib|$ob|$d|$e\""
+                fi
+            done 3> ciscocatiface.state.new
+            mv ciscocatiface.state.new ciscocatiface.state
+            for iface in "${!ifs[@]}"; do
+                if (( in > 0 && ifs[$iface] != 3 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+            done
+            ;;
+        esac
+    }'
+)

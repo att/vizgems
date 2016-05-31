@@ -1,0 +1,203 @@
+#!/bin/ksh
+
+function timedrun { # $1 = timeout, $2-* cmd and args
+    typeset maxt jid i
+
+    maxt=$1
+    shift 1
+
+    set -o monitor
+    "$@" &
+    jid=$!
+    for (( i = 0; i < maxt; i += 0.1 )) do
+        kill -0 $jid 2> /dev/null || break
+        sleep 0.1
+    done
+    if (( i >= maxt )) then
+        if kill -9 -$jid 2> /dev/null; then
+            print -u2 $(ts) timeout for job "$@"
+        fi
+    fi
+    wait $jid 2> /dev/null
+    return $?
+}
+
+function ts {
+    printf '%(%Y/%m/%d %H:%M:%S)T'
+}
+
+workdirs='health alarm stat autoinv'
+suffix=
+if [[ $1 != '' ]] then
+    if [[ $1 == health ]] then
+        workdirs=health
+        suffix=health
+    elif [[ $1 == data ]] then
+        workdirs='alarm stat autoinv'
+    fi
+fi
+
+exitfile=SWIFT_CFG_DSCOPESDIR/exit.upload$suffix
+lockfile=SWIFT_CFG_DSCOPESDIR/lock.upload$suffix
+
+if [[ -f $exitfile ]] then
+    exit
+fi
+set -o noclobber
+if ! command exec 3> ${lockfile}; then
+    if kill -0 $(< ${lockfile}); then
+        exit 0
+    else
+        rm -f ${lockfile}
+        exit 0
+    fi
+fi 2> /dev/null
+print -u3 $$
+set +o noclobber
+
+trap 'rm -f ${lockfile}' HUP QUIT TERM KILL EXIT
+
+mkdir -p SWIFT_CFG_DSCOPESDIR
+cd SWIFT_CFG_DSCOPESDIR || {
+    print -u2 $(ts) cannot cd SWIFT_CFG_DSCOPESDIR; exit 1
+}
+mkdir -p SWIFT_CFG_DSCOPESDIR/outgoing
+[[ ! -d SWIFT_CFG_DSCOPESDIR/outgoing ]] && {
+    print -u2 $(ts) cannot create SWIFT_CFG_DSCOPESDIR/outgoing
+    exit 1
+}
+
+logfile=SWIFT_CFG_DSCOPESDIR/logs/upload$suffix.$(date -f '%Y%m%d-%H').log
+exec >> $logfile 2>&1
+
+[[ -f ./etc/upload.info ]] && . ./etc/upload.info
+SLEEPTIME=${SLEEPTIME:-60}
+float transrate=${TRANSRATE:-1000000}
+transjobs=${TRANSJOBS:-8}
+
+tdir=SWIFT_CFG_DSCOPESDIR/outgoing
+sfl='-C -o ConnectTimeout=60 -o ServerAliveInterval=15 -o ServerAliveCountMax=2'
+
+ALARMSYS=${ALARMSYS:-NONE}
+STATSYS=${STATSYS:-NONE}
+HEALTHSYS=${HEALTHSYS:-NONE}
+AUTOINVSYS=${AUTOINVSYS:-NONE}
+
+td=0
+if [[ -f ./etc/time.diff ]] then
+    td=$(< ./etc/time.diff)
+fi
+ts=$(printf '%(%#)T')
+(( ts += td ))
+
+typeset -l sn=$VG_SYSNAME
+bsuffix=$(printf '%(%Y.%m.%d.%H.%M.%S)T' \#$ts).bundle.$sn
+
+typeset -u NAM
+
+for dir in $workdirs; do
+    tw -i -d $tdir/$dir -e 'type != DIR && mtime < "7 days ago"' rm
+    if [[ $dir == alarm || $dir == stat ]] then
+        nam2=${dir}s
+    else
+        nam2=$dir
+    fi
+    dir2=$dir
+    NAM=$dir
+    typeset -n specs=${NAM}SYS
+    if [[ $specs == NONE ]] then
+        for file in $tdir/$dir/*.xml; do
+            [[ ! -f $file ]] && continue
+            rm $file
+        done
+        continue
+    fi
+
+    havefiles=n
+    for file in $tdir/$dir/*.xml; do
+        [[ ! -f $file ]] && continue
+        if [[ ! -s $file ]] then
+            rm $file
+            continue
+        fi
+        if [[ $havefiles == n ]] then
+            mkdir -p $tdir/$dir/tmp
+            if [[ ! -d $tdir/$dir/tmp ]] then
+                print -u2 $(ts) cannot create $tdir/$dir/tmp
+                sleep $SLEEPTIME
+                exit 1
+            fi
+        fi
+        havefiles=y
+        tfile=${file##*/}
+        mv $file $tdir/$dir/tmp
+    done
+
+    for file in $tdir/$dir/tmp/*.xml; do
+        [[ ! -f $file ]] && continue
+        cat $file
+    done > $tdir/$dir/tmp/$nam2.$bsuffix
+
+    for spec in $specs; do
+        [[ $spec != *:* ]] && continue
+        hostspec=${spec%%:*}
+        rdir=${spec#"$hostspec:"}
+        mkdir -p $tdir/$dir/tmp/$hostspec
+        if [[ ! -d $tdir/$dir/tmp/$hostspec ]] then
+            print -u2 $(ts) cannot create $tdir/$dir/tmp/$hostspec
+            continue
+        fi
+        for file in $tdir/$dir/tmp/*.bundle.*; do
+            [[ ! -f $file ]] && continue
+            [[ ! -s $file ]] && continue
+            ln $file $tdir/$dir/tmp/$hostspec/${file##*/}.xml
+        done
+    done
+
+    for file in $tdir/$dir/tmp/*.xml $tdir/$dir/tmp/*.bundle.*; do
+        [[ ! -f $file ]] && continue
+        rm $file
+    done
+
+    [[ $havefiles == y ]] && rmdir $tdir/$dir/tmp/* 2> /dev/null
+
+    for spec in $specs; do
+        [[ $spec != *:* ]] && continue
+        hostspec=${spec%%:*}
+        [[ $hostspec == HOLD4POLL@* ]] && continue
+        rdir=${spec##"$hostspec"?(:)}
+        rm -f $tdir/$dir/tmp/$hostspec/failed[12]
+        for file in $tdir/$dir/tmp/$hostspec/*.xml; do
+            [[ ! -f $file ]] && continue
+            rfile=$rdir/$dir2/${file##*/}
+            if [[ $hostspec == localhost ]] then
+                cp $file $rfile.tmp && mv $rfile.tmp $rfile && rm $file
+                continue
+            fi
+            (
+                fsize=$(ls -Z '%(size)d' $file)
+                (( wt = 120 + ((9.0 * fsize) / transrate) * 9 ))
+                timedrun $wt ssh $sfl $hostspec \
+                    "cat > $rfile.tmp && mv $rfile.tmp $rfile" \
+                < $file 2> /dev/null
+                if [[ $? != 0 ]] then
+                    print -u2 $(ts) copy of $file to $hostspec failed
+                    if [[ ! -f $tdir/$dir/tmp/$hostspec/failed1 ]] then
+                        touch $tdir/$dir/tmp/$hostspec/failed1
+                    else
+                        touch $tdir/$dir/tmp/$hostspec/failed2
+                    fi
+                else
+                    print -u2 $(ts) copy of $file to $hostspec succeeded
+                    rm $file
+                fi
+            ) &
+            sdpjobcntl $transjobs
+            [[ -f $tdir/$dir/tmp/$hostspec/failed2 ]] && break
+        done
+        rm -f $tdir/$dir/tmp/$hostspec/failed[12]
+    done
+done
+wait; wait
+
+sleep $SLEEPTIME

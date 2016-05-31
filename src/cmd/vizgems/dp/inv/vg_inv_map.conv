@@ -1,0 +1,52 @@
+VARS{
+#include <vmalloc.h>
+#include "vg_hdr.h"
+#include "sl_level_node.c"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+
+#define SZ_id1 DDSSZ_outrec_inv_map_id1
+#define SZ_id2 DDSSZ_outrec_inv_map_id2
+#define SZ_key DDSSZ_outrec_inv_map_key
+#define SZ_level1 DDSSZ_outrec_inv_map_level1
+#define SZ_level2 DDSSZ_outrec_inv_map_level2
+#define SZ_val DDSSZ_outrec_inv_map_val
+
+#include "vg_inv_map_tc.c"
+
+static tcmap_t *maps;
+static int mapn, mapi;
+}
+BEGIN{
+    sl_level_nodeopen (getenv ("LEVELNODEFILE"));
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFWDFILE"));
+    sl_inv_map2open (getenv ("INVMAPREVFILE"));
+    vg_inv_map_tcinit ();
+}
+{
+    sl_level_node_t *lnp;
+    int lni;
+
+    DROP;
+
+    for (lni = 0; lni < sl_level_noderecn; lni++) {
+        GETRECORDlevel_node (lni);
+        lnp = sl_level_nodep;
+        if (strcmp (IN->level, lnp->sl_id) == 0)
+            continue;
+        vg_inv_map_tcfind (IN->level, IN->id, lnp->sl_id);
+        maps = tcmaps[0];
+        mapn = tcmapi[0];
+        for (mapi = 0; mapi < mapn; mapi++) {
+            memcpy (OUT->level1, IN->level, SZ_level1);
+            memcpy (OUT->id1, IN->id, SZ_id1);
+            memcpy (OUT->level2, maps[mapi].level, SZ_level2);
+            memcpy (OUT->id2, maps[mapi].id, SZ_id2);
+            memset (OUT->key, 0, SZ_key);
+            memset (OUT->val, 0, SZ_val);
+            EMIT;
+        }
+    }
+}

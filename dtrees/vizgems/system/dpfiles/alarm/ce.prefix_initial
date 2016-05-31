@@ -1,0 +1,5 @@
+#
+# This file overrides the default CCID prefix 'CCID'.
+# set the variable CCIDPREFIX to an alternate name
+# e.g. CCIDPREFIX=alpems
+#

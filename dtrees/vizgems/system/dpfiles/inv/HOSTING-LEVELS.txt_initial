@@ -1,0 +1,27 @@
+# Section 1 - Level list
+#
+# node(literal)|level id1|name|class
+#
+node|b|Business|1
+node|l2|State|1
+node|l|City|1
+node|c|Customer|1
+node|s|Site|1
+node|g|Group|1
+node|o|Object|1
+node|r|Resource|1
+node|t|Type|2
+
+# Section 2 - Level map
+#
+# map|id1|id2|kind
+#
+map|o|b|0|0|||
+map|o|c|0|0|||
+map|s|l|0|0|||
+map|l|l2|0|0|||
+map|s|c|0|0|||
+map|g|s|0|0|||
+map|o|g|0|0|||
+map|o|t|0|0|||
+map|r|o|0|0|||

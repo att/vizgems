@@ -1,0 +1,33 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSCOPESDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export LC_ALL=C LANG=C
+
+typeset -l yn
+
+exec 3<&0
+tw -i -d SWIFT_CFG_DSCOPESDIR/logs \
+    -e 'sort: !mtime' -e "type==REG" \
+2> /dev/null | while read file; do
+    if fgrep -q "$*" $file 2> /dev/null; then
+        less -p "$*" $file
+        read -u3 yn?"look for more [y|n]? "
+        [[ $yn == n ]] && break
+    fi
+done

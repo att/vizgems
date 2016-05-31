@@ -1,0 +1,76 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+
+static char buf_id[3 * DDSSZ_rec_level_node_id];
+static char buf_name[3 * DDSSZ_rec_level_node_name];
+
+static char *sep;
+static int mode, first = TRUE;
+
+#define MODE_CSV 1
+#define MODE_XML 2
+#define MODE_JSN 3
+}
+BEGIN{
+    char *modestr;
+
+    modestr = getenv ("MODE");
+    if (strcasecmp (modestr, "xml") == 0)
+        mode = MODE_XML;
+    else if (strcasecmp (modestr, "jsn") == 0)
+        mode = MODE_JSN;
+    else
+        mode = MODE_CSV, sep = "|";
+
+   switch (mode) {
+    case MODE_CSV:
+        sfprintf (sfstdout, "level%sname%sclass\n", sep, sep);
+        break;
+    case MODE_JSN:
+        sfprintf (sfstdout, "\"levels\":[\n");
+        break;
+    case MODE_XML:
+        sfprintf (sfstdout, "<levels>\n");
+        break;
+    }
+}
+{
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (sfstdout, "%s%s%s%s%d\n", id, sep, name, sep, class);
+        break;
+    case MODE_XML:
+        VG_urlenc (id, buf_id, sizeof (buf_id));
+        VG_urlenc (name, buf_name, sizeof (buf_name));
+        sfprintf (
+            sfstdout,
+            "<level><lv>%s</lv><name>%s</name><class>%d</class></level>",
+            buf_id, buf_name, class
+        );
+        break;
+    case MODE_JSN:
+        VG_urlenc (id, buf_id, sizeof (buf_id));
+        VG_urlenc (name, buf_name, sizeof (buf_name));
+        sfprintf (
+            sfstdout,
+            "%s{\"level\":\"%s\",\"name\":\"%s\",\"class\":\"%d\"}",
+            first ? "" : ",", buf_id, buf_name, class
+        );
+        first = FALSE;
+        break;
+    }
+}
+END{
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (sfstdout, "\n");
+        break;
+    case MODE_JSN:
+        sfprintf (sfstdout, "]\n");
+        break;
+    case MODE_XML:
+        sfprintf (sfstdout, "</levels>\n");
+        break;
+    }
+}

@@ -1,0 +1,160 @@
+#
+# SUIGRAPH DATA-SPECIFIC INTERFACE
+#
+
+suigraph.ds.protogt = copy (dotty.protogt);
+suigraph.ds.protovt = copy (dotty.protovt.normal);
+
+suigraph.ds.protogt.layoutmode = 'async';
+
+suigraph.ds.protogt.graph.graphattr.rankdir = 'LR';
+suigraph.ds.protogt.graph.graphattr.color = 'white';
+suigraph.ds.protogt.graph.graphattr.fontcolor = 'white';
+suigraph.ds.protogt.graph.nodeattr.color = 'deepskyblue';
+suigraph.ds.protogt.graph.nodeattr.fontcolor = 'black';
+suigraph.ds.protogt.graph.nodeattr.style = 'filled';
+suigraph.ds.protogt.graph.nodeattr.shape = 'box';
+suigraph.ds.protogt.graph.edgeattr.color = 'green';
+suigraph.ds.protogt.graph.edgeattr.fontcolor = 'green';
+
+suigraph.ds.protogt.actions.general['clear'] = function (gt, vt, data) {
+    local nid;
+
+    while (tablesize (gt.graph.nodes) > 0)
+        for (nid in gt.graph.nodes) {
+            gt.removenode (gt, gt.graph.nodes[nid]);
+            break;
+        }
+};
+
+suigraph.ds.protogt.actions.general['rm dup edges'] = function (gt, vt, data) {
+    local nid, node, nlist, eid, edge, elist;
+
+    for (nid in gt.graph.nodes) {
+        node = gt.graph.nodes[nid];
+        nlist = [];
+        elist = [];
+        for (eid in node.edges) {
+            edge = node.edges[eid];
+            if (edge.tail.nid == nid & nlist[edge.head.nid])
+                elist[edge.eid] = edge;
+            else
+                nlist[edge.head.nid] = edge.head;
+        }
+        for (eid in elist)
+            gt.removeedge (gt, elist[eid]);
+    }
+    gt.layoutgraph (gt);
+};
+
+suigraph.ds.protovt.bgcolor = suigraph.ds.canvascolor[0];
+suigraph.ds.protovt.fgcolor = suigraph.ds.canvascolor[1];
+
+suigraph.ds.protovt.menus = [
+    'general' = [
+        0 = "clear";
+        1 = "rm dup edges";
+        2 = "undo";
+        3 = "do layout";
+        4 = "redraw";
+        5 = "save graph as";
+        6 = "birdseye view";
+        7 = "close view";
+        8 = "set graph attr";
+        9 = "set node attr";
+        10 = "set edge attr";
+        11 = "zoom in";
+        12 = "zoom out";
+        13 = "find node";
+        14 = "print graph";
+        15 = "text view";
+    ];
+];
+suigraph.ds.protovt.keys = [
+    'general' = [
+        'u' = "undo";
+        'p' = "paste";
+        'l' = "do layout";
+        'k' = "cancel query";
+        ' ' = "redraw";
+        'L' = "reload graph";
+        's' = "save graph as";
+        'Z' = "zoom in slowly";
+        'z' = "zoom out slowly";
+    ];
+    'node' = [
+        'all' = [
+            'c' = "copy";
+            'C' = "Copy";
+            'g' = "group";
+            'G' = "Group";
+            'd' = "delete";
+            'D' = "Delete";
+            'r' = "remove";
+            'R' = "Remove";
+            'a' = "set attr";
+        ];
+    ];
+    'edge' = [
+        'all' = [
+            'c' = "copy";
+            'C' = "Copy";
+            'd' = "delete";
+            'D' = "Delete";
+            'a' = "set attr";
+        ];
+    ];
+];
+
+suigraph.ds.protovt.uifuncs = [];
+suigraph.ds.protovt.uifuncs.redraw = function (data) {
+    local vt, gt;
+
+    vt = dotty.views[data.widget];
+    gt = dotty.graphs[vt.gtid];
+    gt.drawgraph (gt, [vt.vtid = vt;]);
+};
+suigraph.ds.protovt.uifuncs.closeview = suigraph.cb.closeview;
+suigraph.ds.protovt.uifuncs.leftdown = function (data) {
+    local vt, gt, menu, i;
+
+    vt = dotty.views[data.widget];
+    gt = dotty.graphs[vt.gtid];
+    if (~data.obj)
+        menu = vt.menus.general;
+    else if (data.obj.nid >= 0) {
+        if (vt.menus.node[data.obj.attr.class])
+            menu = vt.menus.node[data.obj.attr.class];
+        else
+            menu = vt.menus.node.all;
+    } else if (data.obj.eid >= 0) {
+        if (vt.menus.edge[data.obj.attr.class])
+            menu = vt.menus.edge[data.obj.attr.class];
+        else
+            menu = vt.menus.edge.all;
+    }
+    if ((i = displaymenu (data.widget, menu)) >= 0)
+        gt.doaction (data, menu[i]);
+};
+suigraph.ds.protovt.uifuncs.rightdown = suigraph.ds.uifuncs.leftdown;
+suigraph.ds.protovt.uifuncs.keyup = function (data) {
+    local vt, gt, key;
+
+    vt = dotty.views[data.widget];
+    gt = dotty.graphs[vt.gtid];
+    if (~data.obj)
+        key = vt.keys.general;
+    else if (data.obj.nid >= 0) {
+        if (vt.keys.node[data.obj.attr.class])
+            key = vt.keys.node[data.obj.attr.class];
+        else
+            key = vt.keys.node.all;
+    } else if (data.obj.eid >= 0) {
+        if (vt.keys.edge[data.obj.attr.class])
+            key = vt.keys.edge[data.obj.attr.class];
+        else
+            key = vt.keys.edge.all;
+    }
+    if (key[data.key])
+        gt.doaction (data, key[data.key]);
+};

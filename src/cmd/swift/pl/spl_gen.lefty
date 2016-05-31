@@ -1,0 +1,106 @@
+spl.gen = function (gt) {
+    local nid, node, eid, t, i;
+
+    spl.genid = 0;
+    for (nid in gt.graph.nodes) {
+        node = gt.graph.nodes[nid];
+        node.plid = -1;
+        node.incount = 0;
+        node.outcount = 0;
+        for (eid in node.edges)
+            if (node.edges[eid].tail == node)
+                node.outcount = node.outcount + 1;
+            else
+                node.incount = node.incount + 1;
+        if (node.incount == 0) {
+            node.plid = spl.genid;
+            spl.genid = spl.genid + 1;
+        }
+        if (node.attr.args) {
+            t = split (node.attr.args, '');
+            node.args = '';
+            for (i = 0; i < tablesize (t); i = i + 1)
+                if (t[i] == '_' & t[i + 1] == '_' & t[i + 2] == '_') {
+                    node.args = concat (node.args, '"');
+                    i = i + 2;
+                } else
+                    node.args = concat (node.args, t[i]);
+        }
+    }
+    for (nid in gt.graph.nodes) {
+        node = gt.graph.nodes[nid];
+        if (node.plid == -1) {
+            node.plid = spl.genid;
+            spl.genid = spl.genid + 1;
+        }
+    }
+    for (nid in gt.graph.nodes) {
+        node = gt.graph.nodes[nid];
+        if (node.attr.type == 'ddstool')
+            spl.genddstool (gt, node);
+        else if (node.attr.type == 'maketool')
+            spl.genmaketool (gt, node);
+        else if (node.attr.type == 'othertool')
+            spl.genothertool (gt, node);
+    }
+};
+spl.genddstool = function (gt, node) {
+    local name, t1, t2, fd, s, eid, cmd;
+
+    t1 = split (node.attr.name, ' ');
+    t2 = split (t1[0], ':');
+    if (tablesize (t1) == 2 & t2[0] == 'ENV') {
+        name = '';
+        for (i = 1; i < tablesize (t2); i = i + 2)
+            name = concat (name, t2[i], '=', t2[i + 1], ' ');
+        name = concat (name, t1[1]);
+    } else
+        name = node.attr.name;
+    if (~((fd = spl.openfile (gt, node)) >= 0))
+        return;
+    if (node.outcount > 0) {
+        s = '';
+        for (eid in node.edges)
+            if (node.edges[eid].tail == node)
+                s = concat (s, ' ', spl.commandname (
+                    gt, node.edges[eid].head
+                ));
+        cmd = concat (name, ' -oce "', s, '" ', node.args);
+    } else
+        cmd = concat (name, ' ', node.args);
+    writeline (fd, cmd);
+    spl.closefile (fd);
+};
+spl.openfile = function (gt, node) {
+    name = concat (gt.splname, '_', node.plid, '.sh');
+    if (~((fd = openio ('file', name, 'w')) >= 0)) {
+        writeline (2, concat ("cannot open ", name));
+        return;
+    }
+    writeline (fd, "#!/bin/ksh");
+    writeline (fd, "if [[ $SWIFTWARNLEVEL != '' ]] then set -x; fi");
+    return fd;
+};
+spl.closefile = function (fd) {
+    closeio (fd);
+};
+spl.commandname = function (gt, node) {
+    return concat (gt.splname, '_', node.plid);
+};
+spl.batchgen = function (name) {
+    local fd, gt, t;
+
+    if (~((fd = openio ('file', name, 'r')) >= 0)) {
+        writeline (2, concat ("cannot open ", name));
+        return;
+    }
+    if (~(gt.graph = readgraph (fd, dotty.protogt.graph))) {
+        writeline (2, concat ("cannot read graph"));
+        return;
+    }
+    closeio (fd);
+    t = split (name, '/');
+    name = t[tablesize (t) - 1];
+    gt.splname = spl.canonname (name);
+    spl.gen (gt);
+};

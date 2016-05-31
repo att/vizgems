@@ -1,0 +1,71 @@
+#!/bin/ksh
+
+usage=$'
+[-1p1?
+@(#)$Id: accountmgr (AT&T) 2012-09-21 $
+]
+[+NAME?accountmgr - account manager]
+[+DESCRIPTION?\baccountmgr\b handles the addition, deletion and changing
+of user accounts.
+]
+[200:add?add an account.
+All parameters (id, password, groups, name, and info) must be specified.
+]
+[201:del?delete an account.
+Only the id parameter must be specified.
+]
+[202:mod?modify an account.
+All parameters (id, password, groups, name, and info) must be specified,
+unless the purpose is to just change the account password, in which case
+only the id and password must be specified
+]
+[999:v?increases the verbosity level. May be specified multiple times.]
+
+id [ password groups name info ]
+
+[+?Each of these arguments should be quoted since they typically include
+spaces or other special characters
+]
+'
+
+function showusage {
+    OPTIND=0
+    getopts -a accountmgr "$usage" opt '-?'
+}
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VG_SYSNAME=SWIFT_CFG_SYSNAME
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+
+export LC_ALL=C LANG=C
+
+mode=
+while getopts -a accountmgr "$usage" opt; do
+    case $opt in
+    200) mode=add ;;
+    201) mode=del ;;
+    202) mode=mod ;;
+    999) (( SWIFTWARNLEVEL++ )) ;;
+    *) showusage; exit 1 ;;
+    esac
+done
+shift $OPTIND-1
+
+if [[ $mode == '' ]] then
+    showusage
+    exit 1
+fi
+
+vg_accountupdate $mode "$1" "$2" "$3" "$4" "$5"

@@ -1,0 +1,59 @@
+<html>
+<head>
+<title>VizGEMS RESTful services</title>
+</head>
+<body>
+<b>VizGEMS RESTful services</b><br>
+
+<p>
+This server provides the following RESTful services.
+
+<p>
+<ul><li>
+Data services
+  <ul><li>
+    GET /rest/dataquery/(level|inv|stat|alarm)/(csv|xml|json)/&lt;param1&gt;=&lt;value1&gt;&amp;...
+    <br>
+    returns the levels of assets, inventory, statistics or alarms that satisfy the parameter settings
+  </li></ul>
+  <ul><li>
+    POST /rest/dataupload/(stat|alarm)/(csv|xml)
+    <br>
+    uploads statistics or alarms data
+  </li></ul>
+</li></ul>
+
+<ul><li>
+Configuration manager services
+  <ul><li>
+    GET /rest/confquery/&lt;file&gt;[=&lt;instance&gt;]
+    <br>
+    returns the contents of the requested configuration file, or when the file has multiple instances the specific instance of the file
+  </li></ul>
+  <ul><li>
+    POST /rest/confupdate/&lt;file&gt;[=&lt;instance&gt;]
+    <br>
+    uploads an edit to the specified file, or file instance where applicable
+  </li></ul>
+</li></ul>
+
+<p>
+The POST actions expect url-encoded payloads
+
+<p>
+If the VizGEMS server is configured to use browser authentication,
+then the user and password must be specified as part of the host specification:
+<pre>
+curl 'http://&lt;user&gt;:&lt;password&gt;@&lt;hostname&gt;/rest/dataquery/stat/csv/level_o=abc&stat_key=cpu_.*'
+</pre>
+If the server uses cookie authentication, first get a cookie:
+<pre>
+cookie=$(curl 'http://&lt;hostname&gt;/cgi-bin/vg_swmaccess.cgi?user=&lt;user&gt;&pass=&lt;password&gt;&mode=showcookie')
+</pre>
+then perform the rest operation:
+<pre>
+curl -b "$cookie" 'http://&lt;hostname&gt;/rest/dataquery/stat/csv/level_o=abc&stat_key=cpu_.*'
+</pre>
+
+</body>
+</html>

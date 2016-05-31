@@ -1,0 +1,630 @@
+.TH AGGR 3
+.SH NAME
+.I AGGR
+\- Aggregation Library
+.SH SYNOPSIS
+#include <ast.h>
+#include <aggr.h>
+#include <swift.h>
+.br
+cc ... -laggr -lswift -last
+.SH DESCRIPTION
+.I AGGR
+is a library for operating on files containing arrays of numeric values.
+An AGGR file has two sections: a dictionary section and a data section.
+The data section is a two dimensional array.
+A row corresponds to a
+.I frame
+and a column to an
+.IR item .
+For example, a file could contain the number of phone calls in a day by time
+of day and by area code and exchange.
+Each frame would contain information about a ten minute interval and each item
+would contain the count of calls for one area code and exchange (for a 10 min.
+interval).
+The dictionary section provides the ability to associate a string or a number
+to an item.
+For example, an entry would be that area code and exchange 973-360 maps to
+item 12345.
+.SH DATA STRUCTURES
+.PP
+The main data structure is
+.BR AGGRfile_t .
+.B AGGRhdr_t
+contains the data written at the header of an AGGR file.
+Fields
+.B dictsn
+and
+.B datasn
+are serial numbers; when the dictionary or data sections are modified,
+the corresponding serial number gets incremented.
+.B AGGRkv_t
+is used for specifying a row and column and a value to add to that location.
+.B AGGRreaggr_t
+is used for specifying a mapping from one dictionary to another.
+.B AGGRextract_t
+is used for specifying a set of keys to extract.
+.DS
+typedef struct AGGRfile_t {
+    ...
+    char *namep;
+    ...
+    int fd, rwmode;
+    int alwayslocked, lockednow;
+    AGGRhdr_t hdr;
+    AGGRdict_t ad;
+    ...
+} AGGRfile_t;
+
+typedef struct AGGRhdr_t {
+    char magic[AGGR_MAGIC_LEN];
+    int version;
+    unsigned int dictsn, datasn;
+    int itemn, framen;
+    short keytype, valtype;
+    int dictlen, datalen;
+    int dictincr, itemincr;
+    double minval, maxval;
+    int vallen;
+    char class[AGGR_CLASS_LEN];
+} AGGRhdr_t;
+
+typedef struct AGGRfname_t {
+    int framei, level;
+    char *name;
+} AGGRfname_t;
+
+typedef struct AGGRunit_t {
+    union {
+        char c;
+        short s;
+        int i;
+        long long l;
+        float f;
+        double d;
+        char *strp;
+    } u;
+} AGGRunit_t;
+
+typedef struct AGGRkv_t {
+    int framei;
+    unsigned char *keyp;
+    unsigned char *valp;
+    int itemi;
+} AGGRkv_t;
+
+typedef struct AGGRreaggr_t {
+    unsigned char *okeyp, *nkeyp;
+    int nitemi;
+} AGGRreaggr_t;
+
+typedef struct AGGRextract_t {
+    unsigned char *keyp;
+    int nitemi;
+} AGGRextract_t;
+
+#define AGGR_COMBINE_OPER_ADD ...
+#define AGGR_COMBINE_OPER_SUB ...
+#define AGGR_COMBINE_OPER_MUL ...
+#define AGGR_COMBINE_OPER_DIV ...
+#define AGGR_COMBINE_OPER_MIN ...
+#define AGGR_COMBINE_OPER_MAX ...
+#define AGGR_COMBINE_OPER_WAVG ...
+
+#define AGGR_SUM_DIR_FRAMES ...
+#define AGGR_SUM_DIR_ITEMS ...
+
+#define AGGR_SUM_OPER_ADD ...
+#define AGGR_SUM_OPER_MIN ...
+#define AGGR_SUM_OPER_MAX ...
+
+#define AGGR_TOPN_OPER_MIN ...
+#define AGGR_TOPN_OPER_MAX ...
+
+#define AGGR_APPEND_OPER_ADD ...
+#define AGGR_APPEND_OPER_SUB ...
+#define AGGR_APPEND_OPER_MUL ...
+#define AGGR_APPEND_OPER_DIV ...
+#define AGGR_APPEND_OPER_MIN ...
+#define AGGR_APPEND_OPER_MAX ...
+#define AGGR_APPEND_OPER_SET ...
+.DE
+.SH FUNCTIONS
+.PP
+Unless otherwise specified, functions of type
+.B int
+will return 0 on success and -1 on failure.
+Functions of pointer type will return a pointer to the data on success
+and NULL on failure.
+.PP
+.B "int AGGRinit (void)"
+.br
+.B "int AGGRterm (void)"
+.IP ""
+These functions must be called before / after any other calls to
+AGGR functions.
+.PP
+.B "AGGRfile_t *AGGRcreate ("
+.br
+.B "\tchar *namep, int itemn, int framen,"
+.br
+.B "\tchar keytype, char valtype, char *classp,"
+.br
+.B "\tint keylen, int vallen,"
+.br
+.B "\tint dictincr, int itemincr,"
+.br
+.B "\tint queuen, int alwayslocked"
+.br
+.B ")"
+.br
+.B "int AGGRdestroy (AGGRfile_t *afp)"
+.IP ""
+.B AGGRcreate
+creates a new blank file.
+If the file existed before, it gets truncated, but first its serial numbers
+are read, incremented, and used in the new file.
+This allows a process to check if a file changed, by reading and comparing
+its serial numbers.
+.B namep
+is the name of the file.
+If the name is in URL form, the file is accessed through an AGGR server.
+See
+.BR aggrserver "(1)"
+for more information.
+.B itemn
+and
+.B framen
+specify the size of the data section.
+.B keytype
+and
+.B valtype
+specify the types of the keys and values in the dictionary.
+These can have any of the
+.B AGGR_TYPE_*
+values, except that
+.B valtype
+cannot be a string.
+.B keylen
+and
+.B vallen
+specify the sizes of the keys and values in the file.
+These must be a multiple of the sizes of the key and value types.
+A value of
+.B -1
+indicates that the length should be the size of a single element of the
+specified type.
+If the key type is string, a value of
+.B -1
+indicates that it is NULL-terminated.
+.B classp
+is a string describing the dataset.
+.B queuen
+specifies the size of the queue that is used when inserting new
+.B AGGRkv_t
+values to the file.
+.B alwayslocked
+specifies whether to lock the file once at the beginning or to lock it
+every time it needs to be accessed.
+A file that's already open cannot be truncated.
+.B AGGRdestroy
+removes the specified file.
+.PP
+.B "int AGGRopen ("
+.br
+.B "\tchar *namep, int rwmode, int queuen, int alwayslocked"
+.br
+.B ")"
+.br
+.B "int AGGRclose (AGGRfile_t *afp)"
+.IP ""
+.B AGGRopen
+loads an existing file.
+If the name is in URL form, the file is accessed through an AGGR server.
+See
+.BR aggrserver "(1)"
+for more information.
+.B rwmode
+should be one of the
+.B AGGR_RWMODE_*
+macros to indicate that the file is to be opened read-only or read-write.
+The other parameters are the same as in the
+.B AGGRcreate
+call.
+.B AGGRclose
+closes the specified file.
+.PP
+.B "int AGGRcombine ("
+.br
+.B "\tAGGRfile_t **iafps, int iafpn,"
+.br
+.B "\tint oper, float *ws, AGGRfile_t *oafp"
+.br
+.B ")"
+.IP ""
+Computes an arithmetic combination of the input files and stores the result
+in the output file.
+The input files should all be of the same key and value type and should have
+the same number of frames but they may have different dictionaries.
+The dictionary of the output file will be the union
+of all the input dictionaries.
+Items from the input files are combined based on their dictionary keys.
+When a key-item combination exists in only some of the input files, its
+value in all the other files is assumed to be zero.
+.B oper
+must be one of the
+.B AGGR_COMBINE_*
+macros for addition, subtraction, multiplication, and division.
+.B ws
+is an array of floating point weights that is used when the operation
+is the weighted average op.
+.PP
+.B "int AGGRcat ("
+.br
+.B "\tAGGRfile_t **iafps, int iafpn, AGGRfile_t *oafp"
+.br
+.B ")"
+.IP ""
+Concatenates several files together.
+The input files should all be of the same key and value type and should have
+the same number of frames but they may have different dictionaries.
+The dictionary of the output file will be the union
+of all the input dictionaries.
+Items from the input files are combined based on their dictionary keys.
+When a key-item combination exists in only some of the input files, its
+value in all the other files is assumed to be zero.
+.PP
+.B "int AGGRsum ("
+.br
+.B "\tAGGRfile_t *iafp, int dir, int oper, AGGRfile_t *oafp"
+.br
+.B ")"
+.IP ""
+Sums up all the frames into one frame, or all the items into one item.
+.B dir
+must be one of the
+.B AGGR_SUM_DIR_*
+macros.
+.B oper
+must be one of the
+.B AGGR_SUM_OPER_*
+macros to indicate that the frames or items are combined by adding
+their values, or by selecting their minimum or maximum values.
+.PP
+.B "int AGGRreaggr ("
+.br
+.B "\tAGGRfile_t *iafp,"
+.br
+.B "\tAGGRreaggr_t *reaggrs, int reaggrn,"
+.br
+.B "\tAGGRfile_t *oafp"
+.br
+.B ")"
+.IP ""
+Converts data from one type of aggregation to another.
+The
+.B reaggrs
+array contains a mapping from keys in the old dictionary to keys in the new.
+The old and new key pointers in this data structure should be the same type
+as the key types in the old and new files.
+The
+.B nitemi
+field should be
+.B -1
+to allow the library to pick a new item id, or a positive value to force it
+into a specific location.
+Item values are combined by addition.
+.PP
+.B "int AGGRextract ("
+.br
+.B "\tAGGRfile_t *iafp,"
+.br
+.B "\tAGGRextract_t *extracts, int extractn,"
+.br
+.B "\tAGGRfile_t *oafp"
+.br
+.B ")"
+.IP ""
+Extracts specific items from the input file and copies them to the output
+file.
+The
+.B extracts
+array contains an array of keys in the old dictionary to extract.
+The key pointer in this data structure should be the same type
+as the key type in the old file.
+The
+.B nitemi
+field should be
+.B -1
+to allow the library to pick a new item id, or a positive value to force it
+into a specific location.
+Item values are combined by addition.
+.PP
+.B "int AGGRmean ("
+.br
+.B "\tAGGRfile_t **iafps, int iafpn,"
+.br
+.B "\tAGGRfile_t *mafp, AGGRfile_t *dafp"
+.br
+.B ")"
+.IP ""
+Computes the mean and standard deviations of items in a set of files.
+The input files should all be of the same key and value type and should have
+the same number of frames but they may have different dictionaries.
+The dictionary of the output file will be the union
+of all the input dictionaries.
+Items from the input files are combined based on their dictionary keys.
+When a key-item combination exists in only some of the input files, its
+value in all the other files is assumed to be zero.
+.PP
+.B "int AGGRtopn ("
+.br
+.B "\tAGGRfile_t *iafp, int fframei, int lframei,"
+.br
+.B "\tAGGRkv_t *kvs, int kvn, int oper"
+.br
+.B ")"
+.IP ""
+Fills out the array
+.B kvs
+with information about the top
+.B kvn
+number of items.
+.B oper
+must be one of the
+.B AGGR_TOPN_OPER_*
+macros to specify that the function should return the items with the largest
+or smallest values.
+This function will fill out the
+.B framei
+and
+.B itemi
+fields in
+.BR kvs .
+If the input file contains fewer than
+.B kvn
+items (over all the frames), the bottom part of the
+.B kvs
+array may have
+.B -1
+as values for
+.B framei
+and
+.BR itemi .
+.PP
+.B "int AGGRlockmode ("
+.br
+.B "\tAGGRfile_t *afp, int alwayslocked"
+.br
+.B ")"
+.IP ""
+Sets the lock mode for the specified file.
+If
+.B alwayslocked
+is set to TRUE, the file stays locked continuously.
+If the flag is set to FALSE, the file is locked only when it is being updated.
+This is preferable when other processes are expected to be trying to read
+(but not modify) the contents of this file.
+.PP
+.B "int AGGRprint ("
+.br
+.B "\tAGGRfile_t *afp, int printdict, int printdata,"
+.br
+.B "\tint onlyitemi, int onlyframei, int verbose, int rawmode"
+.br
+.B ")"
+.IP ""
+Prints information about the input file.
+If
+.B printdict
+is
+.BR TRUE ,
+the dictionary is printed as a graph.
+If
+.B printdata
+is
+.BR TRUE ,
+then either all or specific item values are printed.
+.B onlyitemi
+and
+.B onlyframei
+may be -1 to have all items and / or frames printed, or they may have the value
+of a specific item position or frame to have only that item or frame printed.
+.B verbose
+may be 0, 1, or 2, to print progressively more information.
+.B rawmode
+may be
+.BR TRUE ,
+to specify that the item values should be printed out in binary.
+.PP
+.B "int AGGRgrow ("
+.br
+.B "\tAGGRfile_t *afp, int itemn, int framen"
+.br
+.B ")"
+.IP ""
+Reconfigures the specified file to have more frames or items.
+.PP
+.B "int AGGRappend ("
+.br
+.B "\tAGGRfile_t *afp, AGGRkv_t *kvp, int insertflag"
+.br
+.B ")"
+.IP ""
+Queues the value specified in
+.B kvp
+to be added to the appropriate frame / item location.
+The
+.B queuen
+field in
+.B AGGRopen
+or
+.B AGGRcreate
+indicate the size of the queue.
+Once the queue is full, all data is merged into the file in sorted order.
+.B framei
+must be the frame id.
+When the
+.B keyp
+field is not
+.BR NULL ,
+it is looked up in the dictionary.
+If
+.B itemi
+is not
+.BR -1 ,
+then it is used to force the location id to that number, if the key is not
+in the dictionary.
+This function will set the
+.B itemi
+field to the id it ended up using.
+When
+.B keyp
+is
+.B NULL
+and
+.B itemi
+is positive, no lookup is performed and the id in
+.B itemi
+is used directly.
+The application could keep track of the mapping of keys to items
+by storing the value of the
+.B itemi
+field and using it the next time it has to submit the same key.
+This can improve performance when the namespace of the dictionary
+is limited (e.g. area code and exchange values).
+.B insertflag
+specifies what to do when a key is not found in the dictionary.
+.B TRUE
+indicates that a new key should be added to the dictionary.
+.B FALSE
+indicates that the function should fail and return
+.BR -1 .
+.PP
+.B "int AGGRflush (AGGRfile_t *afp)"
+.IP ""
+Flushes the append queue explicitely.
+This call is only necessary if the application needs to make sure the
+file on disk is up to date at a specific point in time.
+This function is explicitely called by other AGGR
+functions before they modify the file in some other way.
+.PP
+.B "int AGGRlookup ("
+.br
+.B "\tAGGRfile_t *afp, unsigned char *keyp"
+.br
+.B ")"
+.IP ""
+Searches the dictionary for the specified key.
+.PP
+.B "int AGGRfnames ("
+.br
+.B "\tAGGRfile_t *afp, AGGRfname_t *fnames, int fnamen"
+.br
+.B ")"
+.IP ""
+Specifies labels for the frames in the file.
+Existing labels are removed.
+.PP
+.B "int AGGRminmax (AGGRfile_t *afp, int computeflag)"
+.IP ""
+If
+.B computeflag
+is
+.BR TRUE ,
+this function will recalculate the min and max values that are stored
+in the file's header and flush the new header.
+Otherwise, it assumes that the application has set new values for these
+in
+.B afp->hdr
+and just flushes the header.
+.PP
+.B "void *AGGRget (AGGRfile_t *afp, int framei)"
+.br
+.B "int AGGRrelease (AGGRfile_t *afp)"
+.IP ""
+.B AGGRget
+returns a pointer to the item values for frame
+.BR framei .
+The pointer can be cast to the appropriate type (based on the
+.B valtype
+field), and used to read or write item values.
+.B AGGRrelease
+releases the frame and flushes any changes to the file.
+These two functions must be called in pairs.
+An attempt to get a frame while another one is active will fail.
+The pointer returned by
+.B AGGRget
+is generated by memory mapping the appropriate section of the file.
+To ensure consistency, the file remains locked until the call to
+.BR AGGRrelease .
+.PP
+.B "int AGGRparsetype ("
+.br
+.B "\tchar *name, int *typep, int *lenp"
+.br
+.B ")"
+.IP ""
+Parses a key or value type specification and returns the type and length
+in the corresponding fields.
+.PP
+.B "int AGGRparsefnames ("
+.br
+.B "\tchar *names, AGGRfname_t **fnamesp, int *fnamenp"
+.br
+.B ")"
+.IP ""
+Parses a frame label specification and returns an array of labels and the
+corresponding size of the array.
+.SH EXAMPLES
+The following code is from
+.B aggrcombine.c
+and shows the sequence of calls for a typical AGGR application.
+.EX
+#include <ast.h>
+#include <swift.h>
+#include <aggr.h>
+
+main (int argc, char **argv) {
+    ...
+
+    if (AGGRinit () == -1)
+        SUerror ("aggrcombine", "init failed");
+    ...
+    for (iafpi = 0; iafpi < iafpn; iafpi++) {
+        if (!(iafps[iafpi] = AGGRopen (
+            argv[iafpi], AGGR_RWMODE_RD, 1, TRUE
+        )))
+            SUerror ("aggrcombine", "open failed");
+    }
+    if (!(oafp = AGGRcreate (
+        onamep, 1, 1, keytype, valtype, classp,
+        TRUE, keylen, dictincr, itemincr, 1, TRUE
+    )))
+        SUerror ("aggrcombine", "create failed");
+    if (AGGRcombine (iafps, iafpn, oper, oafp) == -1)
+        SUerror ("aggrcombine", "combine failed");
+    if (AGGRminmax (oafp, TRUE) == -1)
+        SUerror ("aggrcombine", "minmax failed");
+    if (AGGRclose (oafp) == -1)
+        SUerror ("aggrcombine", "close failed");
+    if (AGGRterm () == -1)
+        SUerror ("aggrcombine", "term failed");
+    ...
+}
+.EE
+.SH SEE ALSO
+.IR aggr(1) ,
+.IR aggrcat(1) ,
+.IR aggrcombine(1) ,
+.IR aggrload(1) ,
+.IR aggrmean(1) ,
+.IR aggrprint(1) ,
+.IR aggrreaggr(1) ,
+.IR aggrextract(1) ,
+.IR aggrsum(1) ,
+.IR aggrtopn(1) ,
+.IR aggrkeys(1) ,
+.IR aggrmap(1) ,
+.IR aggrserver(1) ,
+.IR aggr(3) .

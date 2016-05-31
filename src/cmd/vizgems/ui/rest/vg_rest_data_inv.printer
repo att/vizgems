@@ -1,0 +1,411 @@
+VARS{
+#include <regex.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_inv_map.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_node.c"
+#include "sl_inv_edge2.c"
+
+static char buf_level[3 * DDSSZ_rec_dq_dt_inv_level1];
+static char buf_id[3 * DDSSZ_rec_dq_dt_inv_id1];
+static char buf_key[3 * VG_inv_node_key_L];
+static char buf_val[3 * VG_inv_node_val_L];
+
+static char *sep;
+static int mode, firstn = TRUE, firstkv = TRUE, firstm = TRUE, firste = TRUE;
+
+#define MODE_CSV 1
+#define MODE_XML 2
+#define MODE_JSN 3
+
+static int showattrs, showmaps;
+static sl_inv_nodeattr_t ina;
+
+static char *hideattrstr;
+static regex_t hideattrre;
+#define CMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define OKTOSHOW(s) ( \
+    !hideattrstr || regexec (&hideattrre, s, 0, NULL, CMPFLAGS) != 0 \
+)
+
+static int ptype;
+}
+BEGIN{
+    char *modestr;
+
+    modestr = getenv ("MODE");
+    if (strcasecmp (modestr, "xml") == 0)
+        mode = MODE_XML;
+    else if (strcasecmp (modestr, "jsn") == 0)
+        mode = MODE_JSN;
+    else
+        mode = MODE_CSV, sep = "|";
+
+    showattrs = atoi (getenv ("SHOWATTRS"));
+    showmaps = atoi (getenv ("SHOWMAPS"));
+    if ((hideattrstr = getenv ("HIDEATTRRE")))
+        if (regcomp (&hideattrre, hideattrstr, CMPFLAGS) != 0)
+            SUerror ("vg_rest_data_inv.printer", "cannot compile hideattr RE");
+
+    strcpy (ina.sl_key, "name");
+    if (showmaps)
+        sl_inv_mapopen (getenv ("INVMAPFILE"));
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    if (showattrs) {
+        sl_inv_nodeopen (getenv ("INVNODEATTRFILE"));
+        sl_inv_edge2open (getenv ("INVEDGEATTRFILE"));
+    }
+    ptype = -1;
+}
+{
+    sl_inv_node_t *inp;
+    sl_inv_nodeattr_t *inap;
+    sl_inv_edge2_t *iep;
+    sl_inv_map_t *imp;
+    char *name, *pflag1, *pflag2;
+
+    pflag1 = (class1 == VG_QUERY_N_CLASS_PRIMARY) ? "y" : "n";
+    pflag2 = (class2 == VG_QUERY_N_CLASS_PRIMARY) ? "y" : "n";
+
+    if (cat != VG_QUERY_N_CAT_RESULT)
+        return 0;
+
+    if (ptype != type) {
+        switch (mode) {
+        case MODE_CSV:
+            if (ptype != -1)
+                sfprintf (sfstdout, "\n");
+            if (type == VG_QUERY_N_TYPE_NODE) {
+                sfprintf (
+                    sfstdout,
+                    "node%spflag%slevel%sid%skey%svalue\n",
+                    sep, sep, sep, sep, sep
+                );
+            } else if (type == VG_QUERY_N_TYPE_EDGE) {
+                sfprintf (
+                    sfstdout,
+                    "edge%slevel1%sid1%slevel2%sid2%skey%svalue\n",
+                    sep, sep, sep, sep, sep, sep
+                );
+            }
+            break;
+        case MODE_JSN:
+            if (ptype != -1)
+                sfprintf (sfstdout, "]\n");
+            if (type == VG_QUERY_N_TYPE_NODE)
+                sfprintf (sfstdout, "\"nodes\":[\n");
+            else if (type == VG_QUERY_N_TYPE_EDGE)
+                sfprintf (sfstdout, ",\"edges\":[\n");
+            break;
+        case MODE_XML:
+            if (ptype == VG_QUERY_N_TYPE_NODE)
+                sfprintf (sfstdout, "</nodes>\n");
+            else if (ptype == VG_QUERY_N_TYPE_EDGE)
+                sfprintf (sfstdout, "</edges>\n");
+            if (type == VG_QUERY_N_TYPE_NODE)
+                sfprintf (sfstdout, "<nodes>\n");
+            else if (type == VG_QUERY_N_TYPE_EDGE)
+                sfprintf (sfstdout, "<edges>\n");
+            break;
+        }
+    }
+    ptype = type;
+
+    switch (mode) {
+    case MODE_CSV:
+        if (type == VG_QUERY_N_TYPE_NODE) {
+            if (!showattrs) {
+                if ((inap = sl_inv_nodeattrfind (level1, id1, ina.sl_key)))
+                    name = inap->sl_val;
+                else
+                    name = id1;
+                sfprintf (
+                    sfstdout, "%s%s%s%s%s%s%s%s%s%s%s\n",
+                    "node", sep, pflag1, sep, level1, sep, id1,
+                    sep, "name", sep, name
+                );
+            } else {
+                for (
+                    inp = sl_inv_nodefindfirst (level1, id1);
+                    inp; inp = sl_inv_nodefindnext (level1, id1)
+                ) {
+                    if (!inp->sl_val[0] || !inp->sl_key[0])
+                        continue;
+                    if (!OKTOSHOW (inp->sl_key))
+                        continue;
+                    sfprintf (
+                        sfstdout, "%s%s%s%s%s%s%s%s%s%s%s\n",
+                        "node", sep, pflag1, sep, level1, sep, id1, sep,
+                        inp->sl_key, sep, inp->sl_val
+                    );
+                }
+            }
+        } else if (type == VG_QUERY_N_TYPE_EDGE) {
+            if (!showattrs || strcmp (level1, level2) != 0) {
+                sfprintf (
+                    sfstdout, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+                    "edge", sep, pflag1, pflag2, sep, level1, sep, id1,
+                    sep, level2, sep, id2, sep, "", sep, ""
+                );
+            } else {
+                for (
+                    iep = sl_inv_edge2findfirst (level1, id1, level2, id2);
+                    iep; iep = sl_inv_edge2findnext (level1, id1, level2, id2)
+                ) {
+                    if (!iep->sl_val[0] || !iep->sl_key[0])
+                        continue;
+                    if (!OKTOSHOW (iep->sl_key))
+                        continue;
+                    sfprintf (
+                        sfstdout, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+                        "edge", sep, pflag1, pflag2, sep, level1, sep, id1, sep,
+                        sep, level2, sep, id2, iep->sl_key, sep, iep->sl_val
+                    );
+                }
+            }
+        }
+        break;
+    case MODE_XML:
+        if (type == VG_QUERY_N_TYPE_NODE) {
+            VG_urlenc (level1, buf_level, sizeof (buf_level));
+            VG_urlenc (id1, buf_id, sizeof (buf_id));
+            if ((inap = sl_inv_nodeattrfind (
+                level1, id1, ina.sl_key
+            )))
+                name = inap->sl_val;
+            else
+                name = id1;
+            VG_urlenc (name, buf_val, sizeof (buf_val));
+            sfprintf (
+                sfstdout,
+                "<node>"
+                "<pf>%s</pf><lv>%s</lv><id>%s</id><n>%s</n>",
+                pflag1, buf_level, buf_id, buf_val
+            );
+            if (showattrs) {
+                sfprintf (
+                    sfstdout, "<attrs>"
+                );
+                for (
+                    inp = sl_inv_nodefindfirst (level1, id1);
+                    inp; inp = sl_inv_nodefindnext (level1, id1)
+                ) {
+                    if (!inp->sl_val[0] || !inp->sl_key[0])
+                        continue;
+                    if (!OKTOSHOW (inp->sl_key))
+                        continue;
+                    VG_urlenc (inp->sl_key, buf_key, sizeof (buf_key));
+                    VG_urlenc (inp->sl_val, buf_val, sizeof (buf_val));
+                    sfprintf (
+                        sfstdout, "<attr><k>%s</k><v>%s</v></attr>",
+                        buf_key, buf_val
+                    );
+                }
+                sfprintf (
+                    sfstdout, "</attrs>"
+                );
+            }
+            if (showmaps) {
+                sfprintf (
+                    sfstdout, "<maps>"
+                );
+                for (
+                    imp = sl_inv_mapfindfirst (level1, id1);
+                    imp; imp = sl_inv_mapfindnext (level1, id1)
+                ) {
+                    VG_urlenc (imp->sl_level2, buf_level, sizeof (buf_level));
+                    VG_urlenc (imp->sl_id2, buf_id, sizeof (buf_id));
+                    sfprintf (
+                        sfstdout, "<map><lv>%s</lv><id>%s</id></map>",
+                        buf_level, buf_id
+                    );
+                }
+                sfprintf (
+                    sfstdout, "</maps>"
+                );
+            }
+            sfprintf (
+                sfstdout, "</node>\n"
+            );
+        } else if (type == VG_QUERY_N_TYPE_EDGE) {
+            VG_urlenc (level1, buf_level, sizeof (buf_level));
+            VG_urlenc (id1, buf_id, sizeof (buf_id));
+            sfprintf (
+                sfstdout,
+                "<edge>"
+                "<pf>%s</pf><lv1>%s</lv1><id1>%s</id1>",
+                pflag1, pflag2, buf_level, buf_id
+            );
+            VG_urlenc (level2, buf_level, sizeof (buf_level));
+            VG_urlenc (id2, buf_id, sizeof (buf_id));
+            sfprintf (
+                sfstdout,
+                "<lv2>%s</lv2><id2>%s</id2>",
+                buf_level, buf_id
+            );
+            if (showattrs) {
+                sfprintf (
+                    sfstdout, "<attrs>"
+                );
+                for (
+                    iep = sl_inv_edge2findfirst (level1, id1, level2, id2);
+                    iep; iep = sl_inv_edge2findnext (level1, id1, level2, id2)
+                ) {
+                    if (!iep->sl_val[0] || !iep->sl_key[0])
+                        continue;
+                    if (!OKTOSHOW (iep->sl_key))
+                        continue;
+                    VG_urlenc (iep->sl_key, buf_key, sizeof (buf_key));
+                    VG_urlenc (iep->sl_val, buf_val, sizeof (buf_val));
+                    sfprintf (
+                        sfstdout, "<attr><k>%s</k><v>%s</v></attr>",
+                        buf_key, buf_val
+                    );
+                }
+                sfprintf (
+                    sfstdout, "</attrs>"
+                );
+            }
+            sfprintf (
+                sfstdout, "</edge>\n"
+            );
+        }
+        break;
+    case MODE_JSN:
+        if (type == VG_QUERY_N_TYPE_NODE) {
+            VG_urlenc (level1, buf_level, sizeof (buf_level));
+            VG_urlenc (id1, buf_id, sizeof (buf_id));
+            if ((inap = sl_inv_nodeattrfind (
+                level1, id1, ina.sl_key
+            )))
+                name = inap->sl_val;
+            else
+                name = id1;
+            VG_urlenc (name, buf_val, sizeof (buf_val));
+            sfprintf (
+                sfstdout,
+                "%s{"
+                "\"pflag\":\"%s\",\"level\":\"%s\",\"id\":\"%s\","
+                "\"name\":\"%s\"",
+                firstn ? "" : ",", pflag1, buf_level, buf_id, buf_val
+            );
+            if (showattrs) {
+                firstkv = TRUE;
+                sfprintf (
+                    sfstdout, ",\"attrs\":{"
+                );
+                for (
+                    inp = sl_inv_nodefindfirst (level1, id1);
+                    inp; inp = sl_inv_nodefindnext (level1, id1)
+                ) {
+                    if (!inp->sl_val[0] || !inp->sl_key[0])
+                        continue;
+                    if (!OKTOSHOW (inp->sl_key))
+                        continue;
+                    VG_urlenc (inp->sl_key, buf_key, sizeof (buf_key));
+                    VG_urlenc (inp->sl_val, buf_val, sizeof (buf_val));
+                    sfprintf (
+                        sfstdout,
+                        "%s\"%s\":\"%s\"",
+                        firstkv ? "" : ",", buf_key, buf_val
+                    );
+                    firstkv = FALSE;
+                }
+                sfprintf (
+                    sfstdout, "}"
+                );
+            }
+            if (showmaps) {
+                firstm = TRUE;
+                sfprintf (
+                    sfstdout, ",\"maps\":["
+                );
+                for (
+                    imp = sl_inv_mapfindfirst (level1, id1);
+                    imp; imp = sl_inv_mapfindnext (level1, id1)
+                ) {
+                    VG_urlenc (imp->sl_level2, buf_level, sizeof (buf_level));
+                    VG_urlenc (imp->sl_id2, buf_id, sizeof (buf_id));
+                    sfprintf (
+                        sfstdout, "%s{\"level\":\"%s\",\"id\":\"%s\"}",
+                        firstm ? "" : ",", buf_level, buf_id
+                    );
+                    firstm = FALSE;
+                }
+                sfprintf (
+                    sfstdout, "]"
+                );
+            }
+            sfprintf (
+                sfstdout, "}\n"
+            );
+            firstn = FALSE;
+        } else if (type == VG_QUERY_N_TYPE_EDGE) {
+            VG_urlenc (level1, buf_level, sizeof (buf_level));
+            VG_urlenc (id1, buf_id, sizeof (buf_id));
+            sfprintf (
+                sfstdout,
+                "%s{"
+                "\"pflag\":\"%s%s\",\"level1\":\"%s\",\"id1\":\"%s\"",
+                firste ? "" : ",", pflag1, pflag2, buf_level, buf_id
+            );
+            VG_urlenc (level2, buf_level, sizeof (buf_level));
+            VG_urlenc (id2, buf_id, sizeof (buf_id));
+            sfprintf (
+                sfstdout,
+                ",\"level2\":\"%s\",\"id2\":\"%s\"",
+                buf_level, buf_id
+            );
+            if (showattrs) {
+                firstkv = TRUE;
+                sfprintf (
+                    sfstdout, ",\"attrs\":{"
+                );
+                for (
+                    iep = sl_inv_edge2findfirst (level1, id1, level2, id2);
+                    iep; iep = sl_inv_edge2findnext (level1, id1, level2, id2)
+                ) {
+                    if (!iep->sl_val[0] || !iep->sl_key[0])
+                        continue;
+                    if (!OKTOSHOW (iep->sl_key))
+                        continue;
+                    VG_urlenc (iep->sl_key, buf_key, sizeof (buf_key));
+                    VG_urlenc (iep->sl_val, buf_val, sizeof (buf_val));
+                    sfprintf (
+                        sfstdout,
+                        "%s\"%s\":\"%s\"",
+                        firstkv ? "" : ",", buf_key, buf_val
+                    );
+                    firstkv = FALSE;
+                }
+                sfprintf (
+                    sfstdout, "}"
+                );
+            }
+            sfprintf (
+                sfstdout, "}\n"
+            );
+            firste = FALSE;
+        }
+        break;
+    }
+}
+END{
+    switch (mode) {
+    case MODE_CSV:
+        if (ptype != -1)
+            sfprintf (sfstdout, "\n");
+        break;
+    case MODE_JSN:
+        if (ptype != -1)
+            sfprintf (sfstdout, "]\n");
+        break;
+    case MODE_XML:
+        if (ptype == VG_QUERY_N_TYPE_NODE)
+            sfprintf (sfstdout, "</nodes>\n");
+        else if (ptype == VG_QUERY_N_TYPE_EDGE)
+            sfprintf (sfstdout, "</edges>\n");
+        break;
+    }
+}

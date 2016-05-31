@@ -1,0 +1,27 @@
+#user|group|value|label
+||latest|real time
+||last30mins|last 30 mins
+||last60mins|last 60 mins
+||thishour|this hour
+||lasthour|last hour
+||last3hours|last 3 hours
+||last6hours|last 6 hours
+||last12hours|last 12 hours
+||last24hours|last 24 hours
+||last48hours|last 48 hours
+||today|today
+||yesterday|yesterday
+||last2days|last 2 days
+||last3days|last 3 days
+||last7days|last 7 days
+||last31days|last 31 days
+||thisweek|this week
+||lastweek|last week
+||last2weeks|last 2 weeks
+||last3weeks|last 3 weeks
+||thismonth|this month
+||lastmonth|last month
+||last2months|last 2 months
+||last3months|last 3 months
+||thisyear|this year
+||lastyear|last year

@@ -1,0 +1,64 @@
+rec=(
+    keys=LUN
+    consts='SYSID SYSKEY MODELID MODELKEY VENDORID VENDORKEY'
+    walk0=(
+        name='.1.3.6.1.4.1.1714.1.1.4.1.2.${LUN}' # partLdLvID
+        type=STRING
+        value='${LID}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.1714.1.1.4.1.4.${LUN}' # partSize
+        type=INTEGER
+        value='${LSIZE}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.1714.1.1.1.1.16.${SYSKEY}' # ctlrUniqueID
+        type=STRING
+        value='${SYSID}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.1714.1.1.1.1.15.${MODELKEY}' # privateLogoModel
+        type=STRING
+        value='${MODELID}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.1714.1.1.1.1.14.${VENDORKEY}' # privateLogoVendor
+        type=STRING
+        value='${VENDORID}'
+    )
+    outkey=LUN
+    output='${LUN}|${LID}|${LSIZE}|${SYSID}|${MODELID}|${VENDORID}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            typeset sysiddone=n modeldone=n vendordone
+            typeset -F3 lsiz
+            typeset -ui ui
+            while read -r lun lid lsize sysid model vendor; do
+                lid=${lid//[\"\|]/}
+                lsize=${lsize//[\"\|]/}
+                sysid=${sysid//[\"\|]/}
+                model=${model//[\"\|]/}; model=${model##+(" ")}; model=${model%%+(" ")}
+                vendor=${vendor//[\"\|]/}; vendor=${vendor##+(" ")}; vendor=${vendor%%+(" ")}
+                ui=$lsize
+                (( lsiz = (ui * 512.0) / 1073741824.0 ))
+                print "node|o|$INV_TARGET|si_lunname$lun|$lid"
+                print "node|o|$INV_TARGET|si_lunsize$lun|$lsiz GB"
+                [[ $sysiddone != y ]] \
+                && print "node|o|$INV_TARGET|si_sysid|$sysid"
+                sysiddone=y
+                [[ $modeldone != y ]] \
+                && print "node|o|$INV_TARGET|si_model|$model"
+                modeldone=y
+                [[ $vendordone != y ]] \
+                && print "node|o|$INV_TARGET|si_vendor|$vendor"
+                vendordone=y
+            done
+            ;;
+        *)
+            cat > /dev/null
+            ;;
+        esac
+    }'
+)

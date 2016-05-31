@@ -1,0 +1,100 @@
+if [[ $_havevars_ != y ]] then
+    print -u2 ERROR missing configuration variables
+    exit 1
+fi
+
+if [[ $wwwtype == https ]] then
+    _wwwssl=''
+else
+    _wwwssl='#'
+fi
+if [[ $wwwswmaccess == y ]] then
+    _wwwswm=''
+    _wwwnoswm='#'
+else
+    _wwwswm='#'
+    _wwwnoswm=''
+fi
+if [[ $wwwatteaccess == y ]] then
+    _wwwatte=''
+else
+    _wwwatte='#'
+fi
+if [[ $wwwebigaccess == y ]] then
+    _wwwebig=''
+else
+    _wwwebig='#'
+fi
+if [[ $wwwcloudaccess == y ]] then
+    _wwwcloud=''
+else
+    _wwwcloud='#'
+fi
+
+for ifile in "$@"; do
+    [[ ! -f $ifile ]] && continue
+    print configuring file ${ifile#"$VGCOMPPREFIX/./"}
+    suffix=${ifile##*_}
+    ofile=${ifile%_$suffix}
+    if [[ $suffix == sample ]] then
+        if [[ -f $ofile ]] then
+            cp $ofile $ofile.old
+        fi
+    elif [[ $suffix == initial ]] then
+        if [[ -f $ofile ]] then
+            print -u2 file ${ofile##*/} exists - skipping
+            continue
+        fi
+    fi
+    sed \
+        -e "s!SWIFT_CFG_SHELLVERSION!$shellversion!g" \
+        -e "s!SWIFT_CFG_SYSNAME!$sysname!g" \
+        -e "s!SWIFT_CFG_SYSMODE!$sysmode!g" \
+        -e "s!SWIFT_CFG_SYSTZ!$systz!g" \
+        -e "s!SWIFT_CFG_NFSMODE!$nfsmode!g" \
+        -e "s!SWIFT_CFG_ROOTDIR!$rootdir!g" \
+        -e "s!SWIFT_CFG_SSYSTEMDIR!$rootdir/sw/system!g" \
+        -e "s!SWIFT_CFG_DSYSTEMDIR!$rootdir/data/system!g" \
+        -e "s!SWIFT_CFG_DPSYSTEMDIR!$permdir!g" \
+        -e "s!SWIFT_CFG_DASYSTEMDIR!$arcdir!g" \
+        -e "s!SWIFT_CFG_SWWWDIR!$rootdir/sw/www!g" \
+        -e "s!SWIFT_CFG_DWWWDIR!$rootdir/data/www!g" \
+        -e "s!SWIFT_CFG_SSCOPESDIR!$rootdir/sw/scopes!g" \
+        -e "s!SWIFT_CFG_DSCOPESDIR!$rootdir/data/scopes!g" \
+        -e "s!SWIFT_CFG_SSNMPDIR!$rootdir/sw/snmp!g" \
+        -e "s!SWIFT_CFG_DSNMPDIR!$rootdir/data/snmp!g" \
+        -e "s!SWIFT_CFG_LDLIBRARYPATH!$ldname!g" \
+        -e "s!SWIFT_CFG_USR!$usr!g" \
+        -e "s!SWIFT_CFG_GRP!$grp!g" \
+        -e "s!SWIFT_CFG_WTYPE!$wwwtype!g" \
+        -e "s!SWIFT_CFG_WUSESSL!$_wwwssl!g" \
+        -e "s!SWIFT_CFG_WHOST!$wwwhost!g" \
+        -e "s!SWIFT_CFG_WPORT!$wwwport!g" \
+        -e "s!SWIFT_CFG_WEMAIL!$wwwemail!g" \
+        -e "s!SWIFT_CFG_WUSEOSM!$wwwuseosm!g" \
+        -e "s!SWIFT_CFG_WOSMSERVER!$wwwosmserver!g" \
+        -e "s!SWIFT_CFG_WBDACCESS!$wwwbdaccess!g" \
+        -e "s!SWIFT_CFG_WCOOKIEIP!$wwwcookieip!g" \
+        -e "s!SWIFT_CFG_WPREFIX!$wwwprefix!g" \
+        -e "s!SWIFT_CFG_WSWMACCESS!$wwwswmaccess!g" \
+        -e "s!SWIFT_CFG_WSWMIDLE!$wwwswmidle!g" \
+        -e "s!SWIFT_CFG_WUSESWM!$_wwwswm!g" \
+        -e "s!SWIFT_CFG_WNOSWM!$_wwwnoswm!g" \
+        -e "s!SWIFT_CFG_WATTEACCESS!$wwwatteaccess!g" \
+        -e "s!SWIFT_CFG_WUSEATTE!$_wwwatte!g" \
+        -e "s!SWIFT_CFG_WEBIGACCESS!$wwwebigaccess!g" \
+        -e "s!SWIFT_CFG_WEBIGURL!$wwwebigurl!g" \
+        -e "s!SWIFT_CFG_WUSEEBIG!$_wwwebig!g" \
+        -e "s!SWIFT_CFG_WCLOUDACCESS!$wwwcloudaccess!g" \
+        -e "s!SWIFT_CFG_WCLOUDURL!$wwwcloudurl!g" \
+        -e "s!SWIFT_CFG_WCLOUDUSER!$wwwclouduser!g" \
+        -e "s!SWIFT_CFG_WUSECLOUD!$_wwwcloud!g" \
+        -e "s!SWIFT_CFG_SWDIR!$rootdir/sw/system/current!g" \
+        -e "s!SWIFT_CFG_WWWDIR!$rootdir/sw/www/current!g" \
+    < $ifile > $ofile
+    if [[ -x $ifile ]] then
+        chmod +x $ofile
+    fi
+done
+
+exit 0

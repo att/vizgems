@@ -1,0 +1,227 @@
+VARS{
+#include <cdt.h>
+#include <vmalloc.h>
+#include <swift.h>
+#include "vg_hdr.h"
+#include "sl_inv_nodeattr.c"
+
+#define S_level VG_inv_node_level_N
+#define S_key VG_inv_node_key_N
+#define S_val VG_inv_node_val_N
+
+#include "vg_dq_dt_attrs.c"
+
+typedef struct default_s {
+    Dtlink_t link;
+    /* begin key */
+    char *slst;
+    /* end key */
+
+    int makere;
+    char *keylist;
+} default_t;
+
+static Dt_t *defaultdict;
+static Dtdisc_t defaultdisc = {
+    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+static char slkey[S_key], stkey[S_key], slst[S_val * 2 + 1];
+
+static char poutlevel[S_level];
+
+static int defaultload (char *defaultfile) {
+    Sfio_t *ffp;
+    char *line;
+    int ln;
+    char *s1, *s2, *s3, *s4, *s5, *s6, *s7;
+    char *s8, *s9, *s10, *s11, *s12, *s13, *s14;
+    default_t *dp;
+
+    if (!(defaultdict = dtopen (&defaultdisc, Dtobag))) {
+        SUwarning (0, "defaultload", "default dtopen failed");
+        return -1;
+    }
+    if (!(ffp = sfopen (NULL, defaultfile, "r"))) {
+        SUwarning (0, "defaultload", "cannot open default file");
+        return -1;
+    }
+    ln = 0;
+    while ((line = sfgetr (ffp, '\n', 1))) {
+        ln++;
+        if (line[0] == '#')
+            continue;
+        s1 = line;
+        if (
+            !(s2 = strchr (s1, '|')) || !(s3 = strchr (s2 + 1, '|')) ||
+            !(s4 = strchr (s3 + 1, '|')) || !(s5 = strchr (s4 + 1, '|')) ||
+            !(s6 = strchr (s5 + 1, '|')) || !(s7 = strchr (s6 + 1, '|')) ||
+            !(s8 = strchr (s7 + 1, '|')) || !(s9 = strchr (s8 + 1, '|')) ||
+            !(s10 = strchr (s9 + 1, '|')) || !(s11 = strchr (s10 + 1, '|'))
+        )
+            continue;
+        *s2++ = 0, *s3++ = 0, *s4++ = 0, *s5++ = 0, *s6++ = 0;
+        *s7++ = 0, *s8++ = 0, *s9++ = 0, *s10++ = 0, *s11++ = 0;
+        if (!*s1 || !*s2 || !*s4 || !*s11)
+            continue;
+        if (s11[0] != 'y' && s11[0] != 'Y')
+            continue;
+        s11++;
+        if (s11[0] == '/')
+            s11++;
+        if (!(dp = vmalloc (Vmheap, sizeof (default_t)))) {
+            SUwarning (0, "defaultload", "default malloc failed");
+            return -1;
+        }
+        memset (dp, 0, sizeof (default_t));
+        if (!(dp->slst = vmalloc (
+            Vmheap, strlen (s1) + strlen (s2) + 2
+        ))) {
+            SUwarning (0, "defaultload", "default malloc failed");
+            return -1;
+        }
+        dp->slst[0] = 0;
+        strcat (dp->slst, s1);
+        strcat (dp->slst, ":");
+        strcat (dp->slst, s2);
+        if (!*s11) {
+            if (!(dp->keylist = vmstrdup (Vmheap, s4))) {
+                SUwarning (0, "defaultload", "cannot copy keylist");
+                continue;
+            }
+            dp->makere = FALSE;
+            if (!strchr (s4, '.'))
+                dp->makere = TRUE;
+        } else {
+            for (s12 = s11; s12 && *s12; s12 = s13) {
+                if ((s13 = strchr (s12, '/')))
+                    *s13++ = 0;
+                if ((s14 = strchr (s12, ':')))
+                    *s14++ = 0;
+                if (!*s12) {
+                    SUwarning (0, "defaultload", "missing level: %s", s12);
+                    continue;
+                }
+                if (
+                    strcmp (s12, poutlevel) != 0 && strcasecmp (s12, "all") != 0
+                )
+                    continue;
+                if (!(dp->keylist = vmstrdup (
+                    Vmheap, (s14 && *s14) ? s14 : s4
+                ))) {
+                    SUwarning (
+                        0, "defaultload",
+                        "cannot copy keylist: %s", (s14 && *s14) ? s14 : s4
+                    );
+                    continue;
+                }
+                dp->makere = FALSE;
+                if (!(s14 && *s14) && !strchr (s4, '.'))
+                    dp->makere = TRUE;
+            }
+        }
+        if (!dtinsert (defaultdict, dp)) {
+            SUwarning (0, "defaultload", "default dtinsert failed");
+            vmfree (Vmheap, dp->slst);
+            vmfree (Vmheap, dp);
+            continue;
+        }
+    }
+    sfclose (ffp);
+
+    return 0;
+}
+
+static default_t *defaultp, *defaultpp, *defaultnp;
+
+static default_t *defaultfind (char *level, char *id) {
+    if (!defaultp) {
+        defaultp = defaultpp;
+        return defaultp;
+    }
+    if (defaultpp) {
+        defaultp = defaultpp = dtprev (defaultdict, defaultpp);
+        if (defaultp && strcmp (defaultp->slst, slst) == 0)
+            return defaultp;
+        defaultpp = NULL;
+    }
+    if (defaultnp) {
+        defaultp = defaultnp = dtnext (defaultdict, defaultnp);
+        if (defaultp && strcmp (defaultp->slst, slst) == 0)
+            return defaultp;
+        defaultnp = NULL;
+    }
+    return NULL;
+}
+
+static default_t *defaultfindfirst (char *level, char *id) {
+    sl_inv_nodeattr_t *nap;
+
+    defaultp = NULL;
+    if (!(nap = sl_inv_nodeattrfind (level, id, slkey)))
+        return NULL;
+    slst[0] = 0;
+    strcat (slst, nap->sl_val);
+    strcat (slst, ":");
+    if (!(nap = sl_inv_nodeattrfind (level, id, stkey)))
+        return NULL;
+    strcat (slst, nap->sl_val);
+    defaultpp = defaultnp = dtmatch (defaultdict, slst);
+
+    return defaultfind (level, id);
+}
+
+static default_t *defaultfindnext (char *level, char *id) {
+    return defaultfind (level, id);
+}
+}
+BEGIN{
+    if (attrload (getenv ("INVATTRFILE")) == -1)
+        SUerror ("vg_dq_dt_inv2statfilter", "cannot load attributes file");
+    if (!attrs[ATTR_POUTLEVEL])
+        SUerror ("vg_dq_dt_inv2statfilter", "cannot find primary outlevel");
+    strcpy (poutlevel, attrs[ATTR_POUTLEVEL]);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    memset (slkey, 0, S_key), strcpy (slkey, "scope_servicelevel");
+    memset (stkey, 0, S_key), strcpy (stkey, "scope_systype");
+    if (defaultload (getenv ("DEFAULTFILE")) == -1)
+        SUerror ("vg_dq_dt_inv2statfilter", "cannot load default file");
+}
+{
+    sl_inv_nodeattr_t ina, *inap;
+    default_t *dp;
+    int found, i;
+
+    DROP;
+    if (cat != VG_QUERY_N_CAT_ACTUAL || class1 != VG_QUERY_N_CLASS_PRIMARY)
+        return __result;
+    found = FALSE;
+    for (i = 0; ; i++) {
+        memset (ina.sl_key, 0, sizeof (ina.sl_key));
+        sfsprintf (ina.sl_key, sizeof (ina.sl_key), "essentialstat%d", i);
+        if (!(inap = sl_inv_nodeattrfind (level1, id1, ina.sl_key)))
+            break;
+        if (!found) {
+            found = TRUE;
+            sfprintf (sfstdout, "%s|%s", level1, id1);
+        }
+        sfprintf (sfstdout, "|%s", inap->sl_val);
+    }
+    if (!found) {
+        for (
+            dp = defaultfindfirst (level1, id1); dp;
+            dp = defaultfindnext (level1, id1)
+        ) {
+            if (!found) {
+                found = TRUE;
+                sfprintf (sfstdout, "%s|%s", level1, id1);
+            }
+            sfprintf (sfstdout, "|%s%s", dp->keylist, dp->makere ? ".*" : "");
+        }
+    }
+    if (found)
+        sfprintf (sfstdout, "\n");
+}
+END{
+}

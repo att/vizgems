@@ -1,0 +1,5 @@
+critical|color: white; background: #FF0000
+major|color: black; background: #FFA500
+minor|color: black; background: #FFFF00
+warning|color: white; background: #0000CD
+normal|color: black; background: #00FF00

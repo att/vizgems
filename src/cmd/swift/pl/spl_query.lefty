@@ -1,0 +1,145 @@
+#
+# SWIFTPL
+#
+#     this file implements the attribute view
+#
+spl.queries.getattrstart = function (t, obj, setobjfunc) {
+    local attrs, order, aname, aid, oid, s;
+
+    if (~(spl.queries.view >= 0)) {
+        spl.queries.view = createwidget (-1, [
+            'size' = spl.coords.qview.size;
+            'origin' = spl.coords.qview.origin;
+            'type' = 'view';
+            'name' = 'SWIFTPL: object attributes';
+        ]);
+        spl.queries.array = createwidget (spl.queries.view, [
+            'type' = 'array';
+        ]);
+        spl.queries.text = createwidget (spl.queries.array, [
+            'type' = 'text';
+            'mode' = 'input';
+        ]);
+        spl.queries.button = createwidget (spl.queries.array, [
+            'type' = 'button';
+            'text' = 'done';
+        ]);
+        widgets[spl.queries.view].closeview = spl.queries.closeview;
+        widgets[spl.queries.button].pressed = spl.queries.done;
+        widgets[spl.queries.array].resize = spl.queries.resize;
+        setwidgetattr (spl.queries.array, [
+            'size' = spl.coords.qview.size;
+        ]);
+    } else
+        setwidgetattr (spl.queries.view, ['zorder' = 'top';]);
+    if (obj.nid >= 0) # it's a node
+        attrs = spl.data.nodes[obj.attr.type].dattr;
+    else if (obj.eid >= 0) # it's an edge
+        attrs = spl.data.edges[obj.attr.type].dattr;
+    else
+        attrs = obj.attr;
+    spl.queries.obj = obj;
+    spl.queries.t = t;
+    spl.queries.setobjfunc = setobjfunc;
+    order = spl.orderattr (spl.queries.t, obj, attrs);
+    spl.queries.order = order;
+    aname = 'text';
+    for (oid = 0; order[oid]; oid = oid + 1) {
+        if (order[oid].label) {
+            setwidgetattr (spl.queries.text, [
+                aname = order[oid].label;
+            ]);
+            aname = 'appendtext';
+            setwidgetattr (spl.queries.text, [aname = '';]);
+        }
+        for (aid = 0; order[oid].order[aid]; aid = aid + 1) {
+            if (~attrs[order[oid].order[aid]])
+                continue;
+            s = '';
+            if (obj.attr[order[oid].order[aid]])
+                s = obj.attr[order[oid].order[aid]];
+            setwidgetattr (spl.queries.text, [
+                aname = concat (order[oid].order[aid], '=', s);
+            ]);
+            aname = 'appendtext';
+        }
+        setwidgetattr (spl.queries.text, [aname = '';]);
+        aname = 'appendtext';
+    }
+    if (aname == 'text') # there were no attributes - clear text
+        setwidgetattr (spl.queries.text, [
+            aname = '';
+        ]);
+};
+spl.queries.getattrend = function (obj, attrs) {
+    local aid;
+
+    for (aid in attrs)
+        obj.attr[aid] = attrs[aid];
+    spl.queries.setobjfunc (spl.queries.t, obj);
+};
+spl.queries.closeview = function (data) {
+    destroywidget (spl.queries.view);
+    remove ('view', spl.queries);
+    remove ('array', spl.queries);
+    remove ('text', spl.queries);
+    remove ('button', spl.queries);
+};
+spl.queries.done = function (data) {
+    local wattrs, t, tt, ttt, i, j, k, name, value, attrs;
+
+    wattrs = getwidgetattr (spl.queries.text, [0 = 'text';]);
+    t = split (wattrs.text, '\n');
+    k = 0;
+    for (i = 0; t[i]; i = i + 1) {
+        if (t[i] == '')
+            continue;
+        if (t[i] == spl.queries.order[k].label) {
+            k = k + 1;
+            continue;
+        }
+        tt = split (t[i], '=');
+        if (~tt[0])
+            continue;
+        if (tablesize (tt) ~= 2) {
+            echo ('bad entry in line ', i + 1);
+            return;
+        }
+        ttt = split (tt[0], ' ');
+        if (tablesize (ttt) ~= 1) {
+            echo ('bad attribute name in line ', i + 1);
+            return;
+        }
+        name = ttt[0];
+        ttt = split (tt[1], '');
+        value = '';
+        j = tablesize (ttt) - 1;
+        while (ttt[j] == '  ') {
+            remove (j, ttt);
+            j = j - 1;
+        }
+        j = 0;
+        while (ttt[j] == ' ')
+            j = j + 1;
+        for (j = j; ttt[j]; j = j + 1) {
+            if (ttt[j] == '"')
+                ttt[j] = "___";
+            value = concat (value, ttt[j]);
+        }
+        attrs[name] = value;
+    }
+    setwidgetattr (spl.queries.view, ['zorder' = 'bottom';]);
+    if (attrs)
+        spl.queries.getattrend (spl.queries.obj, attrs);
+};
+spl.queries.resize = function (data) {
+    local ret, x, y;
+
+    x = data.size.x;
+    y = data.size.y;
+    ret = [
+        spl.queries.button = ['x' = x; 'y' = 30;];
+        spl.queries.text = ['x' = x; 'y' = y - 30;];
+    ];
+    return ret;
+};

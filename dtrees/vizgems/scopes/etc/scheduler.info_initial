@@ -1,0 +1,11 @@
+
+# THESE VARIABLES ARE ONLY READ WHEN THE SCHEDULE JOB STARTS UP
+
+# how often to regenerate the inventory of each asset
+export VG_INVSECS=86400
+
+# how many jobs to run in parallel (max)
+export VG_SCHEDJOBS=32
+
+# which time to use (schedule/current) in the generated records
+export VG_RECTIME=schedule

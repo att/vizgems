@@ -1,0 +1,50 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_stat.c"
+#include "vg_timeranges.c"
+
+#define SZ_id1 DDSSZ_outrec_dq_dt_stat_id
+#define SZ_level1 DDSSZ_outrec_dq_dt_stat_level
+
+static int ffr, lfr;
+static char *filename;
+static int fileoffset;
+}
+BEGIN{
+    char *s1, *s2;
+
+    ffr = atoi (getenv ("FFRAME"));
+    lfr = atoi (getenv ("LFRAME"));
+    filename = getenv ("FILENAME");
+    fileoffset = atoi (getenv ("FILEOFFSET"));
+    if (sl_statopen (filename) != 0)
+        SUerror ("vg_dq_dt_stat_one", "cannot open file %s", filename);
+
+    if ((s1 = getenv ("TIMERANGESFILE")) && (s2 = getenv ("TIMERANGESSIZE")))
+        timerangesload (s1, atoi (s2));
+}
+{
+    sl_stat_t *sp;
+
+    DROP;
+
+    for (sp = sl_statfindfirst (
+        IN->level, IN->id, IN->key, IN->unit
+    ); sp; sp = sl_statfindnext (
+        IN->level, IN->id, IN->key, IN->unit
+    )) {
+        if (trn > 0 && !timerangesinrange (sp->sl_timeissued))
+            continue;
+        memset (OUT, 0, sizeof (struct __outrec_dq_dt_stat_t));
+        memcpy (OUT, sp, sizeof (sl_stat_t));
+        OUT->iclass = IN->iclass;
+        memcpy (OUT->ilevel, IN->ilevel, SZ_level1);
+        memcpy (OUT->iid, IN->iid, SZ_id1);
+        OUT->frame += fileoffset;
+        if (OUT->frame < ffr || OUT->frame > lfr)
+            continue;
+
+        EMIT;
+    }
+}

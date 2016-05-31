@@ -1,0 +1,153 @@
+#!/bin/ksh
+
+# added code from Jeff Fellin to optionally save the results in a log file
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DWWWDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export LC_ALL=C LANG=C
+
+function nonemptyemail {
+    if [[ -s $tmpfile ]] then
+        [[ $lfile != '' ]] && cat $tmpfile >> $lfile
+        [[ $list != ''  ]] && mailx -s "VG $label" $list < $tmpfile
+    fi
+}
+
+tmpfile=/tmp/checklogs.$$
+exec > $tmpfile 2>&1
+trap 'rm -f $tmpfile' HUP QUIT TERM KILL EXIT
+CRITICALLIST=''
+IMPORTANTLIST=''
+ALLLIST=''
+list=$ALLLIST
+label="error report for viz $(uname -n)"
+
+if [[ ! -f SWIFT_CFG_DWWWDIR/etc/checklogs.info ]] then
+    print -u2 SWIFT ERROR cannot find log checking config file
+    nonemptyemail
+    exit 1
+fi
+. SWIFT_CFG_DWWWDIR/etc/checklogs.info
+list=$ALLLIST
+
+level=$1
+if [[ $level != critical && $level != important && $level != all ]] then
+    print -u2 SWIFT ERROR bad reporting level $level
+    nonemptyemail
+    exit 1
+fi
+
+span=$2
+if [[ $span != fifteen && $span != hourly && $span != daily ]] then
+    print -u2 SWIFT ERROR bad span parameter $level
+    nonemptyemail
+    exit 1
+fi
+
+case $level in
+critical)
+    list=$CRITICALLIST
+    label="Critical-$label"
+    ;;
+important)
+    list=$IMPORTANTLIST
+    label="Important-$label"
+    ;;
+all)
+    list=$ALLLIST
+    label="All-$label"
+    ;;
+esac
+list=",${list//' '/,},"
+list=${list//+(,)/,}
+list=${list#,}
+list=${list%,}
+[[ $list == '' ]] && exit 0
+if [[ ,${list}, == *,log,* ]] then
+    lfile=SWIFT_CFG_DWWWDIR/logs/checklogs_$level.$(printf '%(%Y%m%d)T').log
+    list=",${list},"
+    while [[ ,${list}, == *,log,* ]] do
+        list=${list//,log,/,}
+    done
+    list=${list#,}
+    list=${list%,}
+fi
+
+case $span in
+fifteen)
+    tl=$(printf '%(%#)T')
+    ((tf = tl - (15 * 60 + 5)))
+    label="$label for last 15 mins"
+    sf=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tf)
+    sl=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tl)
+    ;;
+hourly)
+    tl=$(printf '%(%#)T')
+    ((tf = tl - (60 * 60 + 5)))
+    label="$label for last 60 mins"
+    sf=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tf)
+    sl=$(printf '%(%a %b %d %H:..:.. %Y)T' \#$tl)
+    ;;
+daily)
+    tl=$(printf '%(%#)T')
+    ((tf = tl - (24 * 60 * 60 + 5)))
+    label="$label for last 24 hrs"
+    sf=$(printf '%(%a %b %d ..:..:.. %Y)T' \#$tf)
+    sl=$(printf '%(%a %b %d ..:..:.. %Y)T' \#$tl)
+    ;;
+esac
+
+egrep "^\[($sf|$sl)\] \[error\]" SWIFT_CFG_DWWWDIR/logs/error_log \
+| while read -r line; do
+    t=${line%%'] [error]'*}
+    t=${t#'['}
+    ct=$(printf '%(%#)T' "$t")
+    (( ct < tf || ct > tl )) && continue
+    rest1=${line#*'[error] '*'] '}
+    rest2=${rest1%%, referer:*}
+    [[ $rest2 == 'File does not exist:'* ]] && continue
+    [[ $rest1 == cat:*'cannot open'* && $rest1 == $rest2 ]] && continue
+    [[ $rest2 == user*:*'authentication failure'* ]] && continue
+    [[ $rest2 == user*not*found* ]] && continue
+    [[ $rest2 == script*not*found* ]] && continue
+    [[ $rest2 == *vg.default*prefs.sh*cannot* ]] && continue
+    [[ $rest2 == *Invalid*method*in* ]] && continue
+    [[ $rest2 == *Invalid*URI*in* ]] && continue
+    [[ $rest1 == *MESSAGE* ]] && continue
+    [[ $rest1 == *attempt*to*invoke* ]] && continue
+    [[ $rest1 == *"cannot read initial buffer"* ]] && continue
+    [[ $rest1 == *"Client sent malformed"* ]] && continue
+    [[ $rest1 == *ALARM:' 'illegal' 'image* ]] && continue
+    [[ $line == *' 00:00:'*'sfopen failed for'*'uniq.stats.dds'* ]] && continue
+    print -r -- "${line%%, referer:*}"
+done \
+| case $level in
+critical)
+    egrep 'ERROR|ALARM'
+    ;;
+important)
+    egrep -v 'user.*not found'
+    ;;
+all)
+    cat
+    ;;
+esac | sed -e 's/SWIFT WARNING:.*)/WARNING/' -e 's/SWIFT ERROR:.*)/ERROR/' 1>&2
+
+exec 2>&-
+
+nonemptyemail

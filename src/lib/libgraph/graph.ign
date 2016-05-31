@@ -1,0 +1,23 @@
+Line_number DATA
+TrieStateTbl DATA
+TrieTransTbl DATA
+imaxabs
+imaxdiv
+myaglex
+sfclrerr
+sfdlen
+sfeof
+sferror
+sffileno
+sfgetc
+sfllen
+sfmaxr
+sfputc
+sfputd
+sfputl
+sfputm
+sfputu
+sfslen
+sfstacked
+sfulen
+sfvalue

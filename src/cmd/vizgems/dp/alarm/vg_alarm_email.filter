@@ -1,0 +1,554 @@
+VARS{
+#include <ctype.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+#include "vgemail_pub.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+
+static char *modemap[VG_ALARM_N_MODE_MAX + 1];
+static char *stylemap[4];
+
+static int pid;
+
+#define ATTRENC_NONE   0
+#define ATTRENC_SIMPLE 1
+#define ATTRENC_URL    2
+#define ATTRENC_HTML   3
+
+typedef struct attr_s {
+    char *str;
+    char *level1, *id1, *level2, *id2;
+    int encmode;
+} attr_t;
+
+static attr_t attr;
+
+static char *(*attrfunc) (char *, char *, char *, char *, char *);
+
+#define ATTRBUFLEN 10240
+static char attrbuf[ATTRBUFLEN];
+
+static char *attrstr;
+static int attrlen, attrpos;
+
+#define SZ_level VG_inv_node_level_L
+#define SZ_id VG_inv_node_id_L
+#define SZ_key VG_inv_node_key_L
+
+static char *baseattrfunc (
+    char *level1, char *id1, char *level2, char *id2, char *key
+) {
+    if (!key || key[0] != '_')
+        return NULL;
+
+    if (strcmp (key, "_object_") == 0) {
+        if (level2 && level2[0] && id2 && id2[0])
+            sfsprintf (
+                attrbuf, ATTRBUFLEN, "e|%s|%s|%s|%s",
+                level1, id1, level2, id2
+            );
+        else
+            sfsprintf (attrbuf, ATTRBUFLEN, "n:%s:%s", level1, id1);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "_id_") == 0 || strcmp (key, "_id1_") == 0) {
+        return &id1[0];
+    }
+    if (strcmp (key, "_id2_") == 0) {
+        return &id2[0];
+    }
+    if (strcmp (key, "_level_") == 0 || strcmp (key, "_level1_") == 0) {
+        return &level1[0];
+    }
+    if (strcmp (key, "_level2_") == 0) {
+        return &level2[0];
+    }
+    if (strncmp (key, "_str_", 5) == 0) {
+        return &key[5];
+    }
+
+    return NULL;
+}
+
+static struct __rec_alarm_t *alarmp;
+static Sfio_t *strfp;
+
+static char *alarmstatemap[VG_ALARM_N_STATE_MAX + 1] = {
+    VG_ALARM_S_STATE_NONE, // VG_ALARM_N_STATE_NONE
+    VG_ALARM_S_STATE_INFO, // VG_ALARM_N_STATE_INFO
+    VG_ALARM_S_STATE_DEG,  // VG_ALARM_N_STATE_DEG
+    VG_ALARM_S_STATE_DOWN, // VG_ALARM_N_STATE_DOWN
+    VG_ALARM_S_STATE_UP,   // VG_ALARM_N_STATE_UP
+};
+
+static char *alarmmodemap[VG_ALARM_N_MODE_MAX + 1] = {
+    VG_ALARM_S_MODE_NONE,  // VG_ALARM_N_MODE_NONE
+    VG_ALARM_S_MODE_KEEP,  // VG_ALARM_N_MODE_KEEP
+    VG_ALARM_S_MODE_DEFER, // VG_ALARM_N_MODE_DEFER
+    VG_ALARM_S_MODE_DROP,  // VG_ALARM_N_MODE_DROP
+};
+
+static char *alarmattr (
+    char *level1, char *id1, char *level2, char *id2, char *key
+) {
+    time_t t;
+    char *s1, *s2, *s3, *s4;
+    ssize_t offs[10];
+
+    if (strcmp (key, "alarm_scope") == 0) {
+        return &alarmp->scope[0];
+    }
+    if (strcmp (key, "alarm_alarmid") == 0) {
+        return &alarmp->alarmid[0];
+    }
+    if (strcmp (key, "alarm_ccid") == 0) {
+        return &alarmp->ccid[0];
+    }
+    if (strcmp (key, "alarm_state") == 0) {
+        if (alarmp->state >= 0 && alarmp->state <= VG_ALARM_N_STATE_MAX)
+            sfsprintf (attrbuf, 10240, "%s", alarmstatemap[alarmp->state]);
+        else
+            sfsprintf (attrbuf, 10240, "%d", alarmp->state);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_smode") == 0) {
+        if (alarmp->smode >= 0 && alarmp->smode <= VG_ALARM_N_MODE_MAX)
+            sfsprintf (attrbuf, 10240, "%s", alarmmodemap[alarmp->smode]);
+        else
+            sfsprintf (attrbuf, 10240, "%d", alarmp->smode);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_variables") == 0) {
+        return &alarmp->variables[0];
+    }
+    if (strcmp (key, "alarm_dateissued") == 0) {
+        return &alarmp->dateissued[0];
+    }
+    if (strcmp (key, "alarm_hourissued") == 0) {
+        return &alarmp->hourissued[0];
+    }
+    if (strcmp (key, "alarm_timecleared") == 0) {
+        t = alarmp->timecleared;
+        if (alarmp->timecleared > 0)
+            tmfmt (attrbuf, 10240, "%Y/%m/%d %H:%M:%S %Z", &t);
+        else
+            sfsprintf (attrbuf, 10240, " ");
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_timeissued") == 0) {
+        t = alarmp->timeissued;
+        if (alarmp->timeissued > 0)
+            tmfmt (attrbuf, 10240, "%Y/%m/%d %H:%M:%S %Z", &t);
+        else
+            sfsprintf (attrbuf, 10240, " ");
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_type") == 0) {
+        if (alarmp->type == VG_ALARM_N_TYPE_ALARM)
+            sfsprintf (attrbuf, 10240, "%s", VG_ALARM_S_TYPE_ALARM);
+        else if (alarmp->type == VG_ALARM_N_TYPE_CLEAR)
+            sfsprintf (attrbuf, 10240, "%s", VG_ALARM_S_TYPE_CLEAR);
+        else
+            sfsprintf (attrbuf, 10240, "%d", alarmp->type);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_sortorder") == 0) {
+        sfsprintf (attrbuf, 10240, "%d", alarmp->sortorder);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_pmode") == 0) {
+        sfsprintf (attrbuf, 10240, "%d", alarmp->pmode);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_level1") == 0) {
+        return (alarmp->level1[0]) ? &alarmp->level1[0] : " ";
+    }
+    if (strcmp (key, "alarm_id1") == 0) {
+        return (alarmp->id1[0]) ? &alarmp->id1[0] : " ";
+    }
+    if (strcmp (key, "alarm_level2") == 0) {
+        return (alarmp->level2[0]) ? &alarmp->level2[0] : " ";
+    }
+    if (strcmp (key, "alarm_id2") == 0) {
+        return (alarmp->id2[0]) ? &alarmp->id2[0] : " ";
+    }
+    if (strcmp (key, "alarm_tmode") == 0) {
+        if (alarmp->tmode >= 0 && alarmp->tmode <= VG_ALARM_N_MODE_MAX)
+            sfsprintf (attrbuf, 10240, "%s", alarmmodemap[alarmp->tmode]);
+        else
+            sfsprintf (attrbuf, 10240, "%d", alarmp->tmode);
+        return &attrbuf[0];
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_severity") == 0) {
+        if (alarmp->severity >= 0 && alarmp->severity < sevmapn) {
+            if (alarmp->type == VG_ALARM_N_TYPE_CLEAR)
+                sfsprintf (attrbuf, 10240, "clear");
+            else
+                sfsprintf (
+                    attrbuf, 10240, "%s", sevmaps[alarmp->severity].name
+                );
+        } else
+            sfsprintf (attrbuf, 10240, "%d", alarmp->severity);
+        return &attrbuf[0];
+    }
+    if (strcmp (key, "alarm_text") == 0) {
+        sfstruse (strfp);
+        if ((s1 = strstr (alarmp->text, ":DOWN")))
+            s1 += 6;
+        else if ((s1 = strstr (alarmp->text, ":UP")))
+            s1 += 4;
+        else
+            s1 = alarmp->text;
+        if (strgrpmatch (s1, "http?(s):", offs, 10, STR_ICASE) == 0)
+            return s1;
+        for (s2 = s1, s3 = s2 + offs[0]; s2; ) {
+            if (s3) {
+                sfwrite (strfp, s2, (s3 - s2));
+                if (
+                    !(s4 = strchr (s3, ' ')) && !(s4 = strchr (s3, '"')) &&
+                    !(s4 = strchr (s3, ')')) && !(s4 = strchr (s3, '('))
+                )
+                    s4 = s3 + strlen (s3);
+                sfprintf (strfp, "\2<a class=_INHERIT_TR_CLASS_ href=");
+                sfwrite (strfp, s3, s4 - s3);
+                sfprintf (strfp, "\2>");
+                sfwrite (strfp, s3, s4 - s3);
+                sfprintf (strfp, "\2</a\2>");
+                s2 = s4;
+                if (strgrpmatch (s2, "http?(s):", offs, 10, STR_ICASE) > 0)
+                    s3 = s2 + offs[0];
+                else
+                    s3 = NULL;
+            } else {
+                sfwrite (strfp, s2, strlen (s2));
+                s2 = NULL;
+            }
+        }
+        return sfstruse (strfp);
+    }
+    if (strcmp (key, "alarm_comment") == 0) {
+        return &alarmp->comment[0];
+    }
+    if (strcmp (key, "alarm_origmsg") == 0) {
+        return &alarmp->origmsg[0];
+    }
+    if (
+        strcmp (key, "alarmclear") == 0 &&
+        alarmp->type != VG_ALARM_N_TYPE_CLEAR && alarmp->timecleared == 0
+    ) {
+        sfstruse (strfp);
+        sfprintf (strfp, "CLEAR:one:%s:%s:%d", level1, id1, alarmp->timeissued);
+        if (alarmp->alarmid[0])
+            sfprintf (
+                strfp, ":CLEAR:aid:%s:%s:%s", level1, id1, alarmp->alarmid
+            );
+        if (alarmp->ccid[0])
+            sfprintf (strfp, ":CLEAR:ccid:%s:%s:%s", level1, id1, alarmp->ccid);
+        sfprintf (strfp, ":CLEAR:all:%s:%s", level1, id1);
+        return sfstruse (strfp);
+    }
+    return NULL;
+}
+
+static int initstr (void) {
+    if (!(attrstr = vmalloc (Vmheap, 128 * sizeof (char))))
+        SUerror ("initstr", "cannot grow attrstr");
+    attrlen = 128;
+    attrpos = 0;
+
+    return 0;
+}
+
+static int appendstr (char *str, int encmode) {
+    int len;
+
+    if ((len = strlen (str)) == 0)
+        return 0;
+
+    switch (encmode) {
+    case ATTRENC_SIMPLE: len *= 2; break;
+    case ATTRENC_URL:    len *= 3; break;
+    case ATTRENC_HTML:   len *= 6; break;
+    }
+    if (attrpos + len >= attrlen) {
+        if (!(attrstr = vmresize (
+            Vmheap, attrstr, (attrlen + 2 * len) * sizeof (char), VM_RSCOPY
+        )))
+            SUerror ("appendstr", "cannot grow attrstr");
+        attrlen += (2 * len);
+    }
+    switch (encmode) {
+    case ATTRENC_NONE:
+        strcpy (attrstr + attrpos, str);
+        break;
+    case ATTRENC_SIMPLE:
+        len = VG_simpleenc (str, attrstr + attrpos, attrlen - attrpos, "'\"");
+        break;
+    case ATTRENC_URL:
+        len = VG_urlenc (str, attrstr + attrpos, attrlen - attrpos);
+        break;
+    case ATTRENC_HTML:
+        len = VG_htmlenc (str, attrstr + attrpos, attrlen - attrpos, FALSE);
+        break;
+    }
+    attrpos += len;
+
+    return 0;
+}
+
+static int termstr (void) {
+    attrstr[attrpos] = 0;
+
+    return 0;
+}
+
+static int expandspec (attr_t *attrp, char *level, char *key, int lastflag) {
+    sl_inv_edgeattr_t iea, *ieap;
+    sl_inv_nodeattr_t ina, *inap;
+    char olevel1[SZ_level], olevel2[SZ_level], okey[SZ_key], *m1p, *m2p, *s;
+    int matchn;
+
+    if (!key[0])
+        return 1;
+
+    memset (olevel1, 0, SZ_level);
+    memset (olevel2, 0, SZ_level);
+    memset (okey, 0, SZ_key);
+    if (level && level[0]) {
+        strcpy (olevel1, level);
+        strcpy (olevel2, level);
+    } else {
+        strcpy (olevel1, attrp->level1);
+        if (attrp->level2 && attrp->level2[0] && attrp->id2 && attrp->id2[0])
+            strcpy (olevel2, attrp->level2);
+    }
+    strcpy (okey, key);
+
+    if (attrfunc && (s = (*attrfunc) (
+        attrp->level1, attrp->id1, attrp->level2, attrp->id2, okey
+    ))) {
+        appendstr (s, attrp->encmode);
+        return 1;
+    }
+    if (okey[0] == '_' && (s = baseattrfunc (
+        attrp->level1, attrp->id1, attrp->level2, attrp->id2, okey
+    ))) {
+        appendstr (s, attrp->encmode);
+        return 1;
+    }
+
+    if (attrp->level2 && attrp->level2[0] && attrp->id2 && attrp->id2[0]) {
+        matchn = 0;
+        for (
+            m1p = M1F (attrp->level1, attrp->id1, olevel1); m1p;
+            m1p = M1N (attrp->level1, attrp->id1, olevel1)
+        ) {
+            for (
+                m2p = M2F (attrp->level2, attrp->id2, olevel2); m2p;
+                m2p = M2N (attrp->level2, attrp->id2, olevel2)
+            ) {
+                memset (&iea, 0, sizeof (sl_inv_edgeattr_t));
+                strcpy (iea.sl_key, okey);
+                if ((ieap = sl_inv_edgeattrfind (
+                    olevel1, m1p, olevel2, m2p, iea.sl_key
+                ))) {
+                    if (matchn > 2) {
+                        appendstr (" ...", attrp->encmode);
+                        return matchn;
+                    }
+
+                    if (matchn > 0)
+                        appendstr ("\\n", attrp->encmode);
+                    appendstr (ieap->sl_val, attrp->encmode);
+                    matchn++;
+                }
+            }
+        }
+        if (matchn == 0 && lastflag) {
+            appendstr (attrp->id1, attrp->encmode);
+            appendstr ("-", attrp->encmode);
+            appendstr (attrp->id2, attrp->encmode);
+            matchn++;
+        }
+    } else {
+        matchn = 0;
+        for (
+            m1p = M1F (attrp->level1, attrp->id1, olevel1); m1p;
+            m1p = M1N (attrp->level1, attrp->id1, olevel1)
+        ) {
+            memset (&ina, 0, sizeof (sl_inv_nodeattr_t));
+            strcpy (ina.sl_key, okey);
+            if ((inap = sl_inv_nodeattrfind (
+                olevel1, m1p, ina.sl_key
+            ))) {
+                if (matchn > 2) {
+                    appendstr (" ...", attrp->encmode);
+                    return 0;
+                }
+
+                if (matchn > 0)
+                    appendstr ("\\n", attrp->encmode);
+                appendstr (inap->sl_val, attrp->encmode);
+                matchn++;
+            }
+        }
+        if (matchn == 0 && lastflag) {
+            appendstr (attrp->id1, attrp->encmode);
+            matchn++;
+        }
+    }
+
+    return matchn;
+}
+
+static int attreval (
+    char *level1, char *id1, char *level2, char *id2, char *str, int encmode
+) {
+    attr_t *attrp;
+    char *s1, *s2, *s3, *s4, *s5, *s6, *s7, *s8;
+    int c2, c3, c5, c6;
+
+    attrp = &attr;
+    attrp->str = str;
+    attrp->level1 = level1, attrp->id1 = id1;
+    attrp->level2 = level2, attrp->id2 = id2;
+    attrp->encmode = encmode;
+
+    initstr ();
+    for (s1 = attrp->str; s1; ) {
+        if (!(s2 = strstr (s1, "%(")) || !(s3 = strstr (s2 + 2, ")%"))) {
+            appendstr (s1, ATTRENC_NONE);
+            break;
+        }
+        c2 = *s2; *s2 = 0;
+        appendstr (s1, ATTRENC_NONE);
+        *s2 = c2;
+        c3 = *s3, *s3 = 0;
+        for (s4 = s2 + 2; s4; ) {
+            if (!(s5 = strchr (s4, '/'))) {
+                if ((s6 = strchr (s4, '.')))
+                    c6 = *s6, *s6 = 0, s7 = s4, s8 = s6 + 1;
+                else
+                    s7 = NULL, s8 = s4;
+                expandspec (attrp, s7, s8, TRUE);
+                if (s6)
+                    *s6 = c6;
+                break;
+            }
+            c5 = *s5, *s5 = 0;
+            if ((s6 = strchr (s4, '.')))
+                c6 = *s6, *s6 = 0, s7 = s4, s8 = s6 + 1;
+            else
+                s7 = NULL, s8 = s4;
+            if (expandspec (attrp, s7, s8, FALSE) > 0) {
+                if (s6)
+                    *s6 = c6;
+                *s5 = c5;
+                break;
+            }
+            if (s6)
+                *s6 = c6;
+            *s5 = c5;
+            s4 = s5 + 1;
+        }
+        *s3 = c3;
+        s1 = s3 + 2;
+    }
+    termstr ();
+
+    return 0;
+}
+
+static int attrsetfunc (
+    char *(*func) (char *, char *, char *, char *, char *)
+) {
+    attrfunc = func;
+    return 0;
+}
+}
+LIBS{
+-lvgemail
+}
+BEGIN{
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_alarm_email", "cannot load sevmap file");
+    if (emailload (getenv ("ALARMEMAILFILE"), getenv ("ACCOUNTFILE")) == -1)
+        SUwarning (0, "vg_alarm_email", "cannot load email data");
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+    modemap[VG_ALARM_N_MODE_DROP]  = VG_ALARM_S_MODE_DROP;
+    modemap[VG_ALARM_N_MODE_KEEP]  = VG_ALARM_S_MODE_KEEP;
+    modemap[VG_ALARM_N_MODE_DEFER] = VG_ALARM_S_MODE_DEFER;
+    stylemap[STYLE_SMS] = "sms";
+    stylemap[STYLE_TEXT] = "text";
+    stylemap[STYLE_HTML] = "html";
+    pid = getpid ();
+    attrsetfunc (alarmattr);
+    strfp = sfstropen ();
+}
+{
+    email_t *emailp;
+    char buf[1][4000], *tp;
+
+    DROP;
+
+    alarmp = __recp;
+    if (type == VG_ALARM_N_TYPE_CLEAR && strcmp (id1, "__ce_svc_upd__") == 0)
+        return __result;
+
+    for (
+        emailp = emailfindfirst (
+            level1, id1, alarmid, text, tmode, severity, timeissued
+        );
+        emailp;
+        emailp = emailfindnext (
+            level1, id1, alarmid, text, tmode, severity, timeissued
+        )
+    ) {
+        if (strncmp (text, "VG ", 3) == 0)
+            tp = text;
+        else if ((tp = strstr (text, ":DOWN")))
+            tp += 6;
+        else if ((tp = strstr (text, ":UP")))
+            tp += 4;
+        else
+            tp = text;
+        VG_warning (
+            0, "DATA INFO",
+            "EMAIL %d match acc=%s obj=%s txt=%s object=%s msg_text=%s", pid,
+            emailp->account, emailp->objstr, emailp->textstr,
+            id1, tp
+        );
+        switch (emailp->style) {
+        case STYLE_SMS:
+            VG_urlenc (tp, buf[0], 4000);
+            break;
+        case STYLE_TEXT:
+            VG_urlenc (tp, buf[0], 4000);
+            break;
+        case STYLE_HTML:
+            VG_htmlenc (tp, buf[0], 4000, FALSE);
+            break;
+        }
+        attreval (level1, id1, level2, id2, emailp->subject, ATTRENC_NONE);
+        sfprintf (
+            sfstdout, "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n",
+            emailp->faddr, emailp->taddr, stylemap[emailp->style],
+            attrstr, level1, id1,
+            sevmaps[severity].name, modemap[tmode], buf[0], emailp->account
+        );
+    }
+}

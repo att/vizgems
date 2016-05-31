@@ -1,0 +1,34 @@
+
+cd ${0%/*} || exit 1
+file=$1
+
+n=$(uname -n)
+n=${n%%.*}
+s=$(uname -s)
+export MACHNAME=$n MACHTYPE=$s
+
+line=
+for i in run ksh.* vgtail *.sh; do
+    case $s in
+    IRIX*)
+        stat $i | egrep size | read j
+        siz=${j##*' '}
+        ;;
+    Darwin*)
+        stat $i | read j j j j j j j siz j
+        ;;
+    *)
+        stat $i | egrep Size: | read j siz j
+        ;;
+    esac
+    line+=" $i=$siz"
+done
+print -- $file-INFO:$line
+
+./$file.sh 2> $file.err.$n | sed "s/^/$file-DATA:/"
+
+if [[ -s $file.err.$n ]] then
+    sed "s/^/$file-ERR:/" $file.err.$n
+fi
+
+exit 0

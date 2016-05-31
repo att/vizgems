@@ -1,0 +1,15 @@
+# this shell script specifies the host to get timing information from
+# the variable TIMESYS must be set to either 'NONE' for no time checks
+# or to a QUOTED, SPACE-SEPARATED line of the form:
+#     "user1@server1"
+# where:
+#     'user' is the user name on the remote system
+#     'server' is the name or ip address of the remote system
+# example:
+#     TIMESYS="swift@alpems"
+# NOTE: this mechanism uses SSH to copy data, so SSH to the remote
+# system must be enabled
+# if this scope is time synced through ntp or the windows protocol,
+# this variable should be left set to NONE.
+
+TIMESYS=NONE

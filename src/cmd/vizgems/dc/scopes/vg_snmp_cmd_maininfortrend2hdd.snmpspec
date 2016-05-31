@@ -1,0 +1,90 @@
+rec=(
+    keys=HDI
+    walk0=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.7.${HDI}' # hddSize
+        type=INTEGER
+        value='${HDSIZE}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.8.${HDI}' # hddBlkSizeIdx
+        type=INTEGER
+        value='${HDBSIZE}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.11.${HDI}' # hddStatus
+        type=INTEGER
+        value='${HDSTATUS}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.15.${HDI}' # hddModelStr
+        type=STRING
+        value='${HDMN}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.16.${HDI}' # hddFwRevStr
+        type=STRING
+        value='${HDFW}'
+    )
+    walk5=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.17.${HDI}' # hddSerialNum
+        type=STRING
+        value='${HDSN}'
+    )
+    walk6=(
+        name='.1.3.6.1.4.1.1714.1.1.6.1.13.${HDI}' # hddSlotNum
+        type=STRING
+        value='${HDID}'
+    )
+    outkey=HDI
+    output='${HDI}|${HDSIZE}|${HDBSIZE}|${HDSTATUS}|${HDMN}|${HDFW}|${HDSN}|${HDID}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            typeset -F3 hdsiz
+            while read -r hdi hdsize hdbsize hdstatus hdmn hdfw hdsn hdid; do
+                [[ $hdid == 0 ]] && continue
+                hdmn=${hdmn//[\"\|]/}; hdmn=${hdmn##+(" ")}; hdmn=${hdmn%%+(" ")}
+                hdfw=${hdfw//[\"\|]/}; hdfw=${hdfw##+(" ")}; hdfw=${hdfw%%+(" ")}
+                hdsn=${hdsn//[\"\|]/}; hdsn=${hdsn##+(" ")}; hdsn=${hdsn%%+(" ")}
+                (( hdsiz = (hdsize * (2 ** hdbsize)) / 1073741824.0 ))
+                print "node|o|$INV_TARGET|si_hwname$hdi|$hdsiz GB"
+                print "node|o|$INV_TARGET|si_hwinfo$hdi|:FW:$hdfw:SN:$hdsn:MN:$hdmn"
+                print "node|o|$INV_TARGET|si_disk$hdi|$hdi"
+            done
+            ;;
+        *)
+            typeset -A hddstatuslabels
+            hddslabels[0]="New Drive"
+            hddslabels[1]="On-Line Drive"
+            hddslabels[2]="Used Drive"
+            hddslabels[3]="Spare Drive"
+            hddslabels[4]="Drive Initialization in Progress"
+            hddslabels[5]="Drive Rebuild in Progress"
+            hddslabels[6]="Add Drive to Logical Drive in Progress"
+            hddslabels[9]="Global Spare Drive"
+            hddslabels[17]="Drive is in process of Cloning an other Drive"
+            hddslabels[18]="Drive is a valid Clone of another Drive"
+            hddslabels[19]="Drive is in process of Copying from another Drive"
+            hddslabels[63]="Drive Absent"
+            hddslabels[252]="Missing Global Spare Drive"
+            hddslabels[253]="Missing Spare Drive"
+            hddslabels[254]="Missing Drive"
+            hddslabels[255]="Failed Drive"
+            typeset -A hddstatuss
+            [[ -f hdd.list ]] && . ./hdd.list
+            while read -r hdi hdsize hdbsize hdstatus hdmn hdfw hdsn hdid; do
+                [[ $hdid == 0 ]] && continue
+                print "rt=STAT name=disk_status.${hdi} type=number num=$hdstatus unit= label=\"Disk Status ($hdi)\" alarmlabel=\"Disk Status (disk $hdi-code $hdstatus)\""
+                if [[ $hdstatus == @(252|253|254|255) ]] then
+                    print "rt=ALARM sev=1 type=ALARM tech=infortrend txt=\"Disk Status, disk: $hdi status: ${hddslabels[$hdstatus]:-$hdstatus}\""
+                elif [[ $hdstatus != ${hddstatuss[$hdi]} && ${hddstatuss[$hdi]} != "" ]] then
+                    print "rt=ALARM sev=2 type=ALARM tech=infortrend txt=\"Disk Status Change, disk: $hdi new status: ${hddslabels[$hdstatus]:-$hdstatus} old status: ${hddslabels[${hddstatuss[$hdi]}]:-${hddstatuss[$hdi]}}\""
+                fi
+                print -u3 "hddstatuss[$hdi]=$hdstatus"
+            done 3> hdd.list.tmp
+            mv hdd.list.tmp hdd.list
+            ;;
+        esac
+    }'
+)

@@ -1,0 +1,661 @@
+#
+# SUIGRAPH
+#
+
+suigraph = [
+    'insuigraph' = 'y';
+    'names' = [];
+    'namen' = 0;
+    'order' = [];
+    'framei' = 0;
+    'ds' = [
+        'graphinit' = 0;
+        'allowinsert' = 0;
+        'showtitle' = 0;
+        'title' = 'SWIFTUI - Graph View';
+        'showcontrol' = 1;
+        'viewcolor' = [0 = 'gray'; 1 = 'black';];
+        'canvascolor' = [0 = 'black'; 1 = 'white';];
+        'vieworigin' = ['x' = 0; 'y' = 0;];
+        'viewsize' = ['x' = 710; 'y' = 200;];
+        'textheight' = 25;
+        'linewidth' = 1;
+        'fps' = 0;
+        'processfocus' = 0;
+        'protogt' = copy (dotty.protogt);
+        'protovt' = copy (dotty.protovt.normal);
+        'graphattr' = 0;
+        'nodeattr' = 0;
+        'edgeattr' = 0;
+        'menus' = 0;
+        'actions' = 0;
+        'setframelabel' = function (framei) { return concat (framei); };
+        'getframelabel' = 0;
+    ];
+];
+
+#
+# startup functions
+#
+
+suigraph.init = function (dataspecific) {
+    local dst, dsi, nds, mi, ai;
+
+    for (dsi in dataspecific)
+        dst[dsi] = 1;
+    for (dsi in suigraph.ds)
+        if (dst[concat ('graph', dsi)])
+            nds[dsi] = dataspecific[concat ('graph', dsi)];
+        else if (dst[dsi])
+            nds[dsi] = dataspecific[dsi];
+    for (dsi in nds)
+        suigraph.ds[dsi] = nds[dsi];
+    if (suigraph.ds.menus) {
+        for (mi in suigraph.ds.menus.node)
+            suigraph.ds.protovt.menus.node[mi] = suigraph.ds.menus.node[mi];
+        for (mi in suigraph.ds.menus.edge)
+            suigraph.ds.protovt.menus.edge[mi] = suigraph.ds.menus.edge[mi];
+    }
+    if (suigraph.ds.actions) {
+        for (ai in suigraph.ds.actions.node)
+            suigraph.ds.protogt.actions.node[ai] = suigraph.uiaction;
+        for (ai in suigraph.ds.actions.edge)
+            suigraph.ds.protogt.actions.edge[ai] = suigraph.uiaction;
+    }
+    if (suigraph.ds.graphattr) {
+        for (ai in suigraph.ds.graphattr)
+            suigraph.ds.protogt.graph.graphattr[ai] = suigraph.ds.graphattr[ai];
+    }
+    if (suigraph.ds.nodeattr) {
+        for (ai in suigraph.ds.nodeattr)
+            suigraph.ds.protogt.graph.nodeattr[ai] = suigraph.ds.nodeattr[ai];
+    }
+    if (suigraph.ds.edgeattr) {
+        for (ai in suigraph.ds.edgeattr)
+            suigraph.ds.protogt.graph.edgeattr[ai] = suigraph.ds.edgeattr[ai];
+    }
+    if (dataspecific.graphinit)
+        dataspecific.graphinit ();
+    dotty.init ();
+    monitorfile = suigraph.monitorfile;
+};
+
+suigraph.main = function (mserver, dserver, localdir, prefprefix) {
+    local t;
+
+    suigraph.mserver = mserver;
+    suigraph.dserver = dserver;
+    suigraph.localdir = localdir;
+    suigraph.prefprefix = prefprefix;
+    t = split (mserver, '/');
+    suigraph.qsuffix = concat ('.query.', t[3], '.', t[4]);
+    suigraph.qn = 0;
+    if (~((suigraph.mpfd = suiutil.getserver (mserver, 'SWIFTMSERVER')) >= 0))
+        exit ();
+    monitor ('on', suigraph.mpfd);
+    suiutil.writecmd (suigraph.mpfd, 'echoon', null);
+    suiutil.writecmd (suigraph.mpfd, 'syncon', null);
+    suigraph.mainview = suigraph.createview (null, null);
+    suigraph.maincanvas = suigraph.widgets[suigraph.mainview].canvas;
+    suiutil.writecmd (suigraph.mpfd, 'history', []);
+};
+
+#
+# command handling functions
+#
+
+suigraph.insert = function (cmd) {
+    local namet;
+
+    if (~(cmd.nostate == 1) & suigraph.names[cmd.name]) {
+        if (cmd.replay ~= 1)
+            suiutil.msg (1, concat ('name ', cmd.name, ' already loaded'));
+        return;
+    };
+    namet.name = cmd.name;
+    namet.outcmd = copy (cmd);
+    remove ('cmd', namet.outcmd);
+    remove ('coords', namet.outcmd);
+    if (~(namet.cmd = suigraph.allowinsert (cmd)))
+        return;
+    namet.namei = suigraph.namen;
+    suiutil.setbusy (suigraph.maincanvas);
+    if (suiutil.updatefile (namet.cmd, suigraph) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        suiutil.unsetbusy (suigraph.maincanvas);
+        return;
+    }
+    suiutil.unsetbusy (suigraph.maincanvas);
+    if (cmd.format == 'aggr') {
+        if (~((namet.value = loadvalue ([
+            'name' = namet.cmd.localfile;
+        ])) >= 0)) {
+            suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+            return;
+        }
+    } else if (cmd.format == 'graph') {
+        namet.view = suigraph.createview (namet.cmd.localfile, namet.outcmd);
+    }
+    if (cmd.nostate == 1)
+        return;
+    suigraph.names[cmd.name] = namet;
+    suigraph.order[suigraph.namen] = namet.cmd.name;
+    suigraph.namen = suigraph.namen + 1;
+    suigraph.calcmm (gmap.values[namet.value]);
+    suigraph.setchainedmaps ();
+    for (name in suigraph.names)
+        if (suigraph.framen < suigraph.names[name].valt.framen)
+            suigraph.framen = suigraph.names[name].valt.framen;
+    for (name in suigraph.names) {
+        suigraph.names[name].framescale = (
+            suigraph.framen / suigraph.names[name].valt.framen
+        );
+        suigraph.names[name].valt.framescale = suigraph.names[name].framescale;
+    }
+};
+
+suigraph.remove = function (cmd) {
+    if (~suigraph.names[cmd.name])
+        return;
+    if (suigraph.names[cmd.name].view)
+        suigraph.destroyview (suigraph.names[cmd.name].view);
+    remove (suigraph.names[cmd.name].namei, suigraph.order);
+    remove (cmd.name, suigraph.names);
+    suigraph.setchainedmaps ();
+};
+
+suigraph.reload = function (cmd) {
+    local namet, widgett;
+
+    if (~(namet = suigraph.names[cmd.name]))
+        return;
+    suiutil.setbusy (suigraph.maincanvas);
+    if (suiutil.updatefile (namet.cmd, suigraph) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        suiutil.unsetbusy (suigraph.maincanvas);
+        return;
+    }
+    suiutil.unsetbusy (suigraph.maincanvas);
+    if (namet.cmd.format == 'aggr') {
+        unloadvalue (namet.value);
+        if (~((namet.value = loadvalue ([
+            'name' = namet.cmd.localfile;
+        ])) >= 0)) {
+            suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+            return;
+        }
+    } else if (cmd.format == 'graph') {
+        widgett = suigraph.widgets[namet.view];
+        widgett.gvt.gt.name = namet.cmd.localfile;
+        widgett.gvt.gt.loadgraph (
+            widgett.gvt.gt, widgett.gvt.gt.name, 'file', widgett.gvt.gt.graph, 1
+        );
+    }
+    suigraph.calcmm (gmap.values[namet.value]);
+    suigraph.setchainedmaps ();
+    namet.valt.framescale = namet.framescale;
+};
+
+suigraph.removeall = function () {
+    local name, names;
+
+    for (name in suigraph.names)
+        names[name] = suigraph.names[name];
+    for (name in names)
+        suigraph.remove (name);
+};
+
+suigraph.reloadall = function () {
+    local name;
+
+    for (name in suigraph.names)
+        suigraph.reload (suigraph.names[name]);
+};
+
+suigraph.removemany = function (cmd) {
+    local i;
+
+    if (cmd.name & strlen (cmd.name) > 0)
+        suigraph.remove (cmd);
+    else if (cmd.names)
+        for (i in cmd.names)
+            suigraph.remove (suigraph.names[cmd.names[i]]);
+    else
+        suigraph.removeall ();
+};
+
+suigraph.reloadmany = function (cmd) {
+    local i;
+
+    if (cmd.name & strlen (cmd.name) > 0)
+        suigraph.reload (cmd);
+    else if (cmd.names)
+        for (i in cmd.names)
+            suigraph.reload (suigraph.names[cmd.names[i]]);
+    else
+        suigraph.reloadall ();
+};
+
+suigraph.setframe = function (cmd) {
+    suigraph.framei = ston (cmd.framef);
+    suigraph.setframelabel ();
+};
+
+suigraph.focus = function (cmd) {
+    local widgett, outcmd;
+
+    widgett = suigraph.widgets[suigraph.mainview];
+    outcmd = copy (cmd);
+    remove ('cmd', outcmd);
+    remove ('coords', outcmd);
+    cmd.format = 'graph';
+    cmd.query = 'focusgraph';
+    cmd.name = concat (cmd.name, suigraph.qsuffix, '.', suigraph.qn);
+    suigraph.qn = suigraph.qn + 1;
+    suiutil.setbusy (suigraph.maincanvas);
+    if (suiutil.updatefile (cmd, suigraph) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', cmd.localfile));
+        suiutil.unsetbusy (suigraph.maincanvas);
+        return;
+    }
+    suiutil.unsetbusy (suigraph.maincanvas);
+    widgett.gvt.gt.name = cmd.localfile;
+    widgett.gvt.gt.cmd = outcmd;
+    widgett.gvt.gt.loadgraph (
+        widgett.gvt.gt, widgett.gvt.gt.name, 'file', widgett.gvt.gt.graph, 1
+    );
+};
+
+suigraph.unfocus = function (cmd) {
+};
+
+suigraph.settitle = function (cmd) {
+    local color;
+
+    if (cmd.color)
+        color = suiutil.parsecolorcmd (cmd.color);
+    if (suigraph.ds.showtitle)
+        setwidgetattr (suigraph.widgets.title, [
+            'text' = cmd.title;
+            'color' = color;
+        ]);
+    setwidgetattr (suigraph.widgets.view, ['name' = cmd.title;]);
+};
+
+#
+# command handling support functions
+#
+
+suigraph.allowinsert = function (cmd) {
+    if (suigraph.ds.allowinsert)
+        if (~(cmd = suigraph.ds.allowinsert (cmd)))
+            return;
+    if (~cmd.file)
+        cmd.file = cmd.name;
+    return cmd;
+};
+
+suigraph.calcmm = function (values) {
+    local ci;
+
+    if (values.children) {
+        values.minvalue = 99999999;
+        values.maxvalue = -99999999;
+        for (ci = 0; values.children[ci]; ci = ci + 1) {
+            suigraph.calcmm (values.children[ci]);
+            if (values.minvalue > values.children[ci].minvalue)
+                values.minvalue = values.children[ci].minvalue;
+            if (values.maxvalue < values.children[ci].maxvalue)
+                values.maxvalue = values.children[ci].maxvalue;
+        }
+    }
+};
+
+suigraph.setchainedmaps = function () {
+    local name, namet, bygroup, minmax, namei, namej, namen;
+
+    namen = 0;
+    for (name in suigraph.names) {
+        namet = suigraph.names[name];
+        if (bygroup[namet.cmd.graphvaluegroup])
+            minmax = bygroup[namet.cmd.graphvaluegroup];
+        else {
+            minmax = [];
+            bygroup[namet.cmd.graphvaluegroup] = minmax;
+            minmax.min = 999999;
+            minmax.max = -999999;
+        }
+        if (minmax.min > gmap.values[namet.valt.value].minvalue)
+            minmax.min = gmap.values[namet.valt.value].minvalue;
+        if (minmax.max < gmap.values[namet.valt.value].maxvalue)
+            minmax.max = gmap.values[namet.valt.value].maxvalue;
+        namen = namen + 1;
+    }
+    namej = 0;
+    for (namei = 0; namei < suigraph.namen; namei = namei + 1) {
+        if (~(name = suigraph.order[namei]))
+            continue;
+        namet = suigraph.names[name];
+        minmax = [
+            'min' = gmap.values[namet.valt.value].minvalue;
+            'max' = gmap.values[namet.valt.value].maxvalue;
+        ];
+        namet.map = namet.cmd.graphvaluemap (
+            namet.cmd, minmax, bygroup[namet.cmd.graphvaluegroup], namej, namen
+        );
+        namej = namej + 1;
+    }
+};
+
+#
+# user interface functions
+#
+
+suigraph.createview = function (name, cmd) {
+    local widgett, protogt, protovt;
+
+    widgett.view = createwidget (-1, [
+        'type' = 'view'; 'name' = suigraph.ds.title;
+        'origin' = suigraph.ds.vieworigin; 'size' = suigraph.ds.viewsize;
+        'color' = suigraph.ds.viewcolor;
+    ]);
+    widgett.areas = createwidget (widgett.view, [
+        'type' = 'array'; 'mode' = 'vertical';
+        'color' = suigraph.ds.viewcolor;
+    ]);
+    if (suigraph.ds.showtitle) {
+        widgett.title = createwidget (widgett.areas, [
+            'type' = 'label'; 'text' = suigraph.ds.title;
+            'size' = ['x' = 200; 'y' = suigraph.ds.textheight;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+    }
+    if (suigraph.ds.showcontrol) {
+        widgett.control = createwidget (widgett.areas, [
+            'type' = 'array'; 'mode' = 'horizontal';
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgett.omodel = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Output Mode:';
+            'size' = ['x' = 200; 'y' = 25;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgett.omodeval = 'graph';
+        widgett.omodet = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = widgett.omodeval;
+            'size' = ['x' = 200; 'y' = 25;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgets[widgett.omodet].leftdown = suigraph.cb.omodechoice;
+        widgett.framel = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Showing Frame:';
+            'size' = ['x' = 200; 'y' = suigraph.ds.textheight;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgett.framet = createwidget (widgett.control, [
+            'type' = 'text'; 'text' = ''; 'mode' = 'oneline';
+            'size' = ['x' = 200; 'y' = suigraph.ds.textheight;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgets[widgett.framet].oneline = suigraph.cb.frame;
+        widgett.iteml = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Showing Location:';
+            'size' = ['x' = 200; 'y' = suigraph.ds.textheight;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgets[widgett.iteml].leftdown = suigraph.cb.resetitem;
+        widgett.itemt = createwidget (widgett.control, [
+            'type' = 'text'; 'text' = ''; 'mode' = 'oneline';
+            'size' = ['x' = 200; 'y' = suigraph.ds.textheight;];
+            'color' = suigraph.ds.viewcolor;
+        ]);
+        widgets[widgett.itemt].oneline = suigraph.cb.item;
+    }
+    protogt = suigraph.ds.protogt;
+    protovt = suigraph.ds.protovt;
+    protovt.parent = widgett.areas;
+    widgett.gvt = dotty.createviewandgraph (name, 'file', protogt, protovt);
+    widgett.gvt.gt.cmd = cmd;
+    widgett.scroll = widgets[widgett.gvt.vt.canvas].parent;
+    widgett.canvas = widgett.gvt.vt.canvas;
+    widgett.protogvt = ['gt' = protogt; 'vt' = protovt;];
+    suigraph.widgets[widgett.view] = widgett;
+    suigraph.widgets[widgett.areas] = widgett;
+    if (suigraph.ds.showcontrol) {
+        suigraph.widgets[widgett.control] = widgett;
+        suigraph.widgets[widgett.omodel] = widgett;
+        suigraph.widgets[widgett.omodet] = widgett;
+        suigraph.widgets[widgett.framel] = widgett;
+        suigraph.widgets[widgett.framet] = widgett;
+        suigraph.widgets[widgett.iteml] = widgett;
+        suigraph.widgets[widgett.itemt] = widgett;
+    }
+    suigraph.widgets[widgett.scroll] = widgett;
+    suigraph.widgets[widgett.canvas] = widgett;
+    widgets[widgett.areas].resize = suigraph.cb.areasresize;
+    if (suigraph.ds.showcontrol) {
+        widgets[widgett.control].resize = suigraph.cb.controlresize;
+        setwidgetattr (widgett.omodel, ['size' = ['x' = 200; 'y' = 200;];]);
+    }
+    setwidgetattr (widgett.scroll, ['size' = ['x' = 200; 'y' = 200;];]);
+    widgets[widgett.view].closeview = suigraph.cb.closeview;
+    return widgett.view;
+};
+
+suigraph.destroyview = function (widget) {
+    local widgett;
+
+    widgett = suigraph.widgets[widget];
+    widgett.gvt.gt.destroyview (widgett.gvt.gt, widgett.gvt.vt);
+    if (tablesize (widgett.gvt.gt.views) == 0)
+        widgett.gvt.gt.destroygraph (widgett.gvt.gt);
+    destroywidget (widgett.view);
+    remove (widgett.view, suigraph.widgets);
+    remove (widgett.areas, suigraph.widgets);
+    if (suigraph.ds.showcontrol) {
+        remove (widgett.control, suigraph.widgets);
+        remove (widgett.omodel, suigraph.widgets);
+        remove (widgett.omodet, suigraph.widgets);
+        remove (widgett.framel, suigraph.widgets);
+        remove (widgett.framet, suigraph.widgets);
+        remove (widgett.iteml, suigraph.widgets);
+        remove (widgett.itemt, suigraph.widgets);
+    }
+    remove (widget, suigraph.widgets);
+};
+
+suigraph.setframelabel = function () {
+    local name, namet;
+
+    if (suigraph.ds.showcontrol) {
+        for (name in suigraph.names) {
+            namet = suigraph.names[name];
+            setwidgetattr (suigraph.widgets[namet.view].framet, [
+                'text' = suigraph.ds.setframelabel (suigraph.framei);
+            ]);
+        }
+        setwidgetattr (suigraph.widgets[suigraph.mainview].framet, [
+            'text' = suigraph.ds.setframelabel (suigraph.framei);
+        ]);
+    }
+};
+
+suigraph.uiaction = function (gt, vt, obj, data) {
+    local widget, widgett, cmd, query, t;
+
+    if (obj.nid >= 0) {
+        if (~(query = suigraph.ds.actions.node[data.menuitem]))
+            return;
+    } else if (obj.eid >= 0) {
+        if (~(query = suigraph.ds.actions.edge[data.menuitem]))
+            return;
+    } else
+        return;
+
+    for (widget in suigraph.widgets)
+        if (suigraph.widgets[widget].gvt.gt == gt)
+            break;
+    widgett = suigraph.widgets[widget];
+    cmd = copy (widgett.gvt.gt.cmd);
+    cmd.format = widgett.omodeval;
+    t = split (query, '|');
+    if (tablesize (t) == 2) {
+        cmd.format = t[1];
+        query = t[0];
+    }
+    cmd.class = obj.attr.class;
+    cmd.view = obj.attr.view;
+    cmd.name = concat (obj.attr.name, suigraph.qsuffix, '.', suigraph.qn);
+    suigraph.qn = suigraph.qn + 1;
+    cmd.framef = obj.attr.framef;
+    cmd.framel = obj.attr.framel;
+    cmd.query = query;
+    cmd.items = [0 = obj.attr.itemi;];
+    cmd.prefprefix = suigraph.prefprefix;
+    suiutil.writecmd (suigraph.mpfd, 'load', cmd);
+};
+
+#
+# resize functions
+#
+
+suigraph.cb.areasresize = function (data) {
+    local t, h, ret, widget;
+
+    t = suigraph.widgets[data.widget];
+    h = 0;
+    if (suigraph.ds.showtitle) {
+        ret[t.title] = ['x' = data.size.x; 'y' = suigraph.ds.textheight;];
+        h = h + suigraph.ds.textheight + 2;
+    }
+    if (suigraph.ds.showcontrol) {
+        ret[t.control] = ['x' = data.size.x; 'y' = suigraph.ds.textheight;];
+        h = h + suigraph.ds.textheight + 2;
+    }
+    ret[t.scroll] = [
+        'x' = data.size.x; 'y' = data.size.y - h;
+    ];
+    return ret;
+};
+
+suigraph.cb.controlresize = function (data) {
+    local t, ret;
+
+    t = suigraph.widgets[data.widget];
+    ret = [
+        t.omodel = ['x' = 2 * data.size.x / 12; 'y' = data.size.y;];
+        t.omodet = ['x' = 2 * data.size.x / 12; 'y' = data.size.y;];
+        t.framel = ['x' = 3 * data.size.x / 12; 'y' = data.size.y;];
+        t.framet = ['x' = 1 * data.size.x / 12; 'y' = data.size.y;];
+        t.iteml = ['x' = 3 * data.size.x / 12; 'y' = data.size.y;];
+        t.itemt = ['x' = 1 * data.size.x / 12; 'y' = data.size.y;];
+    ];
+    return ret;
+};
+
+#
+# Callbacks
+#
+
+suigraph.cb.omodemenu = [
+    0 = 'graph';
+    1 = 'text';
+];
+
+suigraph.cb.omodechoice = function (data) {
+    local t, i;
+
+    t = suigraph.widgets[data.widget];
+    if (~((i = displaymenu (data.widget, suigraph.cb.omodemenu)) >= 0))
+        return;
+    t.omodeval = suigraph.cb.omodemenu[i];
+    setwidgetattr (data.widget, ['text' = t.omodeval;]);
+};
+
+suigraph.cb.frame = function (data) {
+    local attr, framei;
+
+    attr = getwidgetattr (data.widget, [0 = 'text';]);
+    if (attr.text) {
+        if (suigraph.ds.getframelabel)
+            framei = suigraph.ds.setframelabel (attr.text);
+        else
+            framei = ston (attr.text);
+        if ((framei = ston (attr.text)))
+            suiutil.writecmd (suigraph.mpfd, 'play', ['framef' = framei;]);
+    }
+};
+
+suigraph.cb.resetitem = function (data) {
+    suiutil.writecmd (suigraph.mpfd, 'unfocus', []);
+};
+
+suigraph.cb.item = function (data) {
+    local widgett, attr, menu, menunames, menui, namei, name, namet, cmd, t;
+
+    widgett = suigraph.widgets[data.widget];
+    attr = getwidgetattr (data.widget, [0 = 'text';]);
+    if (attr.text & strlen (attr.text) > 1) {
+        if (tablesize (suigraph.names) > 1) {
+            menu[0] = 'Select Dataset:';
+            menui = 1;
+            for (namei = 0; namei < suigraph.namen; namei = namei + 1) {
+                if (~(name = suigraph.order[namei]))
+                    continue;
+                menu[menui] = suigraph.names[name].cmd.label;
+                menunames[menui] = name;
+                menui = menui + 1;
+            }
+            if (~((menui = displaymenu (widgett.canvas, menu)) >= 1))
+                return;
+            namet = suigraph.names[menunames[menui]];
+        } else
+            for (name in suigraph.names)
+                namet = suigraph.names[name];
+        cmd = copy (namet.outcmd);
+        t = split (attr.text, '\n');
+        cmd.items[0] = t[0];
+        cmd.framef = suigraph.framei;
+        cmd.framel = suigraph.framei;
+        suiutil.writecmd (suigraph.mpfd, 'focus', cmd);
+    } else
+        suiutil.writecmd (suigraph.mpfd, 'unfocus', []);
+};
+
+suigraph.cb.closeview = function (data) {
+    local widgett;
+
+    widgett = suigraph.widgets[data.widget];
+    suigraph.destroyview (widgett.view);
+    if (tablesize (suigraph.widgets) == 0)
+        writeline (1, "exit");
+};
+
+suigraph.monitorfile = function (data) {
+    local pendiot, cmd, t;
+
+    if (data.fd ~= suigraph.mpfd) {
+        if (dotty.monitorfile (data) == 0)
+            closeio (data.fd);
+        return;
+    }
+    if (~(cmd = suiutil.readcmd (suigraph.mpfd)))
+        exit ();
+    if (cmd.cmd == 'load')
+        suigraph.insert (cmd);
+    else if (cmd.cmd == 'unload')
+        suigraph.removemany (cmd);
+    else if (cmd.cmd == 'reload')
+        suigraph.reloadmany (cmd);
+    else if (cmd.cmd == 'play')
+        suigraph.setframe (cmd);
+    else if (cmd.cmd == 'focus') {
+        suigraph.setframe (cmd);
+        suigraph.focus (cmd);
+    } else if (cmd.cmd == 'unfocus')
+        suigraph.unfocus (cmd);
+    else if (cmd.cmd == 'settitle')
+        suigraph.settitle (cmd);
+    else if (cmd.cmd == 'sync')
+        suiutil.writecmd (suigraph.mpfd, concat ('sync ', cmd.id), null);
+};

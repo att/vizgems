@@ -1,0 +1,17 @@
+rec=(
+    keys=IFACE
+    walk0=(
+        name='.1.3.6.1.4.1.9.9.46.1.6.1.1.14.${IFACE}' # vlanTrunkPortDynamicStatus
+        type=INTEGER
+        value='${VTSTATE}'
+    )
+    outkey=IFACE
+    output='${IFACE}|${VTSTATE}'
+    outfilter='(
+        IFS="|"
+        while read -r iface vtstate; do
+            [[ $vtstate != 1 ]] && continue
+            print "ifistrunk[$SNMPIP:$iface]=1"
+        done
+    )'
+)

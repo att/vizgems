@@ -1,0 +1,805 @@
+#!/bin/ksh
+
+usage=$'
+[-1p1?
+@(#)$Id: renameassets (AT&T) 2007-03-25 $
+]
+[+NAME?renameassets - map old asset names to new ones or remove them]
+[+DESCRIPTION?\brenameassets\b the renaming of assets in all VizGEMS tables.
+the user must specify the name of an ascii file that contains the mapping.
+the format of the file is lines containing the old asset name, followed
+by \'|\' followed by the new asset name.
+if the new asset name is empty, the old asset will be deleted.
+]
+[200:new?specifies that only active files should be modified.
+]
+[201:old?specifies that only non-active files should be modified.
+]
+[202:all?specifies that all files should be modified.
+this is the default.
+]
+[203:maxjobs?specifies the number of convertions to do in parallel.
+the default is 4.
+]#[maxjobs]
+[204:dates?specifies a range of dates to operate on.
+the default is to operate on all dates.
+]:[YYYY.MM.DD-YYYY.MM.DD]
+[999:v?increases the verbosity level. May be specified multiple times.]
+
+mapfile
+
+'
+
+function showusage {
+    OPTIND=0
+    getopts -a renameassets "$usage" opt '-?'
+}
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+function geninvfilter {
+    cat > $tmpdir/trans.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id1 DDSSZ_rec_trans_inid
+	#define SZ_id2 DDSSZ_rec_trans_outid
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renameinv", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renameinv", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renameinv", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id1)
+	            SUerror ("renameinv", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renameinv", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renameinv", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renameinv", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renameinv", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+	    if ((mapp = dtmatch (mapdict, inid))) {
+	        if (mapp->oid[0]) {
+	            memset (inid, 0, SZ_id1);
+	            strcpy (inid, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	    if ((mapp = dtmatch (mapdict, outid))) {
+	        if (mapp->oid[0]) {
+	            memset (outid, 0, SZ_id2);
+	            strcpy (outid, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/trans.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_trans.schema \
+        -ff $tmpdir/trans.filter \
+    < /dev/null
+    [[ $? != 0 ]] && return 1
+
+    cat > $tmpdir/invnode.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id DDSSZ_rec_inv_node_id
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renameinv", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renameinv", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renameinv", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id)
+	            SUerror ("renameinv", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renameinv", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renameinv", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renameinv", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renameinv", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+	    if ((mapp = dtmatch (mapdict, id))) {
+	        if (mapp->oid[0]) {
+	            memset (id, 0, SZ_id);
+	            strcpy (id, mapp->oid);
+	            KEEP;
+	        } else
+	            DROP;
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/invnode.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_inv_node.schema \
+        -ff $tmpdir/invnode.filter \
+    < /dev/null
+    [[ $? != 0 ]] && return 1
+
+    cat > $tmpdir/invedge.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id1 DDSSZ_rec_inv_edge_id1
+	#define SZ_id2 DDSSZ_rec_inv_edge_id2
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renameinv", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renameinv", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renameinv", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id1)
+	            SUerror ("renameinv", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renameinv", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renameinv", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renameinv", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renameinv", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+	    if ((mapp = dtmatch (mapdict, id1))) {
+	        if (mapp->oid[0]) {
+	            memset (id1, 0, SZ_id1);
+	            strcpy (id1, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	    if ((mapp = dtmatch (mapdict, id2))) {
+	        if (mapp->oid[0]) {
+	            memset (id2, 0, SZ_id2);
+	            strcpy (id2, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/invedge.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_inv_edge.schema \
+        -ff $tmpdir/invedge.filter \
+    < /dev/null
+    [[ $? != 0 ]] && return 1
+
+    cat > $tmpdir/invmap.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id1 DDSSZ_rec_inv_map_id1
+	#define SZ_id2 DDSSZ_rec_inv_map_id2
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renameinv", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renameinv", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renameinv", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id1)
+	            SUerror ("renameinv", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renameinv", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renameinv", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renameinv", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renameinv", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+	    if ((mapp = dtmatch (mapdict, id1))) {
+	        if (mapp->oid[0]) {
+	            memset (id1, 0, SZ_id1);
+	            strcpy (id1, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	    if ((mapp = dtmatch (mapdict, id2))) {
+	        if (mapp->oid[0]) {
+	            memset (id2, 0, SZ_id2);
+	            strcpy (id2, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/invmap.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_inv_map.schema \
+        -ff $tmpdir/invmap.filter \
+    < /dev/null
+    [[ $? != 0 ]] && return 1
+
+    cat > $tmpdir/invcc.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id1 DDSSZ_rec_inv_cc_ndid
+	#define SZ_id2 DDSSZ_rec_inv_cc_ccid
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renameinv", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renameinv", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renameinv", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id1)
+	            SUerror ("renameinv", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renameinv", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renameinv", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renameinv", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renameinv", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+	    if ((mapp = dtmatch (mapdict, ndid))) {
+	        if (mapp->oid[0]) {
+	            memset (ndid, 0, SZ_id1);
+	            strcpy (ndid, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	    if ((mapp = dtmatch (mapdict, ccid))) {
+	        if (mapp->oid[0]) {
+	            memset (ccid, 0, SZ_id2);
+	            strcpy (ccid, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/invcc.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_inv_cc.schema \
+        -ff $tmpdir/invcc.filter \
+    < /dev/null
+    [[ $? != 0 ]] && return 1
+
+    return 0
+}
+
+function genalarmfilter {
+    cat > $tmpdir/alarm.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id1 DDSSZ_rec_alarm_id1
+	#define SZ_id2 DDSSZ_rec_alarm_id2
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renamealarm", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renamealarm", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renamealarm", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id1)
+	            SUerror ("renamealarm", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renamealarm", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renamealarm", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renamealarm", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renamealarm", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+            if (timeissued < $MINTIME || timeissued > $MAXTIME) {
+	        KEEP;
+	        return __result;
+            }
+	    if ((mapp = dtmatch (mapdict, id1))) {
+	        if (mapp->oid[0]) {
+	            memset (id1, 0, SZ_id1);
+	            strcpy (id1, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	    if ((mapp = dtmatch (mapdict, id2))) {
+	        if (mapp->oid[0]) {
+	            memset (id2, 0, SZ_id2);
+	            strcpy (id2, mapp->oid);
+	            KEEP;
+	        } else {
+	            DROP;
+	            return __result;
+	        }
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/alarm.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_alarm.schema \
+        -ff $tmpdir/alarm.filter \
+    < /dev/null
+}
+
+function genstatfilter {
+    cat > $tmpdir/stat.filter <<-EOF
+	VARS{
+	#include <ast.h>
+	#include <cdt.h>
+	#include <swift.h>
+	#define SZ_id DDSSZ_rec_stat_id
+	typedef struct map_s {
+	    Dtlink_t link;
+	    char *iid;
+	    char *oid;
+	} map_t;
+	static Dt_t *mapdict;
+	static Dtdisc_t mapdisc = {
+	    sizeof (Dtlink_t), -1, 0, NULL, NULL, NULL, NULL, NULL, NULL
+	};
+	}
+	BEGIN{
+	    Sfio_t *fp;
+	    char *line, *s1, *s2;
+	    map_t *mapp;
+	    if (!(mapdict = dtopen (&mapdisc, Dtset)))
+	        SUerror ("renamestat", "cannot create dictionary");
+	    if (!(fp = sfopen (NULL, "$mapfile", "r")))
+	        SUerror ("renamestat", "cannot open file %s", "$mapfile");
+	    while ((line = sfgetr (fp, '\n', 1))) {
+	        s1 = line;
+	        if (!(s2 = strchr (line, '|')))
+	            SUerror ("renamestat", "bad line %s", line);
+	        if (strlen (s2 + 1) >= SZ_id)
+	            SUerror ("renamestat", "id too long: %s", s2 + 1);
+	        *s2++ = 0;
+	        if (!(mapp = dtmatch (mapdict, s1))) {
+	            if (!(mapp = vmalloc (Vmheap, sizeof (map_t))))
+	                SUerror ("renamestat", "malloc failed");
+	            memset (mapp, 0, sizeof (map_t));
+	            if (!(mapp->iid = vmstrdup (Vmheap, s1)))
+	                SUerror (0, "renamestat", "strdup1 failed");
+	            if (!(mapp->oid = vmstrdup (Vmheap, s2)))
+	                SUerror (0, "renamestat", "strdup2 failed");
+	            if (dtinsert (mapdict, mapp) != mapp)
+	                SUerror (0, "renamestat", "dtinsert failed");
+	        }
+	    }
+	    sfclose (fp);
+	}
+	{
+	    map_t *mapp;
+            if (timeissued < $MINTIME || timeissued > $MAXTIME) {
+	        KEEP;
+	        return __result;
+            }
+	    if ((mapp = dtmatch (mapdict, id))) {
+	        if (mapp->oid[0]) {
+	            memset (id, 0, SZ_id);
+	            strcpy (id, mapp->oid);
+	            KEEP;
+	        } else
+	            DROP;
+	    } else
+	        KEEP;
+	}
+	EOF
+    ddscc \
+        -filter -so $tmpdir/stat.filter.so \
+        -is SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vg_stat.schema \
+        -ff $tmpdir/stat.filter \
+    < /dev/null
+}
+
+function filterfile { # $1 = file
+    typeset file=$1
+
+    case ${file##*/} in
+    inv-cc-*)     filter=invcc.filter.so   ;;
+    inv-nodes*)   filter=invnode.filter.so ;;
+    inv-edges*)   filter=invedge.filter.so ;;
+    inv-maps*)    filter=invmap.filter.so  ;;
+    objecttrans*) filter=trans.filter.so   ;;
+    *.alarms.*)   filter=alarm.filter.so   ;;
+    *.stats.*)    filter=stat.filter.so    ;;
+    *)
+        print -u2 ERROR unknown file $file
+        return 0
+        ;;
+    esac
+
+    if [[
+        $(ddsinfo -q $file | egrep ^compression | egrep -v ' none$') != ''
+    ]] then
+        args='-ozm rtb'
+    else
+        args=''
+    fi
+
+    ddsfilter -fso $tmpdir/$filter $file \
+    | case ${file##*/} in
+    inv-cc-cc2nd*)
+        ddssort $args -ke 'cclevel ccid'
+        ;;
+    inv-cc-nd2cc*)
+        ddssort $args -ke 'ndlevel ndid'
+        ;;
+    inv-nodes*)
+        ddssort $args -ke 'level id key'
+        ;;
+    inv-edges*)
+        ddssort $args -ke 'level1 id1 level2 id2 key'
+        ;;
+    inv-maps*)
+        ddssort $args -ke 'level1 id1 level2 id2 key'
+        ;;
+    objecttrans-rev*)
+        ddssort $args -ke 'outid'
+        ;;
+    objecttrans*)
+        ddssort $args -ke 'inid'
+        ;;
+    *.alarms.*)
+        if [[ $file == *main/????/??/??/processed/* ]] then
+            ddssort $args -r -ke 'timeissued type sortorder'
+        else
+            ddssort $args -ke 'level1 id1 level2 id2'
+        fi
+        ;;
+    *.stats.*)
+        ddssort $args -ke 'level id key unit frame'
+        ;;
+    *)
+        print -u2 ERROR unknown file $file
+        return 0
+        ;;
+    esac > $file.tmp && mv $file.tmp $file
+}
+
+set -o pipefail
+
+export LC_ALL=C LANG=C
+
+mode=all
+maxjobs=4
+while getopts -a renameassets "$usage" opt; do
+    case $opt in
+    200) mode=new ;;
+    201) mode=old ;;
+    202) mode=all ;;
+    203) maxjobs=$OPTARG ;;
+    204) dates=$OPTARG ;;
+    999) (( SWIFTWARNLEVEL++ )) ;;
+    *) showusage; exit 1 ;;
+    esac
+done
+shift $OPTIND-1
+export JOBMAX=$maxjobs
+
+mapfile=$1
+if [[ ! -f $mapfile ]] then
+    print -u2 ERROR file $mapfile does not exist
+    exit 1
+fi
+if [[ $(fgrep '|' $mapfile) == '' ]] then
+    print -u2 ERROR file $mapfile does not contain mapping records
+    exit 1
+fi
+mindate=1970.01.01
+maxdate=${ printf '%(%Y.%m.%d)T' "10 days hence"; }
+if [[ $dates != '' ]] then
+    if [[ $dates != {4}([0-9])[./]{2}([0-9])[./]{2}([0-9])-{4}([0-9])[./]{2}([0-9])[./]{2}([0-9]) ]] then
+        print -u2 ERROR bad dates specification, should be YYYY.MM.DD-YYYY.MM.DD
+        exit 1
+    fi
+    mindate=${dates%-*}
+    maxdate=${dates#*-}
+    mindate=${mindate//\//.}
+    maxdate=${maxdate//\//.}
+fi
+export MINTIME=${ printf '%(%#)T' "$mindate-00:00:00"; }
+export MAXTIME=${ printf '%(%#)T' "$maxdate-23:59:59"; }
+mindate=${mindate//.//}
+maxdate=${maxdate//.//}
+
+cd SWIFT_CFG_DSYSTEMDIR
+
+export TMPDIR=$PWD/tmp
+mkdir -p $TMPDIR
+
+tmpdir=$TMPDIR/renameassets.$$
+mkdir -p $tmpdir
+[[ ! -d $tmpdir ]] && {
+    print -u2 ERROR cannot create directory $tmpdir
+    exit 1
+}
+
+geninvfilter || exit 1
+genalarmfilter || exit 1
+genstatfilter || exit 1
+
+print "ready to start renaming"
+print "this will take some time"
+if [[ $mode == @(all|new) ]] then
+    print "all data processing will be suspended"
+fi
+read yn?"start? "
+[[ $yn != y ]] && exit 0
+
+if [[ $mode == @(all|new) ]] then
+    print begin processing active files $(date)
+    print STOPPING LIVE PROCESSING
+    ./etc/system_control stop
+    for i in data/main/????/??/?? data/main/????/?? data/main/????; do
+        [[ ! -d $i ]] && continue
+        [[ -f $i/complete.stamp ]] && continue
+        d=${i#data/main/}
+        if [[ $d == ????/??/?? ]] then
+            [[ $d < $mindate || $d > $maxdate ]] && continue
+        elif [[ $d == ????/?? ]] then
+            [[ $d < ${mindate%/??} || $d > ${maxdate%/??} ]] && continue
+        elif [[ $d == ???? ]] then
+            [[ $d < ${mindate%/??/??} || $d > ${maxdate%/??/??} ]] && continue
+        fi 
+        print $i
+    done | sort -r | while read i; do
+        print date=${i#data/main/}
+        touch $tmpdir/*
+        for j in \
+            $i/processed/total/inv-*.dds \
+            $i/processed/total/objecttrans*.dds \
+            $i/processed/total/all.*alarms.dds \
+            $i/processed/total/open.*alarms.dds \
+            $i/processed/total/uniq.*alarms.dds \
+            $i/processed/total/all.*stats.dds \
+            $i/processed/total/uniq.*stats.dds \
+            $i/processed/avg/total/mean.*.stats.dds \
+            $i/processed/avg/total/sdev.*.stats.dds \
+        ; do
+            [[ ! -f $j ]] && continue
+            [[ -f exit.rename ]] && break
+            print file=$j
+            filterfile $j &
+        done
+        [[ -f exit.rename ]] && break
+    done
+    wait
+    print RESTARTING LIVE PROCESSING
+    ./etc/system_control start
+    print end processing active files $(date)
+fi
+
+if [[ $mode == @(all|old) ]] then
+    print begin processing non-active files $(date)
+    for i in data/main/????/??/?? data/main/????/?? data/main/????; do
+        [[ ! -d $i ]] && continue
+        [[ ! -f $i/complete.stamp ]] && continue
+        d=${i#data/main/}
+        if [[ $d == ????/??/?? ]] then
+            [[ $d < $mindate || $d > $maxdate ]] && continue
+        elif [[ $d == ????/?? ]] then
+            [[ $d < ${mindate%/??} || $d > ${maxdate%/??} ]] && continue
+        elif [[ $d == ???? ]] then
+            [[ $d < ${mindate%/??/??} || $d > ${maxdate%/??/??} ]] && continue
+        fi
+        print $i
+    done | sort -r | while read i; do
+        print date=${i#data/main/}
+        touch $tmpdir/*
+        for j in \
+            $i/processed/total/inv-*.dds \
+            $i/processed/total/objecttrans*.dds \
+            $i/processed/total/all.*alarms.dds \
+            $i/processed/total/open.*alarms.dds \
+            $i/processed/total/uniq.*alarms.dds \
+            $i/processed/total/all.*stats.dds \
+            $i/processed/total/uniq.*stats.dds \
+            $i/processed/avg/total/mean.*.stats.dds \
+            $i/processed/avg/total/sdev.*.stats.dds \
+        ; do
+            [[ ! -f $j ]] && continue
+            [[ -f exit.rename ]] && break
+            print file=$j
+            filterfile $j &
+        done
+        [[ -f exit.rename ]] && break
+    done
+    wait
+    print end processing non-active files $(date)
+fi

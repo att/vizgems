@@ -1,0 +1,60 @@
+vpmpid = '';
+a = function () {
+    local s;
+
+    if ((s = getenv ("VPMX")))
+        dotty.protovt.normal.orig.x = ston (s);
+    if ((s = getenv ("VPMY")))
+        dotty.protovt.normal.orig.y = ston (s);
+    if ((s = getenv ("VPMW")))
+        dotty.protovt.normal.size.x = ston (s);
+    if ((s = getenv ("VPMH")))
+        dotty.protovt.normal.size.y = ston (s);
+    if ((s = getenv ("VPMPID")))
+        vpmpid = s;
+};
+a();
+dotty.protogt.setgraph = function (gt, graph) {
+    local vid, vt, nid, eid, gid;
+
+    if (gt.layoutpending > 0)
+        gt.cancellayout (gt);
+    for (vid in gt.views) {
+        vt = gt.views[vid];
+        vt.colors = [];
+        vt.colorn = 2;
+    }
+    gt.graph = copy (graph);
+    gt.undoarray = ['level' = 0; 'entries' = [];];
+    gt.unpackattr (gt);
+    gt.graph.maxgid = tablesize (graph.graphs);
+    gt.graph.maxnid = tablesize (graph.nodes);
+    gt.graph.maxeid = tablesize (graph.edges);
+    for (nid in gt.graph.nodes)
+        gt.graph.nodes[nid][dotty.keys.nid] = nid;
+    for (eid in gt.graph.edges)
+        gt.graph.edges[eid][dotty.keys.eid] = eid;
+    for (gid in gt.graph.graphs)
+        gt.graph.graphs[gid][dotty.keys.gid] = gid;
+    gt.unpackattr (gt);
+    if (vpmpid ~= '')
+        gt.removesubtree (gt, gt.graph.nodes[gt.graph.nodedict[vpmpid]]);
+    gt.layoutgraph (gt);
+    return gt.graph;
+};
+monitor ('on', 0);
+monitorfile = function (data) {
+    local gt, s;
+
+    if (data.fd ~= 0)
+        return dotty.monitorfile (data);
+    if (~(s = readline (0))) {
+        monitor ('off', 0);
+        return 0;
+    }
+    gt = dotty.graphs[1];
+    if (s == 'read graph') {
+        graph = readgraph (0, dotty.protogt.graph);
+        gt.setgraph (gt, graph);
+    }
+};

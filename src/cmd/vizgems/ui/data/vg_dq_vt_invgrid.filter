@@ -1,0 +1,251 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+
+static char graphlevel[SZ_level];
+static char pclusterlevel[SZ_level];
+static char sclusterlevel[SZ_level];
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, maxpix;
+static char *rendermode, *pagemode;
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("INVGRIDATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_invgrid", "cannot load attr file");
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_invgrid", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_MAXPIXEL].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find maxpixel");
+    maxpix = atoi (attrs[ATTR_MAXPIXEL].str);
+    if (!attrs[ATTR_GRAPHLEVEL].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find graphlevel");
+    strcpy (graphlevel, attrs[ATTR_GRAPHLEVEL].str);
+    if (!attrs[ATTR_PCLUSTERLEVEL].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find pclusterlevel");
+    strcpy (pclusterlevel, attrs[ATTR_PCLUSTERLEVEL].str);
+    if (!attrs[ATTR_SCLUSTERLEVEL].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find sclusterlevel");
+    strcpy (sclusterlevel, attrs[ATTR_SCLUSTERLEVEL].str);
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_invgrid", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_invgrid", "cannot init UT");
+    if (RIinit (fprefix, iprefix, maxpix) == -1)
+        SUerror ("vg_dq_vt_invgrid", "cannot init RI");
+    if (EMinit (getenv ("INVGRIDEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_invgrid", "cannot init EM");
+    if (IGDinit (atoi (getenv ("SCREENWIDTH")), pagemode) == -1)
+        SUerror ("vg_dq_vt_invgrid", "cannot init IGD");
+}
+{
+    IGDcc_t *ccp;
+    IGDcl_t *clp;
+    IGDnd_t *ndp;
+    char *m1p;
+    char url[ATTRBUFLEN];
+
+    DROP;
+
+    if (cat != VG_QUERY_N_CAT_RESULT)
+        return __result;
+
+    switch (type) {
+    case VG_QUERY_N_TYPE_NODE:
+        if (attreval (
+            level1, id1, NULL, NULL, (
+                class1 == VG_QUERY_N_CLASS_PRIMARY
+            ) ? ATTR_PNODEATTR : ATTR_SNODEATTR, ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_invgrid", "cannot get node attr");
+        if (!(ndp = IGDinsertnd (level1, id1, class1, attrstr)))
+            SUerror ("vg_dq_vt_invgrid", "cannot insert nd");
+
+        if (graphlevel[0]) {
+            for (
+                m1p = M1F (level1, id1, graphlevel); m1p;
+                m1p = M1N (level1, id1, graphlevel)
+            ) {
+                if (!(ccp = IGDinsertcc (graphlevel, m1p)))
+                    SUerror ("vg_dq_vt_invgrid", "cannot insert cc");
+                if (!IGDlinknd2cc (ndp, ccp))
+                    SUerror ("vg_dq_vt_invgrid", "cannot link nd to cc");
+            }
+        } else {
+            if (!(ccp = IGDinsertcc ("ALL", "ALL")))
+                SUerror ("vg_dq_vt_invgrid", "cannot insert ALL cc");
+            if (!IGDlinknd2cc (ndp, ccp))
+                SUerror ("vg_dq_vt_invgrid", "cannot link nd to cc");
+        }
+
+        if (class1 == VG_QUERY_N_CLASS_PRIMARY && pclusterlevel[0]) {
+            for (
+                m1p = M1F (level1, id1, pclusterlevel); m1p;
+                m1p = M1N (level1, id1, pclusterlevel)
+            ) {
+                if (attreval (
+                    pclusterlevel, m1p, NULL, NULL,
+                    ATTR_PCLUSTERURL, ATTRENC_URL
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgrid", "cannot get cluster url");
+                strcpy (url, attrstr);
+                if (attreval (
+                    pclusterlevel, m1p, NULL, NULL,
+                    ATTR_PCLUSTERATTR, ATTRENC_SIMPLE
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgrid", "cannot get cluster attr");
+                sfsprintf (objstr, OBJLEN, "n|%s|%s", pclusterlevel, m1p);
+                if (!(clp = IGDinsertcl (
+                    pclusterlevel, m1p, attrstr, objstr, url
+                )))
+                    SUerror ("vg_dq_vt_invgrid", "cannot insert pcl");
+                if (!IGDlinknd2cl (ndp, clp))
+                    SUerror ("vg_dq_vt_invgrid", "cannot link nd to pcl");
+            }
+        } else if (class1 == VG_QUERY_N_CLASS_SECONDARY && sclusterlevel[0]) {
+            for (
+                m1p = M1F (level1, id1, sclusterlevel); m1p;
+                m1p = M1N (level1, id1, sclusterlevel)
+            ) {
+                if (attreval (
+                    sclusterlevel, m1p, NULL, NULL,
+                    ATTR_SCLUSTERURL, ATTRENC_URL
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgrid", "cannot get cluster url");
+                strcpy (url, attrstr);
+                if (attreval (
+                    sclusterlevel, m1p, NULL, NULL,
+                    ATTR_SCLUSTERATTR, ATTRENC_SIMPLE
+                ) == -1)
+                    SUerror ("vg_dq_vt_invgrid", "cannot get cluster attr");
+                sfsprintf (objstr, OBJLEN, "n|%s|%s", sclusterlevel, m1p);
+                if (!(clp = IGDinsertcl (
+                    sclusterlevel, m1p, attrstr, objstr, url
+                )))
+                    SUerror ("vg_dq_vt_invgrid", "cannot insert scl");
+                if (!IGDlinknd2cl (ndp, clp))
+                    SUerror ("vg_dq_vt_invgrid", "cannot link nd to scl");
+           }
+        } else {
+            if (!(clp = IGDinsertcl ("ALL", "ALL", "", NULL, NULL)))
+                SUerror ("vg_dq_vt_invgrid", "cannot insert scl");
+            if (!IGDlinknd2cl (ndp, clp))
+                SUerror ("vg_dq_vt_invgrid", "cannot link nd to scl");
+        }
+        break;
+    case VG_QUERY_N_TYPE_EDGE:
+        break;
+    }
+}
+END{
+    IGDcc_t *ccp;
+    IGDcl_t *clp;
+    IGDnd_t *ndp;
+    int ndi, ndj;
+    char tlurl[ATTRBUFLEN];
+    int done;
+
+    if (IGDflatten () == -1)
+        SUerror ("vg_dq_vt_invgrid", "cannot flatten");
+
+    for (;;) {
+        for (ndi = 0; ndi < IGDndn; ndi++)
+            if ((ndp = IGDnds[ndi]))
+                break;
+        if (ndi == IGDndn)
+            break;
+
+        ccp = ndp->ccp;
+
+        done = FALSE;
+        for (ndi = 0, done = FALSE; !done;) {
+            done = TRUE;
+            for (ndj = 0, clp = NULL; ndj < IGDndn; ndj++) {
+                if (!(ndp = IGDnds[ndj]))
+                    continue;
+                if (ndp->ccp != ccp)
+                    continue;
+                done = FALSE;
+                if (!clp)
+                    clp = ndp->clp;
+                else if (clp != ndp->clp)
+                    continue;
+                IGDwnds[ndi++] = ndp;
+                IGDnds[ndj] = NULL;
+            }
+        }
+
+        if (attreval (
+            ccp->level, ccp->id, NULL, NULL,
+            ATTR_TITLEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_invgrid", "cannot get title url");
+        strncpy (tlurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            ccp->level, ccp->id, NULL, NULL,
+            ATTR_TITLEATTR, ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_invgrid", "cannot get title attr");
+        sfsprintf (
+            objstr, OBJLEN, "n|%s|%s", IGDwnds[0]->level, IGDwnds[0]->id
+        );
+        if (IGDbegindraw (
+            fprefix, findex++, ndi,
+            attrs[ATTR_INVGRIDATTR].str, attrstr, tlurl, objstr
+        ) == -1)
+            SUerror ("vg_dq_vt_invgrid", "cannot begin drawing");
+
+        for (clp = NULL, ndj = 0; ndj < ndi; ndj++) {
+            ndp = IGDwnds[ndj];
+            if (attreval (
+                ndp->level, ndp->id, NULL, NULL, (
+                    ndp->nclass == VG_QUERY_N_CLASS_PRIMARY
+                ) ? ATTR_PNODEURL : ATTR_SNODEURL, ATTRENC_URL
+            ) == -1)
+                SUerror ("vg_dq_vt_invgrid", "cannot get node url");
+            sfsprintf (objstr, OBJLEN, "n|%s|%s", ndp->level, ndp->id);
+            if (IGDdrawnode (
+                ndp, attrstr, objstr, (!clp || clp != ndp->clp) ? TRUE : FALSE
+            ) == -1)
+                SUerror ("vg_dq_vt_invgrid", "cannot draw node");
+            clp = ndp->clp;
+        }
+
+        if (IGDenddraw () == -1)
+            SUerror ("vg_dq_vt_invgrid", "cannot end drawing");
+    }
+}

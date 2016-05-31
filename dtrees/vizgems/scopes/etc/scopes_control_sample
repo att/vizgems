@@ -1,0 +1,52 @@
+#!/bin/ksh
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH
+
+case $1 in
+setup)
+    ;;
+start)
+    if [[ ! -f SWIFT_CFG_DSCOPESDIR/active ]] then
+        exit 0
+    fi
+    rm -f SWIFT_CFG_DSCOPESDIR/exit.schedule
+    rm -f SWIFT_CFG_DSCOPESDIR/exit.upload
+    rm -f SWIFT_CFG_DSCOPESDIR/exit.health
+    rm -f SWIFT_CFG_DSCOPESDIR/exit.uploadhealth
+    mkdir -p SWIFT_CFG_DSCOPESDIR/logs
+    ;;
+stop)
+    if [[ ! -f SWIFT_CFG_DSCOPESDIR/active ]] then
+        exit 0
+    fi
+    touch SWIFT_CFG_DSCOPESDIR/exit.schedule
+    touch SWIFT_CFG_DSCOPESDIR/exit.upload
+    touch SWIFT_CFG_DSCOPESDIR/exit.health
+    touch SWIFT_CFG_DSCOPESDIR/exit.uploadhealth
+    while [[ -f SWIFT_CFG_DSCOPESDIR/lock.schedule ]] do
+        sleep 1
+    done
+    while [[ -f SWIFT_CFG_DSCOPESDIR/lock.upload ]] do
+        sleep 1
+    done
+    while [[ -f SWIFT_CFG_DSCOPESDIR/lock.health ]] do
+        sleep 1
+    done
+    while [[ -f SWIFT_CFG_DSCOPESDIR/lock.uploadhealth ]] do
+        sleep 1
+    done
+    n=0
+    while [[ $(fuser SWIFT_CFG_DSCOPESDIR/etc/*job 2> /dev/null) != '' ]] do
+        print waiting for these processes to finish:
+        fuser SWIFT_CFG_DSCOPESDIR/etc/*job
+        sleep 1
+        (( n++ > 30 )) && break
+    done
+    while [[ $(fuser SWIFT_CFG_DSCOPESDIR/tmp/inuse.* 2> /dev/null) != '' ]] do
+        print waiting for these processes to finish:
+        fuser SWIFT_CFG_DSCOPESDIR/tmp/inuse.*
+        sleep 1
+        (( n++ > 30 )) && break
+    done
+    ;;
+esac

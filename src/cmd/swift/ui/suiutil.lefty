@@ -1,0 +1,235 @@
+#
+# utility functions for swiftui
+#
+suiutil.msglevel = 0;
+suiutil.msglabel = 'SWIFT UI message: ';
+suiutil.msg = function (level, msg) {
+    if (suiutil.msglevel >= level)
+        writeline (2, concat (suiutil.msglabel, msg));
+};
+
+suiutil.readcmd = function (fd) {
+    local s, t, ret;
+
+    if (~(s = readline (fd)))
+        return null;
+    if (s ~= 'begin') {
+        t = split (s, ' ');
+        if (t[0] == 'sync')
+            return ['cmd' = 'sync'; 'id' = t[1];];
+        return ['cmd' = s;];
+    }
+    ret = suiutil.readcmdrec (fd);
+    return ret;
+};
+suiutil.readcmdrec = function (fd) {
+    local ret, i, s, t, j, l, n;
+
+    ret = [];
+    i = 0;
+    while ((s = readline (fd))) {
+        if (s == ']' | s == 'end')
+            return ret;
+        t = split (s, '=');
+        if (tablesize (t) < 2) {
+            ret[i] = t[0];
+            i = i + 1;
+        } else if (t[1] ~= '[') {
+            if ((n = tablesize (t)) > 2) {
+                l = t[1];
+                for (j = 2; j < n; j = j + 1)
+                    l = concat (l, '=', t[j]);
+                ret[t[0]] = l;
+            } else
+                ret[t[0]] = t[1];
+        } else
+            ret[t[0]] = suiutil.readcmdrec (fd);
+    }
+    return;
+};
+suiutil.writecmd = function (fd, cmd, args) {
+    if (args == null) {
+        writeline (fd, cmd);
+        return;
+    }
+    writeline (fd, 'begin');
+    writeline (fd, concat ('cmd=', cmd));
+    suiutil.writecmdrec (fd, args);
+    writeline (fd, 'end');
+};
+suiutil.writecmdrec = function (fd, args) {
+    local argi;
+
+    for (argi in args) {
+        if (typeof (args[argi]) == 'table') {
+            writeline (fd, concat (argi, '=['));
+            suiutil.writecmdrec (fd, args[argi]);
+            writeline (fd, ']');
+        } else if (argi >= 0)
+            writeline (fd, args[argi]);
+        else
+            writeline (fd, concat (argi, '=', args[argi]));
+    }
+};
+suiutil.parsecolorcmd = function (cmd) {
+    local ret, t, n, i;
+
+    t = split (cmd, ' ');
+    if ((n = tablesize (t)) < 1)
+        return;
+    if (n == 1)
+        return cmd;
+    for (i = 0; i < n; i = i + 1)
+        ret[i] = t[i];
+    return ret;
+};
+suiutil.mkcolortable = function (ct) {
+    local t, ci, cn, cv;
+
+    for (ci in ct) {
+        cn = ct[ci].name;
+        if (ct[ci].value) {
+            if (typeof (ct[ci].value) == 'table') {
+                t[cn] = ct[ci].value;
+                continue;
+            }
+            cn = ct[ci].value;
+        }
+        if ((cv = colormap (cn)))
+            t[cn] = cv;
+    }
+    return t;
+};
+
+suiutil.msg = function (level, msg) {
+};
+
+suiutil.packcmd = function (prefprefix, cmd) {
+    local cmd2, t, s, c, i;
+
+    cmd2 = copy (cmd);
+    cmd = cmd2;
+    cmd.prefprefix = prefprefix;
+    s = concat (cmd.name);
+    if (tablesize (split (s, '?')) > 1)
+        c = '&';
+    else
+        c = '?';
+    for (i in cmd) {
+        if (typeof (cmd[i]) == 'table')
+            s = concat (s, c, i, '=[', suiutil.packcmdrec (cmd[i]), ']');
+        else
+            s = concat (s, c, i, '=', htmlquote (cmd[i]));
+        c = '&';
+    }
+    return s;
+};
+
+suiutil.packcmdrec = function (cmd) {
+    local s, c, i;
+
+    s = '';
+    c = '';
+    for (i in cmd) {
+        if (typeof (cmd[i]) == 'table')
+            s = concat (s, c, i, '=[', suiutil.packcmdrec (cmd[i]), ']');
+        else
+            s = concat (s, c, i, '=', htmlquote (cmd[i]));
+        c = ';';
+    }
+    return s;
+};
+
+suiutil.updatefile = function (cmd, data) {
+    local fd, s;
+
+    if (~cmd.localfile)
+        if (cmd.file)
+            cmd.localfile = concat (data.localdir, cmd.file);
+        else
+            cmd.localfile = concat (data.localdir, cmd.name);
+    if (~cmd.remotefile)
+        if (cmd.query)
+            cmd.remotefile = suiutil.packcmd (data.prefprefix, cmd);
+        else if (cmd.file)
+            cmd.remotefile = cmd.file;
+        else
+            cmd.remotefile = cmd.name;
+    if (~(fd = openio ('pipe', 'suidclient', 'r', concat (
+        '%e "', "'", cmd.localfile, "' '",
+        data.dserver, cmd.remotefile, "'", '"'
+    )))) {
+        suiutil.msg (1, 'cannot run suidclient');
+        return;
+    }
+    s = readline (fd);
+    closeio (fd);
+    return s;
+};
+
+suiutil.startupdatefile = function (cmd, data) {
+    local fd;
+
+    if (~cmd.localfile)
+        if (cmd.file)
+            cmd.localfile = concat (data.localdir, cmd.file);
+        else
+            cmd.localfile = concat (data.localdir, cmd.name);
+    if (~cmd.remotefile)
+        if (cmd.file)
+            cmd.remotefile = cmd.file;
+        else
+            cmd.remotefile = cmd.name;
+    if (~(fd = openio ('pipe', 'suidclient', 'r', concat (
+        '%e "', "'", cmd.localfile, "' '",
+        data.dserver, cmd.remotefile, "'", '"'
+    )))) {
+        suiutil.msg (1, 'cannot run suidclient');
+        return;
+    }
+    return fd;
+};
+
+suiutil.getserver = function (server, type) {
+    local afd, is, os, sfd;
+
+    if (~((afd = openio ('pipe', 'suiencode', 'r')) >= 0)) {
+        suiutil.msg (1, 'cannot access encryption info');
+        return;
+    }
+    if (~(is = readline (afd)) | ~(os = readline (afd))) {
+        suiutil.msg (1, 'cannot read encryption info');
+        closeio (afd);
+        return;
+    }
+    closeio (afd);
+    if (~((sfd = openio ('file', server, 'r+')) >= 0)) {
+        suiutil.msg (1, concat ('cannot connect to server ', server));
+        return;
+    }
+    if (~writeline (sfd, concat ('A', type)) | ~(readline (sfd) == 'YES')) {
+        suiutil.msg (1, 'wrong server type');
+        closeio (sfd);
+        return;
+    }
+    if (~writeline (sfd, is) | ~writeline (sfd, os)) {
+        suiutil.msg (1, 'cannot send authentication strings');
+        closeio (sfd);
+        return;
+    }
+    if (~(readline (sfd) == 'YES')) {
+        suiutil.msg (1, 'authentication failed');
+        closeio (sfd);
+        return;
+    }
+    return sfd;
+};
+suiutil.releaseserver = function (fd) {
+    closeio (fd);
+};
+suiutil.setbusy = function (widget) {
+    setwidgetattr (widget, ['cursor' = 'watch';]);
+};
+suiutil.unsetbusy = function (widget) {
+    setwidgetattr (widget, ['cursor' = 'default';]);
+};

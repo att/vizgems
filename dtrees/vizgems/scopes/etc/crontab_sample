@@ -1,0 +1,12 @@
+#
+# data collection jobs
+#
+# schedulejob and uploadjob don't terminate
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSCOPESDIR/etc/schedulejob
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSCOPESDIR/etc/uploadjob
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * /bin/ksh SWIFT_CFG_DSCOPESDIR/etc/healthjob
+#
+# monitoring jobs
+0,15,30,45 * * * * /bin/ksh SWIFT_CFG_DSCOPESDIR/etc/checklogs critical fifteen
+0 * * * * /bin/ksh SWIFT_CFG_DSCOPESDIR/etc/checklogs important hourly
+0 0 * * * /bin/ksh SWIFT_CFG_DSCOPESDIR/etc/checklogs all daily

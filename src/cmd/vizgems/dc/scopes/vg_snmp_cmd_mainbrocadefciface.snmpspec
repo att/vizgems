@@ -1,0 +1,143 @@
+rec=(
+    keys=FCINDEX
+    walk0=(
+        name='.1.3.6.1.4.1.1588.2.1.1.1.6.2.1.4.${FCINDEX}' # swFCPortOpStatus
+        type=INTEGER
+        value='${FCSTATE}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.1588.2.1.1.1.6.2.1.36.${FCINDEX}' # swFCPortName
+        type=STRING
+        value='${FCNAME}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.1588.2.1.1.1.6.2.1.12.${FCINDEX}' # swFCPortRxWords
+        type=INTEGER
+        value='${FCIW}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.1588.2.1.1.1.6.2.1.11.${FCINDEX}' # swFCPortTxWords
+        type=INTEGER
+        value='${FCOW}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.1588.2.1.1.1.6.2.1.14.${FCINDEX}' # swFCPortRxFrames
+        type=INTEGER
+        value='${FCIFR}'
+    )
+    walk5=(
+        name='.1.3.6.1.4.1.1588.2.1.1.1.6.2.1.13.${FCINDEX}' # swFCPortTxFrames
+        type=INTEGER
+        value='${FCOFR}'
+    )
+
+    outkey=FCINDEX
+    output='${FCINDEX}|${FCNAME}|${FCSTATE}|${FCIW}|${FCOW}|${FCIFR}|${FCOFR}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r index name st iw ow ifr ofr; do
+                name=${name//[\"\|]/}
+                if [[ $st == 1 ]] then
+                    print "node|o|$INV_TARGET|si_fcindex$index|$index"
+                    print -u3 "ifs[$index]=1"
+                fi
+                if [[ $st == 1 ]] then
+                    print "node|o|$INV_TARGET|si_fcstatus$index|up"
+                else
+                    print "node|o|$INV_TARGET|si_fcstatus$index|down"
+                fi
+                print "node|o|$INV_TARGET|si_fcname$index|$name"
+            done 3> brocadefciface.list.new
+            mv brocadefciface.list.new brocadefciface.list
+            ;;
+        *)
+            fmt="rt=STAT name=\"%s\" type=number num=%s unit=\"%s\" label=\"%s\"\\n"
+            typeset -A pvs ifs
+            typeset -F3 mdiw mdow
+            [[ -f ./brocadefciface.state ]] && . ./brocadefciface.state
+            [[ -f ./brocadefciface.list ]] && . ./brocadefciface.list
+            ifn=0
+            while read -r index name st iw ow ifr ofr; do
+                if [[ $st != 1 ]] then
+                    continue
+                fi
+                name=${name//[\"\|]/}
+                if (( ifs[$index] < 1 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+
+                if [[ ${pvs[$index].ts} != "" ]] then
+                    typeset -n pvr=pvs[$index]
+                    (( dt = VG_JOBTS - pvr.ts ))
+                    if (( dt > 0 && dt <= 3 * $VG_JOBIV )) then
+                        if [[ $iw != "" && ${pvr.iw} != "" ]] then
+                            (( (diw = iw - pvr.iw) < 0 )) && wrapcalc 32 $dt ${pvr.iw} $iw diw
+                            if (( diw >= 0 )) then
+                                (( mdiw = diw / 1000000.0 ))
+                                print -f "$fmt" "fc_inwords.${index}" "$mdiw" "MFCW" "In FC Words ($name)"
+                            fi
+                        fi
+                        if [[ $ow != "" && ${pvr.ow} != "" ]] then
+                            (( (dow = ow - pvr.ow) < 0 )) && wrapcalc 32 $dt ${pvr.ow} $ow dow
+                            if (( dow >= 0 )) then
+                                (( mdow = dow / 1000000.0 ))
+                                print -f "$fmt" "fc_outwords.${index}" "$mdow" "MFCW" "Out FC Words ($name)"
+                            fi
+                        fi
+                        if [[ $ifr != "" && ${pvr.ifr} != "" ]] then
+                            (( (difr = ifr - pvr.ifr) < 0 )) && wrapcalc 32 $dt ${pvr.ifr} $ifr difr
+                            if (( difr >= 0 )) then
+                                print -f "$fmt" "fc_infr.${index}" "$difr" "FR" "In FC Frames ($name)"
+                            fi
+                        fi
+                        if [[ $ofr != "" && ${pvr.ofr} != "" ]] then
+                            (( (dofr = ofr - pvr.ofr) < 0 )) && wrapcalc 32 $dt ${pvr.ofr} $ofr dofr
+                            if (( dofr >= 0 )) then
+                                print -f "$fmt" "fc_outfr.${index}" "$dofr" "FR" "Out FC Frames ($name)"
+                            fi
+                        fi
+                    fi
+                fi
+                pstr="ts=$VG_JOBTS"
+                [[ $iw != "" ]] && pstr+=" iw=$iw"; [[ $ow != "" ]] && pstr+=" ow=$ow"
+                [[ $ifr != "" ]] && pstr+=" ifr=$ifr"; [[ $ofr != "" ]] && pstr+=" ofr=$ofr"
+                print -u3 "pvs[$index]=($pstr)"
+
+                ifs[$index]=2
+                (( ifn++ ))
+            done 3> brocadefciface.state.new
+            mv brocadefciface.state.new brocadefciface.state
+            for index in "${!ifs[@]}"; do
+                if (( ifn > 0 && ifs[$index] != 2 )) then
+                    touch -d "14 day ago" inv.out
+                    break
+                fi
+            done
+            ;;
+        esac
+    }'
+    prepend='
+        typeset wraputs
+        function wrapcalc {
+            typeset bn=$1 dt=$2 pv=$3 cv=$4 dvv=$5
+            typeset -n dvr=$dvv
+            typeset j v ifs
+            ifs="$IFS"
+            IFS=" "
+            if [[ $wraputs == "" ]] then
+                $SNMPCMD -On $SNMPARGS .1.3.6.1.2.1.1.3.0 | read -r j j j wraputs j
+                wraputs=${wraputs//[()]/}
+                [[ $wraputs != +([0-9]) ]] && return
+                (( wraputs /= 100 ))
+            fi
+            if (( dt > wraputs - 5 )) then
+                (( dvr = cv ))
+            else
+                (( dvr = dvr + (2 ** bn) ))
+            fi
+            IFS="$ifs"
+        }
+    '
+)

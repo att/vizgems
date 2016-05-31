@@ -1,0 +1,38 @@
+#!/bin/ksh
+
+touch accounts/current
+
+rm -f proj/vg/cgi-bin-members/vg_dateselect.cgi*
+rm -f proj/vg/cgi-bin-members/vg_launch.cgi*
+rm -f proj/vg/cgi-bin-members/vg_lss.cgi*
+rm -f proj/vg/cgi-bin-members/vg_pad.cgi*
+rm -f proj/vg/cgi-bin-members/vg_setup.cgi*
+rm -f proj/vg/cgi-bin-members/vg_start.cgi*
+rm -f proj/vg/cgi-bin-members/vg_viewselect.cgi*
+
+rm -f conf/swift/gen.conf_sample conf/swift/gen.conf conf/swift/gen.conf.old
+
+rm -rf htdocs/proj/gen
+rm -rf proj/gen
+
+rm -f cgi-bin/jsui*
+rm -f cgi-bin-members/sui*
+rm -f cgi-bin-members/swm*
+
+if [[ $(egrep 'Member' htdocs/index.html) != '' ]] then
+    cp htdocs/index.html_initial htdocs/index.html
+fi
+
+port=$(egrep '^Listen ([0-9])+$' conf/httpd.conf)
+port=${port#'Listen '}
+if (( port >= 1024 )) then
+    for i in logs/*; do
+        [[ ! -f $i ]] && continue
+        if [[ $(stat "$i" | egrep 'Uid:.*/.*root') != '' ]] then
+            print -u2 changing owner for $i
+            cp $i $i.bak
+            rm -f $i
+            mv $i.bak $i
+        fi
+    done
+fi

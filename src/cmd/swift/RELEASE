@@ -1,0 +1,12 @@
+13-05-22 added tool sdpmpjobcntl to control parallelism between
+         unrelated processes
+13-03-25 fixed circular build dependency for tiger tools
+12-10-19 fixed bug when name is not specified in a dserver url
+12-03-28 changes to aggr tools to deal with vmalloc issue
+11-03-29 fix to the dds toolkit to handle more than 2B records
+11-03-29 fix to ddssort to implement -u -m correctly
+11-03-15 man page fixes for ddsaggr and ddssplitnaggr
+10-10-28 change to ddssort tool to deal with negative numbers in a fast way
+10-10-28 minor improvement to ddssort
+10-06-16 fix to ddsinfo tool
+09-03-12 several updates to the SWIFT toolkit

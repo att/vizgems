@@ -1,0 +1,4 @@
+#name|alarmid|id|txt|tmode|sev|svcs
+RULEEV|+|ping|+|ping_loss.*|+|.*|+|.*|+|keep|+|critical|+|.*
+#svcs|tmodespec|sevspec|comment
+RULESVC|+|.*|+|keep|+|0:critical:25:major:50:minor:100:warning|+|comment

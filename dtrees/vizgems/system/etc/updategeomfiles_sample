@@ -1,0 +1,149 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VG_SYSNAME=SWIFT_CFG_SYSNAME
+export VG_SYSMODE=SWIFT_CFG_SYSMODE
+export VG_NFSMODE=SWIFT_CFG_NFSMODE
+
+export VG_SSYSTEMDIR=SWIFT_CFG_SSYSTEMDIR
+export VG_SSCOPESDIR=SWIFT_CFG_SSCOPESDIR
+export VG_SWWWDIR=SWIFT_CFG_SWWWDIR
+export VG_SSNMPDIR=SWIFT_CFG_SSNMPDIR
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+export VG_DPSYSTEMDIR=SWIFT_CFG_DPSYSTEMDIR
+export VG_DASYSTEMDIR=SWIFT_CFG_DASYSTEMDIR
+export VG_DSCOPESDIR=SWIFT_CFG_DSCOPESDIR
+export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
+export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=SWIFT_CFG_DPSYSTEMDIR
+
+export LC_ALL=C LANG=C
+
+PATH=$PATH:/usr/sbin:/sbin
+
+cd $VG_DSYSTEMDIR/uifiles/geom || {
+    print -u2 ERROR cannot find geom directory $VG_DSYSTEMDIR/uifiles/geom
+    exit 1
+}
+
+for dfile in *.data; do
+    [[ ! -f $dfile ]] && continue
+    gfile=${dfile%.data}.geom
+    bfile=${dfile%.geom}.bbox
+    [[ -f $gfile ]] && continue
+    print deleting old data file $dfile
+    rm -f $dfile $bfile
+done
+for bfile in *.bbox; do
+    [[ ! -f $bfile ]] && continue
+    gfile=${bfile%.bbox}.geom
+    dfile=${bfile%.geom}.data
+    [[ -f $gfile ]] && continue
+    print deleting old bounding box file $bfile
+    rm -f $dfile $bfile
+done
+
+typeset -F p=3.14159265358979323846 lx ly x y s1 s2 rly ry
+
+for gfile in *.geom; do
+    [[ ! -f $gfile ]] && continue
+    dfile=${gfile%.geom}.data
+    bfile=${gfile%.geom}.bbox
+    if [[
+        -f $bfile && -f $dfile && $bfile -nt $gfile && $dfile -nt $gfile
+    ]] then
+        continue
+    fi
+    print processing $gfile
+    {
+        maxx=-1000 maxy=-1000 minx=1000 miny=1000 naflag=n
+        read cityn
+        if [[ $cityn == na ]] then
+            naflag=y
+            read cityn
+        fi
+        print -- $cityn
+        for (( cityi = 0; cityi < cityn; cityi++ )) do
+            read name
+            print -- $name
+            read lx ly
+            x=$lx
+            if [[ $naflag == y ]] then
+                y=$ly
+            else
+                (( rly = p * ly / 180.0 ))
+                (( s1 = 1.0 + sin(rly) ))
+                (( s2 = 1.0 - sin(rly) ))
+                if (( s2 == 0.0 )) then
+                    y=$ly
+                else
+                    (( ry = 0.5 * log(s1 / s2) ))
+                    (( y = (ry * 180.0) / p ))
+                fi
+            fi
+            print -- $x $y
+            (( maxx < x )) && maxx=$x
+            (( maxy < y )) && maxy=$y
+            (( minx > x )) && minx=$x
+            (( miny > y )) && miny=$y
+        done
+        read polyn
+        print -- $polyn
+        for (( polyi = 0; polyi < polyn; polyi++ )) do
+            read name
+            print -- $name
+            read pn
+            print -- $pn
+            for (( pi = 0; pi < pn; pi++ )) do
+                read lx ly
+                x=$lx
+                if [[ $naflag == y ]] then
+                    y=$ly
+                else
+                    (( rly = p * ly / 180.0 ))
+                    (( s1 = 1.0 + sin(rly) ))
+                    (( s2 = 1.0 - sin(rly) ))
+                    if (( s2 == 0.0 )) then
+                        y=$ly
+                    else
+                        (( ry = 0.5 * log(s1 / s2) ))
+                        (( y = (ry * 180.0) / p ))
+                    fi
+                fi
+                print -- $x $y
+                (( maxx < x )) && maxx=$x
+                (( maxy < y )) && maxy=$y
+                (( minx > x )) && minx=$x
+                (( miny > y )) && miny=$y
+            done
+        done
+        true
+    } < $gfile > $dfile.tmp && mv $dfile.tmp $dfile
+    print -- $minx $miny $maxx $maxy > $bfile.tmp && mv $bfile.tmp $bfile
+done
+
+for gfile in *.geom; do
+    [[ ! -f $gfile ]] && continue
+    dfile=${gfile%.geom}.data
+    bfile=${gfile%.geom}.bbox
+    read minx miny maxx maxy < $bfile
+    print -- $dfile $minx $miny $maxx $maxy
+done > geom.dir.tmp && mv geom.dir.tmp geom.dir

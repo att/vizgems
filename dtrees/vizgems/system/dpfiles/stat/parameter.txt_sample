@@ -1,0 +1,440 @@
+
+# servers
+
+os|mainlinux.i386|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|mainlinux.i386|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|mainlinux.i386|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|mainlinux.i386|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|mainlinux.i386|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainlinux.i386|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainlinux.i386|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainlinux.i386|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
+os|mainlinux.i386|mainlinux.i386|cpu_sys._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=cpu_sys&inst=_total&file=stat|%|number|||
+os|mainlinux.i386|mainlinux.i386|cpu_used._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=cpu_used&inst=_total&file=stat|%|number||VR:i:5:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainlinux.i386|mainlinux.i386|cpu_usr._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=cpu_usr&inst=_total&file=stat|%|number|||
+os|mainlinux.i386|mainlinux.i386|cpu_wait._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=cpu_wait&inst=_total&file=stat|%|number|||
+os|mainlinux.i386|mainlinux.i386|fs_used|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maindf&var=fs_used&inst=[[si_fs]]|GB|number|>=95%:2:2/3:1/3600:>=90%:4:2/3:1/3600:CLEAR:5:3/3|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainlinux.i386|mainlinux.i386|log|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintail&file=[[scope_log]]&var=log&inst=[[scope_log]]||number|CLEAR:5:2/2||
+os|mainlinux.i386|mainlinux.i386|memory_used._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainfree&var=memory_used&inst=_total|MB|number|>=95%:2:6/6:1/3600:>=90%:4:6/6:1/3600:CLEAR:5:6/6|VR:i:512:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainlinux.i386|mainlinux.i386|os_loadavg._main|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_loadavg&file=loadavg&inst=5||number|||
+os|mainlinux.i386|mainlinux.i386|os_nproc._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_nproc&inst=_total||number|||
+os|mainlinux.i386|mainlinux.i386|os_nthread._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_nthread&inst=_total&file=loadavg||number|||
+os|mainlinux.i386|mainlinux.i386|os_nuser._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainuptime&var=os_nuser&inst=_total||number|||
+os|mainlinux.i386|mainlinux.i386|os_pagein._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_pagein&inst=_total&file=vmstat|KB|counter|||
+os|mainlinux.i386|mainlinux.i386|os_pageout._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_pageout&inst=_total&file=vmstat|KB|counter|||
+os|mainlinux.i386|mainlinux.i386|os_runqueue._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_runqueue&inst=_total&file=stat||number|||
+os|mainlinux.i386|mainlinux.i386|os_swapin._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_swapin&inst=_total&file=vmstat|KB|counter|||
+os|mainlinux.i386|mainlinux.i386|os_swapout._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=os_swapout&inst=_total&file=vmstat|KB|counter|||
+os|mainlinux.i386|mainlinux.i386|proc_topcpu.1|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=proc_topcpu&inst=1&exclude=*:top|%|number|||
+os|mainlinux.i386|mainlinux.i386|swap_used._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainfree&var=swap_used&inst=_total|MB|number|>=98%:2:4/4:1/3600:>=95%:4:4/4:1/3600:CLEAR:5:4/4||y
+os|mainlinux.i386|mainlinux.i386|tcpip_inerrpkt|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_inerrpkt&inst=[[si_iface]]|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainlinux.i386|mainlinux.i386|tcpip_inpkt|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_inpkt&inst=[[si_iface]]|pkts|counter|||
+os|mainlinux.i386|mainlinux.i386|tcpip_outerrpkt|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_outerrpkt&inst=[[si_iface]]|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainlinux.i386|mainlinux.i386|tcpip_outpkt|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_outpkt&inst=[[si_iface]]|pkts|counter|||
+os|mainlinux.i386|mainlinux.i386|sensor_temp|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainmegacli&var=sensor_temp&inst=[[!si_hwname]]|F|number|||
+os|mainlinux.i386|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|maindarwin.i386|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|maindarwin.i386|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|maindarwin.i386|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|maindarwin.i386|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|maindarwin.i386|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maindarwin.i386|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|maindarwin.i386|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maindarwin.i386|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
+os|maindarwin.i386|mainlinux.i386|cpu_sys._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=cpu_sys&inst=_total|%|number|||
+os|maindarwin.i386|mainlinux.i386|cpu_used._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=cpu_used&inst=_total|%|number||VR:i:5:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|maindarwin.i386|mainlinux.i386|cpu_usr._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=cpu_usr&inst=_total|%|number|||
+os|maindarwin.i386|mainlinux.i386|fs_used|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maindf&var=fs_used&inst=[[si_fs]]|GB|number|>=95%:2:2/3:1/3600:>=90%:4:2/3:1/3600:CLEAR:5:3/3|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|maindarwin.i386|mainlinux.i386|log|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintail&file=[[scope_log]]&var=log&inst=[[scope_log]]||number|CLEAR:5:2/2||
+os|maindarwin.i386|mainlinux.i386|memory_used._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=memory_used&inst=_total|MB|number|>=95%:2:6/6:1/3600:>=90%:4:6/6:1/3600:CLEAR:5:6/6|VR:i:512:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|maindarwin.i386|mainlinux.i386|os_loadavg._main|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_loadavg&inst=5||number|||
+os|maindarwin.i386|mainlinux.i386|os_nproc._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_nproc&inst=_total||number|||
+os|maindarwin.i386|mainlinux.i386|os_nthread._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_nthread&inst=_total||number|||
+os|maindarwin.i386|mainlinux.i386|os_pagein._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_pagein&inst=_total||counter|||
+os|maindarwin.i386|mainlinux.i386|os_pageout._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_pageout&inst=_total||counter|||
+os|maindarwin.i386|mainlinux.i386|os_runqueue._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=os_runqueue&inst=_total||number|||
+os|maindarwin.i386|mainlinux.i386|proc_topcpu.1|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=proc_topcpu&inst=1&exclude=*:top|%|number|||
+os|maindarwin.i386|mainlinux.i386|swap_used._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maintop&var=swap_used&inst=_total|MB|number|>=98%:2:4/4:1/3600:>=95%:4:4/4:1/3600:CLEAR:5:4/4||y
+os|maindarwin.i386|mainlinux.i386|tcpip_inerrpkt|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_inerrpkt&inst=[[si_iface]]|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|maindarwin.i386|mainlinux.i386|tcpip_inpkt|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_inpkt&inst=[[si_iface]]|pkts|counter|||
+os|maindarwin.i386|mainlinux.i386|tcpip_outerrpkt|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_outerrpkt&inst=[[si_iface]]|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|maindarwin.i386|mainlinux.i386|tcpip_outpkt|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_outpkt&inst=[[si_iface]]|pkts|counter|||
+os|maindarwin.i386|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainsolaris.sun4|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsolaris.sun4|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|mainsolaris.sun4|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsolaris.sun4|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|mainsolaris.sun4|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsolaris.sun4|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainsolaris.sun4|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsolaris.sun4|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
+os|mainsolaris.sun4|mainlinux.i386|cpu_free._total|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainmpstat&var=cpu_free&inst=_total&count=5|%|number|||
+os|mainsolaris.sun4|mainlinux.i386|cpu_sys._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainmpstat&var=cpu_sys&inst=_total&count=5|%|number|||
+os|mainsolaris.sun4|mainlinux.i386|cpu_used._total|y|CALC:raw?val=100.0-{cpu_free._total}&label=CPU Used (All)&unit=%|%|number|>=95:2:6/6:1/3600:>=90:4:6/6:1/3600:CLEAR:5:6/6||
+os|mainsolaris.sun4|mainlinux.i386|cpu_usr._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainmpstat&var=cpu_usr&inst=_total&count=5|%|number|||
+os|mainsolaris.sun4|mainlinux.i386|cpu_wait._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainmpstat&var=cpu_wait&inst=_total&count=5|%|number|||
+os|mainsolaris.sun4|mainlinux.i386|fs_used|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maindf&var=fs_used&inst=[[si_fs]]|GB|number|>=95%:2:2/3:1/3600:>=90%:4:2/3:1/3600:CLEAR:5:3/3||
+os|mainsolaris.sun4|mainlinux.i386|memory_free._total|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainsar&var=memory_free&inst=_total|MB|number|||
+os|mainsolaris.sun4|mainlinux.i386|memory_total._total|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainsar&var=memory_total&inst=_total|MB|number|||
+os|mainsolaris.sun4|mainlinux.i386|memory_used._total|y|CALC:raw?val={memory_total._total}-{memory_free._total}&label=Used Memory&unit=MB|MB|number|>=95%:2:6/6:1/3600:>=90%:4:6/6:1/3600:CLEAR:5:6/6||
+os|mainsolaris.sun4|mainlinux.i386|os_loadavg._main|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainuptime&var=os_loadavg&inst=5||number|||
+os|mainsolaris.sun4|mainlinux.i386|os_nproc._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainps&var=os_nproc&inst=_total||number|||
+os|mainsolaris.sun4|mainlinux.i386|os_nthread._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainprstat&var=os_nthread&inst=_total||number|||
+os|mainsolaris.sun4|mainlinux.i386|os_nuser._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainuptime&var=os_nuser&inst=_total||number|||
+os|mainsolaris.sun4|mainlinux.i386|os_pagein._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainvmstat&var=os_pagein&inst=_total&count=5|KBps|number|||
+os|mainsolaris.sun4|mainlinux.i386|os_pageout._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainvmstat&var=os_pageout&inst=_total&count=5|KBps|number|||
+os|mainsolaris.sun4|mainlinux.i386|os_runqueue._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainvmstat&var=os_runqueue&inst=_total&count=5||number|||
+os|mainsolaris.sun4|mainlinux.i386|os_swapin._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainvmstat&var=os_swapin&inst=_total&count=5|KBps|number|||
+os|mainsolaris.sun4|mainlinux.i386|os_swapout._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainvmstat&var=os_swapout&inst=_total&count=5|KBps|number|||
+os|mainsolaris.sun4|mainlinux.i386|proc_topcpu.1|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainps&var=proc_topcpu&inst=1&exclude=*:ps|%|number|||
+os|mainsolaris.sun4|mainlinux.i386|swap_free._total|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainswap&var=swap_free&inst=_total|MB|number|||
+os|mainsolaris.sun4|mainlinux.i386|swap_total._total|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainswap&var=swap_total&inst=_total|MB|number|||
+os|mainsolaris.sun4|mainlinux.i386|swap_used._total|y|CALC:raw?val={swap_total._total}-{swap_free._total}&label=Used Swap&unit=MB|MB|number|>=98%:2:4/4:1/3600:>=95%:4:4/4:1/3600:CLEAR:5:4/4||
+os|mainsolaris.sun4|mainlinux.i386|tcpip_inerrpkt|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_inerrpkt&inst=[[si_iface]]|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsolaris.sun4|mainlinux.i386|tcpip_inpkt|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_inpkt&inst=[[si_iface]]|pkts|counter|||
+os|mainsolaris.sun4|mainlinux.i386|tcpip_outerrpkt|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_outerrpkt&inst=[[si_iface]]|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsolaris.sun4|mainlinux.i386|tcpip_outpkt|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainnetstat&var=tcpip_outpkt&inst=[[si_iface]]|pkts|counter|||
+os|mainsolaris.sun4|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainwin32.i386|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|mainwin32.i386|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|mainwin32.i386|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainwin32.i386|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
+os|mainwin32.i386|mainlinux.i386|cpu_sys._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Processor.PercentPrivilegedTime._Total&label=CPU System (All)&unit=%|%|number|||
+os|mainwin32.i386|mainlinux.i386|cpu_used._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Processor.PercentProcessorTime._Total&label=CPU Used (All)&unit=%|%|number|>=95:2:6/6:1/3600:>=90:4:6/6:1/3600:CLEAR:5:6/6||
+os|mainwin32.i386|mainlinux.i386|cpu_usr._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Processor.PercentUserTime._Total&label=CPU User (All)&unit=%|%|number|||
+os|mainwin32.i386|mainlinux.i386|fs_free|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_LogicalDisk.FreeSpace.[[si_fs]]&unit=B|GB|number|||
+os|mainwin32.i386|mainlinux.i386|fs_total|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_LogicalDisk.Size.[[si_fs]]&unit=B|GB|number|||
+os|mainwin32.i386|mainlinux.i386|fs_used|y|CALC:raw?val={fs_total.[[!si_fs]]}-{fs_free.[[!si_fs]]}&label=FS Used ([[si_fs!SUM]])&unit=GB|GB|number|>=95%:2:2/3:1/3600:>=90%:4:2/3:1/3600:CLEAR:5:3/3||
+os|mainwin32.i386|mainlinux.i386|log.application|n|WMI:log?user=[scope_user]&pass=[scope_pass]&file=Application&source=vizgems&etype=1:2||counter|CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|log.system|n|WMI:log?user=[scope_user]&pass=[scope_pass]&file=System&source=Server Administrator:iANSMiniport:Foundation Agents:Storage Agents:Server Agents:NIC Agents:cpqasm2:CPQ:Disk:RAIDDISK&etype=1:2||counter|CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|memory_free._total|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_OperatingSystem.FreePhysicalMemory.ALL&unit=KB|MB|number|||
+os|mainwin32.i386|mainlinux.i386|memory_total._total|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_ComputerSystem.TotalPhysicalMemory.ALL&unit=B|MB|number|||
+os|mainwin32.i386|mainlinux.i386|memory_used._total|y|CALC:raw?val={memory_total._total}-{memory_free._total}&label=Used Memory&unit=MB|MB|number|>=95%:2:6/6:1/3600:>=90%:4:6/6:1/3600:CLEAR:5:6/6||
+os|mainwin32.i386|mainlinux.i386|os_nproc._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Objects.Processes.ALL&label=Number of Procs||number|||
+os|mainwin32.i386|mainlinux.i386|os_nthread._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Objects.Threads.ALL&label=Number of Threads||number|||
+os|mainwin32.i386|mainlinux.i386|os_pagein._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Memory.PagesInputPersec.ALL&label=Pages In&unit=pages|pages|number|||
+os|mainwin32.i386|mainlinux.i386|os_pageout._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_Memory.PagesOutputPersec.ALL&label=Pages Out&unit=pages|pages|number|||
+os|mainwin32.i386|mainlinux.i386|os_runqueue._total|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_PerfOS_System.ProcessorQueueLength.ALL&label=Run Queue||number|||
+os|mainwin32.i386|mainlinux.i386|swap_free._total|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_OperatingSystem.FreeSpaceInPagingFiles.ALL&unit=KB|MB|number|||
+os|mainwin32.i386|mainlinux.i386|swap_total._total|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_OperatingSystem.SizeStoredInPagingFiles.ALL&unit=KB|MB|number|||
+os|mainwin32.i386|mainlinux.i386|swap_used._total|y|CALC:raw?val={swap_total._total}-{swap_free._total}&label=Used Swap&unit=MB|MB|number|>=98%:2:4/4:1/3600:>=95%:4:4/4:1/3600:CLEAR:5:4/4||
+os|mainwin32.i386|mainlinux.i386|tcpip_inerrpkt|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_Tcpip_NetworkInterface.PacketsReceivedErrors.[[si_iface]]&mt=simple&except=loopback_OR_6to4*_OR_*pseudo*_OR_isatap*&unit=pkts&label=In Errors ([[si_iface]])|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|tcpip_inpkt|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_Tcpip_NetworkInterface.PacketsReceivedPersec.[[si_iface]]&mt=simple&except=loopback_OR_6to4*_OR_*pseudo*_OR_isatap*&unit=pkts&label=In Packets ([[si_iface]])|pkts|counter|||
+os|mainwin32.i386|mainlinux.i386|tcpip_outerrpkt|n|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_Tcpip_NetworkInterface.PacketsOutboundErrors.[[si_iface]]&mt=simple&except=loopback_OR_6to4*_OR_*pseudo*_OR_isatap*&unit=pkts&label=Out Errors ([[si_iface]])|pkts|counter|>5:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainwin32.i386|mainlinux.i386|tcpip_outpkt|y|WMI:raw?user=[scope_user]&pass=[scope_pass]&var=Win32_PerfRawData_Tcpip_NetworkInterface.PacketsSentPersec.[[si_iface]]&mt=simple&except=loopback_OR_6to4*_OR_*pseudo*_OR_isatap*&unit=pkts&label=Out Packets ([[si_iface]])|pkts|counter|||
+os|mainwin32.i386|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainhadoop|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainhadoop|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainhadoop|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainhadoop|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainhadoop|mainlinux.i386|apps_completed._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.appsCompleted&label=Applications Completed&urlbase=http://[scope_ip]:8088/ws/v1/cluster||counter|||
+os|mainhadoop|mainlinux.i386|apps_failed._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.appsFailed&label=Applications Failed&urlbase=http://[scope_ip]:8088/ws/v1/cluster||counter|||y
+os|mainhadoop|mainlinux.i386|apps_killed._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.appsKilled&label=Applications Killed&urlbase=http://[scope_ip]:8088/ws/v1/cluster||counter|||y
+os|mainhadoop|mainlinux.i386|apps_pending._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.appsPending&label=Applications Pending&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||y
+os|mainhadoop|mainlinux.i386|apps_running._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.appsRunning&label=Applications Running&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||y
+os|mainhadoop|mainlinux.i386|apps_submitted._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.appsSubmitted&label=Applications Submitted&urlbase=http://[scope_ip]:8088/ws/v1/cluster||counter|||
+os|mainhadoop|mainlinux.i386|containers_allocated._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.containersAllocated&label=Containers Allocated&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|containers_pending._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.containersPending&label=Containers Pending&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|containers_reserved._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.containersReserved&label=Containers Reserved&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|memory_used._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.allocatedMB&label=Memory Used&urlbase=http://[scope_ip]:8088/ws/v1/cluster|GB|number|||y
+os|mainhadoop|mainlinux.i386|nodes_active._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.activeNodes&label=Nodes Active&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|nodes_lost._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.lostNodes&label=Nodes Lost&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|nodes_unhealthy._total|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=metrics&var=clusterMetrics.unhealthyNodes&label=Nodes Unhealthy&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|queueapps_used|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=scheduler&var=scheduler.schedulerInfo.queues.*.numActiveApplications&evar=*.users.*&id=queueName&val=[[si_queue]]&label=Queue Applications Used (%s)&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|queuecapacity_used|y|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=scheduler&var=scheduler.schedulerInfo.queues.*.absoluteUsedCapacity&evar=*.users.*&id=queueName&val=[[si_queue]]&label=Queue Capacity Used (%s)&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|state|n|EXEC:mainhadoop?user=[scope_user]&pass=[scope_pass]&topic=nodes&var=nodes.node*.state&id=id&alarm=!(RUNNING)&map=RUNNING:0:*:1&val=[[si_nodeid]]&label=Node State (%s)&urlbase=http://[scope_ip]:8088/ws/v1/cluster||number|||
+os|mainhadoop|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainopenstack|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainopenstack|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainopenstack|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainopenstack|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainopenstack|mainlinux.i386|projectstat|n|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&projid=[[si_projectid]]&bizid=[scope_bizid]&locid=[scope_locid]&urlbase=http://[scope_ip]||number|||
+os|mainopenstack|mainlinux.i386|cpu_util._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|%|number||VR:i:5:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainopenstack|mainlinux.i386|disk_device_read_bytes|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_svindex]]|B|number|||
+os|mainopenstack|mainlinux.i386|disk_device_read_requests|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_svindex]]|req|number|||
+os|mainopenstack|mainlinux.i386|disk_device_write_bytes|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_svindex]]|B|number|||
+os|mainopenstack|mainlinux.i386|disk_device_write_requests|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_svindex]]|req|number|||
+os|mainopenstack|mainlinux.i386|disk_read_bytes._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|B|number|||
+os|mainopenstack|mainlinux.i386|disk_read_bytes_rate._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|B/s|number|||
+os|mainopenstack|mainlinux.i386|disk_read_requests._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|req|number|||
+os|mainopenstack|mainlinux.i386|disk_read_requests_rate._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|req/s|number|||
+os|mainopenstack|mainlinux.i386|disk_write_bytes._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|B|number|||
+os|mainopenstack|mainlinux.i386|disk_write_bytes_rate._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|B/s|number|||
+os|mainopenstack|mainlinux.i386|disk_write_requests._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|req|number|||
+os|mainopenstack|mainlinux.i386|disk_write_requests_rate._total|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_sindex]]|req/s|number|||
+os|mainopenstack|mainlinux.i386|network_incoming_bytes_rate|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|B/s|number|||
+os|mainopenstack|mainlinux.i386|network_incoming_bytes|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|B|number|||
+os|mainopenstack|mainlinux.i386|network_incoming_packets_rate|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|pkts/s|number|||
+os|mainopenstack|mainlinux.i386|network_incoming_packets|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|pkts|number|||
+os|mainopenstack|mainlinux.i386|network_outgoing_bytes_rate|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|B/s|number|||
+os|mainopenstack|mainlinux.i386|network_outgoing_bytes|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|B|number|||
+os|mainopenstack|mainlinux.i386|network_outgoing_packets_rate|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|pkts/s|number|||
+os|mainopenstack|mainlinux.i386|network_outgoing_packets|y|EXEC:mainopenstack?user=[scope_user]&pass=[scope_pass]&inst=[[si_saindex]]|pkts|number|||
+os|mainopenstack|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainsmartctl|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsmartctl|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|mainsmartctl|mainlinux.i386|sensor_temp|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainsmartctl&var=sensor_temp&inst=[[!si_tempid]]|C|number|||
+os|mainsmartctl|mainlinux.i386|smartdisk_attr|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainsmartctl&var=smartdisk_attr&inst=[[!si_sdid]]|%|number|>100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainsmartctl|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# networking
+
+os|maincisco|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=6&ip=[scope_ip]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||y
+os|maincisco|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|maincisco|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||y
+os|maincisco|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|maincisco|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maincisco|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|maincisco|mainlinux.i386|cpu_used._total|y|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.4.1.9.9.109.1.1.1.1.8.1&label=CPU Used (All)&unit=%|%|number|>=95:1:3/3:1/3600:>=85:4:3/3:1/3600:CLEAR:5:6/6|VR:i:5:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|maincisco|mainlinux.i386|memory_used._total|y|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.4.1.9.9.48.1.1.1.5.1&label=Used Memory&unit=B|MB|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6||y
+os|maincisco|mainlinux.i386|tcpip_disc|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|maincisco|mainlinux.i386|tcpip_err|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|maincisco|mainlinux.i386|tcpip_inbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|maincisco|mainlinux.i386|tcpip_outbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|maincisco|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainciscocat|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainciscocat|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainciscocat|mainlinux.i386|cpu_used._total|y|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.4.1.9.9.109.1.1.1.1.5.9&label=CPU Used (All)&unit=%|%|number|>=95:1:3/3:1/3600:>=85:4:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|memory_used._total|y|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.4.1.9.9.48.1.1.1.5.1&label=Used Memory&unit=B|MB|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|tcpip_disc|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscocatiface&uniq=ciscoiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|tcpip_err|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscocatiface&uniq=ciscoiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|tcpip_inbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscocatiface&uniq=ciscoiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|tcpip_outbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscocatiface&uniq=ciscoiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6||
+os|mainciscocat|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainarista|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=6&ip=[scope_ip]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||y
+os|mainarista|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainarista|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||y
+os|mainarista|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainarista|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainarista|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainarista|mainlinux.i386|cpu_used._total|y|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.2.1.25.3.3.1.2.1&label=CPU Used (All)&unit=%|%|number|>=95:1:3/3:1/3600:>=85:4:3/3:1/3600:CLEAR:5:6/6|VR:i:5:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainarista|mainlinux.i386|memory_used_blk._total|n|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.2.1.25.2.3.1.4.1&unit=B|B|number|||
+os|mainarista|mainlinux.i386|memory_used_siz._total|n|SNMP:raw?community=[scope_snmpcommunity]&version=2c&var=.1.3.6.1.2.1.25.2.3.1.6.1&unit=B|B|number|||
+os|mainarista|mainlinux.i386|memory_used._total|y|CALC:raw?val={memory_used_blk._total}*{memory_used_siz._total}&label=Used Memory&unit=B|MB|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6||y
+os|mainarista|mainlinux.i386|tcpip_disc|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainaristaiface&uniq=aristaiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainarista|mainlinux.i386|tcpip_err|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainaristaiface&uniq=aristaiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainarista|mainlinux.i386|tcpip_inbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainaristaiface&uniq=aristaiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainarista|mainlinux.i386|tcpip_outbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainaristaiface&uniq=aristaiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainarista|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|maindellswitch|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=6&ip=[scope_ip]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||y
+os|maindellswitch|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|maindellswitch|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||y
+os|maindellswitch|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|maindellswitch|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maindellswitch|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|maindellswitch|mainlinux.i386|cpu_used._total|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=maindellswitchcpu&uniq=dellswitchcpu&var=_total|%|number|>=95:1:3/3:1/3600:>=85:4:3/3:1/3600:CLEAR:5:6/6|VR:i:5:n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|maindellswitch|mainlinux.i386|memory_used._total|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=maindellswitchmem&uniq=dellswitchmem&var=_total|MB|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6||y
+os|maindellswitch|mainlinux.i386|tcpip_disc|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|maindellswitch|mainlinux.i386|tcpip_err|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]||number|>0:1:3/3:1/3600:CLEAR:5:6/6||
+os|maindellswitch|mainlinux.i386|tcpip_inbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|maindellswitch|mainlinux.i386|tcpip_outbw|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainciscoiface&uniq=ciscoiface&var=[[si_iface]]|mbps|number|>=90%:1:3/3:1/3600:>=80%:4:3/3:1/3600:CLEAR:5:6/6|VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|maindellswitch|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# storage
+
+os|mainbrocade|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainbrocade|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainbrocade|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainbrocade|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainbrocade|mainlinux.i386|fc_infr|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainbrocadefciface&uniq=brocadefciface&var=[[si_fcindex]]|FR|number|||
+os|mainbrocade|mainlinux.i386|fc_inwords|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainbrocadefciface&uniq=brocadefciface&var=[[si_fcindex]]|MFCW|number|||
+os|mainbrocade|mainlinux.i386|fc_outfr|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainbrocadefciface&uniq=brocadefciface&var=[[si_fcindex]]|FR|number|||
+os|mainbrocade|mainlinux.i386|fc_outwords|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainbrocadefciface&uniq=brocadefciface&var=[[si_fcindex]]|MFCW|number|||
+os|mainbrocade|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainsmee|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsmee|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsmee|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsmee|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsmee|mainlinux.i386|errors._total|n|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainsmee&var=errors&inst=_total&addr=[scope_addr]||number|||
+os|mainsmee|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|maininfortrend1|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend1|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend1|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend1|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend1|mainlinux.i386|disk_status|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=maininfortrend1hdd&uniq=infortrend1hdd&var=[[si_disk]]||number|||
+os|maininfortrend1|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|maininfortrend2|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend2|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend2|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend2|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|maininfortrend2|mainlinux.i386|disk_status|n|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=maininfortrend2hdd&uniq=infortrend2hdd&var=[[si_disk]]||number|||
+os|maininfortrend2|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# sensors
+
+os|mainavocentpm|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainavocentpm|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainavocentpm|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainavocentpm|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainavocentpm|mainlinux.i386|sensor_current|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainavocentpm&uniq=avocentpm&var=[[si_port]]|Amps|number|||
+os|mainavocentpm|mainlinux.i386|sensor_pf|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainavocentpm&uniq=avocentpm&var=[[si_port]]|factor|number|||
+os|mainavocentpm|mainlinux.i386|sensor_power|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainavocentpm&uniq=avocentpm&var=[[si_port]]|kW|number|||
+os|mainavocentpm|mainlinux.i386|sensor_temp._total|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainavocentpm&uniq=avocentpm|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainavocentpm|mainlinux.i386|sensor_volts|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainavocentpm&uniq=avocentpm&var=[[si_port]]|Volts|number|||
+os|mainavocentpm|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainraritanpm|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=5&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpm|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=5&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpm|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=5&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpm|mainlinux.i386|ping_time|y|PING:raw?var=time&count=5&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpm|mainlinux.i386|sensor_current|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpm&uniq=raritanpm&var=[[si_port]]|Amps|number|||
+os|mainraritanpm|mainlinux.i386|sensor_pf|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpm&uniq=raritanpm&var=[[si_port]]|factor|number|||
+os|mainraritanpm|mainlinux.i386|sensor_power|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpm&uniq=raritanpm&var=[[si_port]]|kW|number|||
+os|mainraritanpm|mainlinux.i386|sensor_temp._total|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpm&uniq=raritanpm|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainraritanpm|mainlinux.i386|sensor_volts|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpm&uniq=raritanpm&var=[[si_port]]|Volts|number|||
+os|mainraritanpm|mainlinux.i386|sensor_humi|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpmsensor&uniq=mainraritanpmsensor&var=[[si_humiid]]|%|number|||
+os|mainraritanpm|mainlinux.i386|sensor_temp|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpmsensor&uniq=mainraritanpmsensor&var=[[si_tempid]]|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainraritanpm|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainraritanpx|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=5&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpx|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=5&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpx|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=5&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpx|mainlinux.i386|ping_time|y|PING:raw?var=time&count=5&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainraritanpx|mainlinux.i386|sensor_current|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpx&uniq=raritanpx&var=[[si_port]]|Amps|number|||
+os|mainraritanpx|mainlinux.i386|sensor_ucurrent._total|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpx&uniq=raritanpx&var=_total|%|number|||
+os|mainraritanpx|mainlinux.i386|sensor_pf|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpx&uniq=raritanpx&var=[[si_port]]|factor|number|||
+os|mainraritanpx|mainlinux.i386|sensor_power|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpx&uniq=raritanpx&var=[[si_port]]|Watt|number|||
+os|mainraritanpx|mainlinux.i386|sensor_volts|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpx&uniq=raritanpx&var=[[si_port]]|Volts|number|||
+os|mainraritanpx|mainlinux.i386|sensor_humi|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpxsensor&uniq=mainraritanpxsensor&var=[[si_humiid]]|%|number|||
+os|mainraritanpx|mainlinux.i386|sensor_temp|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainraritanpxsensor&uniq=mainraritanpxsensor&var=[[si_tempid]]|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainraritanpx|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainsynapsense|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsynapsense|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsynapsense|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsynapsense|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainsynapsense|mainlinux.i386|sensor_batt|y|EXEC:mainsynapsense?user=[scope_user]&pass=[scope_pass]&var=[[si_battid]]|V|number|||
+os|mainsynapsense|mainlinux.i386|sensor_humi|y|EXEC:mainsynapsense?user=[scope_user]&pass=[scope_pass]&var=[[si_humiid]]|%|number|||
+os|mainsynapsense|mainlinux.i386|sensor_pres|y|EXEC:mainsynapsense?user=[scope_user]&pass=[scope_pass]&var=[[si_presid]]|inH2O|number|||
+os|mainsynapsense|mainlinux.i386|sensor_temp|y|EXEC:mainsynapsense?user=[scope_user]&pass=[scope_pass]&var=[[si_tempid]]|F|number|||
+os|mainsynapsense|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainnetbotz|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainnetbotz|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainnetbotz|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainnetbotz|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainnetbotz|mainlinux.i386|sensor_air|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainnetbotzairsensor&uniq=netbotzairsensor&var=[[si_airid]]|fpm|number||VR:n::n::SIGMA:i:12:n::1:12:12:1:3600:CLEAR:5:12:12|
+os|mainnetbotz|mainlinux.i386|sensor_audio|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainnetbotzaudiosensor&uniq=netbotzaudiosensor&var=[[si_audioid]]||number|||
+os|mainnetbotz|mainlinux.i386|sensor_dew|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainnetbotzdewsensor&uniq=netbotzdewsensor&var=[[si_dewid]]|F|number|||
+os|mainnetbotz|mainlinux.i386|sensor_door|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainnetbotzdoorsensor&uniq=netbotzdoorsensor&var=[[si_doorid]]||number|>=1:4:1/1:1/3600:CLEAR:5:1/1||
+os|mainnetbotz|mainlinux.i386|sensor_humi|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainnetbotzhumisensor&uniq=netbotzhumisensor&var=[[si_humiid]]|%|number|||
+os|mainnetbotz|mainlinux.i386|sensor_temp|y|SNMP:cooked?community=[scope_snmpcommunity]&version=2c&helper=mainnetbotztempsensor&uniq=netbotztempsensor&var=[[si_tempid]]|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|y
+os|mainnetbotz|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainveris|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainveris|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainveris|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainveris|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainveris|mainlinux.i386|sensor_apower|n|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_apowerid]]|kVA|number|||
+os|mainveris|mainlinux.i386|sensor_current|y|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_currentid]]|Amps|number|||
+os|mainveris|mainlinux.i386|sensor_energy|n|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_energyid]]|kWh|number|||
+os|mainveris|mainlinux.i386|sensor_freq|n|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_freqid]]|Hz|number|||
+os|mainveris|mainlinux.i386|sensor_pf|n|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_pfid]]|factor|number|||
+os|mainveris|mainlinux.i386|sensor_power|y|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_powerid]]|kW|number|||
+os|mainveris|mainlinux.i386|sensor_volts|n|EXEC:mainveris?user=[scope_user]&pass=[scope_pass]&ip=[scope_ip]&var=[[si_voltsid]]|Volts|number|||
+os|mainveris|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainweatherstation|mainlinux.i386|sensor_temp.in|y|EXEC:mainweatherstation?user=[scope_user]&pass=[scope_pass]&path=[scope_path]&inst=in|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainweatherstation|mainlinux.i386|sensor_temp.out|y|EXEC:mainweatherstation?user=[scope_user]&pass=[scope_pass]&path=[scope_path]&inst=out|F|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainweatherstation|mainlinux.i386|sensor_humi.in|y|EXEC:mainweatherstation?user=[scope_user]&pass=[scope_pass]&path=[scope_path]&inst=in|%|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainweatherstation|mainlinux.i386|sensor_humi.out|y|EXEC:mainweatherstation?user=[scope_user]&pass=[scope_pass]&path=[scope_path]&inst=out|%|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainweatherstation|mainlinux.i386|sensor_wind.out|y|EXEC:mainweatherstation?user=[scope_user]&pass=[scope_pass]&path=[scope_path]&inst=out|mph|number||VR:n::n::SIGMA:i:6:n::1:6:6:1:3600:CLEAR:5:6:6|
+os|mainweatherstation|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# urls
+
+os|mainurl|mainlinux.i386|url_avail|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=[[si_url]]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainurl|mainlinux.i386|url_time|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=[[si_url]]&var=url_time|ms|number|||
+os|mainurl|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainurl-win|mainwin32.i386|url_avail|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=[[si_url]]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainurl-win|mainwin32.i386|url_time|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=[[si_url]]&var=url_time|ms|number|||
+os|mainurl-win|mainwin32.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|maincachedurl|mainlinux.i386|url_avail|y|URL:cached?user=[scope_user]&pass=[scope_pass]&url=[[si_cacheurl]]&var=url_avail&label=[[si_cacheurl!X!si_cachelabel]]&proxy=[[si_cacheurl!X!si_cacheproxy]]|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maincachedurl|mainlinux.i386|url_avail._main|y|URL:cached?user=[scope_user]&pass=[scope_pass]&url=[si_baseurl]&var=url_avail&label=[si_baselabel]|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maincachedurl|mainlinux.i386|url_diff|y|URL:cached?user=[scope_user]&pass=[scope_pass]&url=[[si_cacheurl]]&var=url_diff&label=[[si_cacheurl!X!si_cachelabel]]&proxy=[[si_cacheurl!X!si_cacheproxy]]|ms|number|||
+os|maincachedurl|mainlinux.i386|url_time|y|URL:cached?user=[scope_user]&pass=[scope_pass]&url=[[si_cacheurl]]&var=url_time&label=[[si_cacheurl!X!si_cachelabel]]&proxy=[[si_cacheurl!X!si_cacheproxy]]|ms|number|||
+os|maincachedurl|mainlinux.i386|url_time._main|y|URL:cached?user=[scope_user]&pass=[scope_pass]&url=[si_baseurl]&var=url_time&label=[si_baselabel]|ms|number|||
+os|maincachedurl|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainopturl|mainlinux.i386|url_avail|y|URL:option?user=[scope_user]&pass=[scope_pass]&url=[[si_url]]&var=url_avail&option=[[si_url!X!si_option]]|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainopturl|mainlinux.i386|url_time|y|URL:option?user=[scope_user]&pass=[scope_pass]&url=[[si_url]]&var=url_time&option=[[si_url!X!si_option]]|ms|number|||
+os|mainopturl|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# ila
+
+os|mainila|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|mainila|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|mainila|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|mainila|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|mainila|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainila|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainila|mainlinux.i386|alarms|n|SSH:embedded?user=[scope_user]&pass=[scope_pass]&tool=mainilaalarms&var=alarm&inst=_total||number|||
+os|mainila|mainlinux.i386|stats|n|SSH:embedded?user=[scope_user]&pass=[scope_pass]&tool=mainilastats&var=stat&inst=_total||number|||
+os|mainila|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# ping only
+
+os|mainnetdev|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainnetdev|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainnetdev|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=50:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainnetdev|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=100:1:3/3:1/3600:CLEAR:5:6/6||
+os|mainnetdev|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainnetdev|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainnetdev|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainnetdev|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
+os|mainnetdev|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+os|mainping-win|mainwin32.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainping-win|mainwin32.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|mainping-win|mainwin32.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||
+os|mainping-win|mainwin32.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|mainping-win|mainwin32.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# nagios interface
+
+os|mainnrpe|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainnrpe|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||y
+os|mainnrpe|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainnrpe|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|>=1000:4:3/3:1/3600:CLEAR:5:3/3||
+os|mainnrpe|mainlinux.i386|load.1|y|EXEC:mainnrpe?user=[scope_user]&pass=[scope_pass]&command=check_load&aid=load&var=load1&label=1 Min Load Avg&use=[si_load]||number|||
+os|mainnrpe|mainlinux.i386|load.5|y|EXEC:mainnrpe?user=[scope_user]&pass=[scope_pass]&command=check_load&aid=load&var=load5&label=5 Min Load Avg&use=[si_load]||number|||
+os|mainnrpe|mainlinux.i386|load.15|y|EXEC:mainnrpe?user=[scope_user]&pass=[scope_pass]&command=check_load&aid=load&var=load15&label=15 Min Load Avg&use=[si_load]||number|||
+os|mainnrpe|mainlinux.i386|procs._total|y|EXEC:mainnrpe?user=[scope_user]&pass=[scope_pass]&command=check_total_procs&aid=procs&var=procs&label=Total Processes&use=[si_totalprocs]||number|||
+os|mainnrpe|mainlinux.i386|procs.zombie|y|EXEC:mainnrpe?user=[scope_user]&pass=[scope_pass]&command=check_zombie_procs&aid=zombieprocs&var=procs&label=Zombie Processes&use=[si_zombieprocs]||number|||
+os|mainnrpe|mainlinux.i386|users._total|y|EXEC:mainnrpe?user=[scope_user]&pass=[scope_pass]&command=check_users&aid=users&var=users&label=Users&use=[si_users]||number|||
+os|mainnrpe|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||
+
+# collectd interface
+
+os|maincollectd|mainlinux.i386|ping_loss._main|y|PING:raw?var=loss&count=10&ip=[scope_ip]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|maincollectd|mainlinux.i386|ping_time._main|y|PING:raw?var=time&count=10&ip=[scope_ip]|ms|number|||
+os|maincollectd|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[si_ip]]|%|number|>=100:1:2/2:1/3600:CLEAR:5:2/2||y
+os|maincollectd|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
+os|maincollectd|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maincollectd|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|maincollectd|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
+os|maincollectd|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
+os|maincollectd|mainlinux.i386|cd|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=maincollectd&var=[[si_cdvar]]&label=[[si_cdvar!X!si_cdlabel]]&socket=[scope_socket]&host=[scope_host]|%|number|||
+os|maincollectd|mainlinux.i386|collection|n|NOOP:none|%|number|>=50:2:3/3:1/3600:>0:4:3/3:1/3600:CLEAR:5:3/3||

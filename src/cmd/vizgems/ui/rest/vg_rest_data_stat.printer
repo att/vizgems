@@ -1,0 +1,119 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+static char buf_scope[3 * DDSSZ_rec_dq_dt_stat_scope];
+static char buf_level[3 * DDSSZ_rec_dq_dt_stat_level];
+static char buf_id[3 * DDSSZ_rec_dq_dt_stat_id];
+static char buf_key[3 * DDSSZ_rec_dq_dt_stat_key];
+static char buf_unit[3 * DDSSZ_rec_dq_dt_stat_unit];
+static char buf_label[3 * DDSSZ_rec_dq_dt_stat_label];
+
+static char *sep;
+static int mode, first = TRUE;
+
+#define MODE_CSV 1
+#define MODE_XML 2
+#define MODE_JSN 3
+}
+BEGIN{
+    char *modestr;
+
+    modestr = getenv ("MODE");
+    if (strcasecmp (modestr, "xml") == 0)
+        mode = MODE_XML;
+    else if (strcasecmp (modestr, "jsn") == 0)
+        mode = MODE_JSN;
+    else
+        mode = MODE_CSV, sep = "|";
+
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (
+            sfstdout,
+            "scope%sdateissued%shourissued%stimeissued%s"
+            "level%sid%skey%sunit%sframe%sval%slabel\n",
+            sep, sep, sep, sep, sep, sep, sep, sep, sep, sep
+        );
+        break;
+    case MODE_JSN:
+        sfprintf (sfstdout, "\"stats\":[\n");
+        break;
+    }
+}
+{
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (
+            sfstdout, "%s%s%s%s%s%s%d%s%s%s%s%s%s%s%s%s%d%s%f%s%s\n",
+            scope, sep, dateissued, sep, hourissued, sep, timeissued, sep,
+            level, sep, id, sep, key, sep, unit, sep, frame, sep, val, sep,
+            label
+        );
+        break;
+    case MODE_XML:
+        VG_urlenc (scope, buf_scope, sizeof (buf_scope));
+        VG_urlenc (level, buf_level, sizeof (buf_level));
+        VG_urlenc (id, buf_id, sizeof (buf_id));
+        VG_urlenc (key, buf_key, sizeof (buf_key));
+        VG_urlenc (unit, buf_unit, sizeof (buf_unit));
+        VG_urlenc (label, buf_label, sizeof (buf_label));
+        sfprintf (
+            sfstdout,
+            "<stat>"
+            "<sid>%s</sid>"
+            "<di>%s</di><hi>%s</hi>"
+            "<ti>%d</ti>"
+            "<lv>%s</lv><id>%s</id>"
+            "<vars><var>"
+            "<k>%s</k><u>%s</u><fr>%d</fr>"
+            "<n>%f</n><l>%s</l>"
+            "</var></vars>"
+            "</stat>\n",
+            buf_scope,
+            dateissued, hourissued,
+            timeissued,
+            buf_level, buf_id,
+            buf_key, buf_unit, frame,
+            val, buf_label
+        );
+        break;
+    case MODE_JSN:
+        VG_simpleenc (scope, buf_scope, sizeof (buf_scope), "\"\\");
+        VG_simpleenc (level, buf_level, sizeof (buf_level), "\"\\");
+        VG_simpleenc (id, buf_id, sizeof (buf_id), "\"\\");
+        VG_simpleenc (key, buf_key, sizeof (buf_key), "\"\\");
+        VG_simpleenc (unit, buf_unit, sizeof (buf_unit), "\"\\");
+        VG_simpleenc (label, buf_label, sizeof (buf_label), "\"\\");
+        sfprintf (
+            sfstdout,
+            "%s{"
+            "\"sid\":\"%s\","
+            "\"di\":\"%s\",\"hi\":\"%s\","
+            "\"ti\":%d,"
+            "\"lv\":\"%s\",\"id\":\"%s\","
+            "\"vars\":[{"
+            "\"k\":\"%s\",\"u\":\"%s\",\"fr\":%d,"
+            "\"n\":%f,\"l\":\"%s\""
+            "}]"
+            "}\n",
+            first ? "" : ",", buf_scope,
+            dateissued, hourissued,
+            timeissued,
+            buf_level, buf_id,
+            buf_key, buf_unit, frame,
+            val, buf_label
+        );
+        break;
+    }
+    first = FALSE;
+}
+END{
+    switch (mode) {
+    case MODE_CSV:
+        sfprintf (sfstdout, "\n");
+        break;
+    case MODE_JSN:
+        sfprintf (sfstdout, "]\n");
+        break;
+    }
+}

@@ -1,0 +1,132 @@
+.TH AGGR 1
+.SH NAME
+.I AGGR
+\- Aggregation Toolkit
+.SH SYNOPSIS
+aggrcommand [flags] ...
+.SH DESCRIPTION
+.I AGGR
+is a toolkit for operating on files containing arrays of numeric values.
+An AGGR file has two sections: a dictionary section and a data section.
+The data section is a two dimensional array.
+A row corresponds to a
+.I frame
+and a column to an
+.IR item .
+For example, a file could contain the number of phone calls in a day by time
+of day and by area code and exchange.
+Each frame would contain information about a ten minute interval and each item
+would contain the count of calls for one area code and exchange (for a 10 min.
+interval).
+The dictionary section provides the ability to associate a string or a number
+to an item.
+For example, an entry would be that area code and exchange 973-360 maps to
+item 12345.
+.SH ARGUMENTS
+.PP
+The following flags can be used on most AGGR tools.
+.PP
+.B -o
+.I "<outfile>"
+.IP ""
+Indicates that the output file should have the name specified.
+Some tools require the user to specify several output files.
+This must be done by quoting the argument, e.g.
+.B "aggrmean -o 'mean.aggr stdev.aggr' ..."
+.PP
+.B -cl
+.I "<description>"
+.IP ""
+Specifies a string describing the output dataset.
+.PP
+.B -kt
+(\fBchar\fP|\fBshort\fP|\fBint\fP|\fBllong\fP|\fBfloat\fP|\fBdouble\fP|\fBstring\fP):\fBn\fP
+.IP ""
+Indicates the data type of the keys in the output file.
+.B string
+indicates variable-length strings.
+The main type name may be following by a colon and a number, specifying how
+many elements of that type make up the key, e.g. \bint:5\b would mean that
+the key is a sequence of 5 integers.
+Such a key should appear in the input stream as 5 integers separated by
+colons: 10:22:3:1:1.
+.PP
+.B -vt
+(\fBchar\fP|\fBshort\fP|\fBint\fP|\fBllong\fP|\fBfloat\fP|\fBdouble\fP):\fBn\fP
+.IP ""
+Indicates the data type of the values in the output file.
+The main type name may be following by a colon and a number, specifying how
+many elements of that type make up the value, e.g. \bint:5\b would mean that
+the value is a sequence of 5 integers.
+Such a value should appear in the input stream as 5 integers separated by
+colons: 10:22:3:1:1.
+.PP
+.B -v
+.IP ""
+Used for turning on various messages.
+Each appearance of this option increases the level of messages printed.
+.SH TOOLS
+.PP
+.B aggrload
+.IP ""
+Generate one or more AGGR files from ascii data.
+.PP
+.B aggrcat
+.IP ""
+Concatenate several files into one.
+.PP
+.B aggrcombine
+.IP ""
+Compute the arithmetic combination of several files.
+.PP
+.B aggrprint
+.IP ""
+Print the contents of a file in ascii.
+.PP
+.B aggrsum
+.IP ""
+Sum all items of each frame into one or all frames of each item into one.
+.PP
+.B aggrreaggr
+.IP ""
+Re-aggregate data based on a mapping.
+.PP
+.B aggrextract
+.IP ""
+Extract a subset of items.
+.PP
+.B aggrmean
+.IP ""
+Compute the mean and standard deviation of the values in several files.
+.PP
+.B aggrtopn
+.IP ""
+Print the top maximum or minimum values in a file.
+.PP
+.B aggrkeys
+.IP ""
+Convert keys between ascii and binary formats.
+.PP
+.B aggrmap
+.IP ""
+Convert map files between ascii and binary formats or search map files
+for specific keys.
+.PP
+.B aggrserver
+.IP ""
+A data server for AGGR files.
+.SH SEE ALSO
+.IR aggr(1) ,
+.IR aggrcat(1) ,
+.IR aggrcombine(1) ,
+.IR aggrload(1) ,
+.IR aggrmean(1) ,
+.IR aggrprint(1) ,
+.IR aggrreaggr(1) ,
+.IR aggrextract(1) ,
+.IR aggrsum(1) ,
+.IR aggrtopn(1) ,
+.IR aggrkeys(1) ,
+.IR aggrmap(1) ,
+.IR aggrserver(1) ,
+.IR aggr(3) .

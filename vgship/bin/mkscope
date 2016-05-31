@@ -1,0 +1,33 @@
+#!/bin/ksh
+
+if [[ $1 == '' || $2 == '' || $3 == '' ]] then
+    print -u2 "usage: mkscope <name> <arch> <version>"
+    exit
+fi
+n=$1
+a=$2
+v=$3
+shift 3
+
+print mkscope $n $a $v
+
+rm -rf $n.$a.$v.sw
+mkdir -p $n.$a.$v.sw
+
+(
+    cd ${n//scopes/system}.$a.$v.sw/scopes
+    pax -ps -rw . ../../$n.$a.$v.sw
+)
+
+(
+    cd ../strees/vizgems/scopes
+    pax -ps -rw . ../../../vgship/$n.$a.$v.sw
+)
+
+rm -rf $n.$a.$v.data
+mkdir -p $n.$a.$v.data
+
+(
+    cd ../dtrees/vizgems/scopes
+    pax -ps -rw . ../../../vgship/$n.$a.$v.data
+)

@@ -1,0 +1,53 @@
+#!/bin/ksh
+
+function timedrun { # $1 = timeout, $2-* cmd and args
+    typeset maxt jid i
+
+    maxt=$1
+    shift 1
+
+    set -o monitor
+    "$@" &
+    jid=$!
+    for (( i = 0; i < maxt; i += 0.1 )) do
+        kill -0 $jid 2> /dev/null || break
+        sleep 0.1
+    done
+    if (( $i >= maxt )) then
+        if kill -9 -$jid 2> /dev/null; then
+            print -u2 timediff: timeout for job "$@"
+        fi
+    fi
+    wait $jid 2> /dev/null
+    return $?
+}
+
+tdir=SWIFT_CFG_DSCOPESDIR/outgoing
+sfl='-C -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2'
+
+TIMESYS=${TIMESYS:-NONE}
+
+cd SWIFT_CFG_DSCOPESDIR || exit 1
+
+[[ -f ./etc/timediff.info ]] && . ./etc/timediff.info
+
+if [[ $TIMESYS == NONE && -f etc/time.diff ]] then
+    cp etc/time.diff etc/time.diff.tmp
+elif [[ $TIMESYS == NONE ]] then
+    print 0 > etc/time.diff.tmp
+else
+    cp etc/time.diff etc/time.diff.tmp
+    hostspec=${TIMESYS%%:*}
+    timedrun 30 ssh $sfl $hostspec "TZ=$TZ date '+%s'" \
+    | tail -1 | read -t 30 rtim
+    if [[ $rtim == [0-9]* ]] then
+        date '+%s' | read ltim
+        (( td = (2 + rtim) - ltim ))
+        print -- "$td" > etc/time.diff.tmp
+    fi
+fi
+if cmp etc/time.diff etc/time.diff.tmp > /dev/null 2>&1; then
+    rm etc/time.diff.tmp
+else
+    mv etc/time.diff.tmp etc/time.diff
+fi

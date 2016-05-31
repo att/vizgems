@@ -1,0 +1,44 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export LC_ALL=C LANG=C
+
+cd SWIFT_CFG_DWWWDIR || {
+    print -u2 ERROR cannot cd to SWIFT_CFG_DWWWDIR
+    exit 1
+}
+
+diff=${DIFF:-diff}
+
+tw -e 'if (
+    type == DIR && (name=="data" || name=="record")
+) status=SKIP; (name == "*_initial")' | case $1 in
+-all)
+    cat
+    ;;
+*)
+    egrep -v "\.cookie|\.group|\.passwd|accounts/current|schedule|checklogs.info"
+    ;;
+esac | while read i; do
+    if ! cmp $i ${i%_initial} > /dev/null 2>&1; then
+        print "$diff $i ${i%_initial}"
+        $diff $i ${i%_initial}
+        read yn?"copy $i to ${i%_initial}? " < /dev/tty
+        if [[ $yn == y ]] then
+            cp ${i%_initial} ${i%_initial}.old
+            cp $i ${i%_initial}
+        fi
+    fi
+done

@@ -1,0 +1,116 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_stat.c"
+
+#define SZ_scope DDSSZ_outrec_dq_dt_stat_scope
+#define SZ_dateissued DDSSZ_outrec_dq_dt_stat_dateissued
+#define SZ_hourissued DDSSZ_outrec_dq_dt_stat_hourissued
+#define SZ_level DDSSZ_outrec_dq_dt_stat_level
+#define SZ_id DDSSZ_outrec_dq_dt_stat_id
+#define SZ_ilevel DDSSZ_outrec_dq_dt_stat_ilevel
+#define SZ_iid DDSSZ_outrec_dq_dt_stat_iid
+#define SZ_iclass DDSSZ_outrec_dq_dt_stat_iclass
+
+static int interval, fph, notimenorm, havefirsttime, firstframe, lastframe;
+static int mode;
+static time_t firstt, lastt, baset;
+static Sfio_t *fp3;
+
+static void mytmfmt1 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+static void mytmfmt2 (char *buf, size_t len, const char *fmt, time_t *clock) {
+    static char *pfmt;
+    static time_t pclock;
+    static char pbuf[1024];
+
+    if (clock && *clock == pclock && pclock > 0 && fmt == pfmt) {
+        strncpy (buf, pbuf, len);
+        return;
+    }
+    tmfmt (buf, len, fmt, clock);
+    if (clock) {
+        strncpy (pbuf, buf, 1024);
+        pclock = *clock;
+        pfmt = (char *) fmt;
+    }
+}
+}
+BEGIN{
+    char *s;
+    time_t t;
+
+    mode = atoi (getenv ("MODE"));
+    if (mode > 0) {
+        t = strtoll (getenv ("FT"), &s, 10);
+        baset = firstt = t;
+        firstframe = 0;
+        havefirsttime = TRUE;
+    }
+    interval = atoi (getenv ("STATINTERVAL"));
+    fph = 3600 / interval;
+    if ((s = getenv ("NOTIMENORM")))
+        notimenorm = atoi (s);
+    if (!(fp3 = sfnew (NULL, NULL, 4096, 3, SF_WRITE)))
+        SUerror ("vg_dq_dt_alarm2stat", "cannot open fd 3");
+}
+{
+    char buf[1000];
+    char *s;
+    time_t t;
+
+    t = IN->timeissued;
+    if (!notimenorm)
+        t += interval / 2;
+    memset (OUT, 0, sizeof (struct __outrec_dq_dt_stat_t));
+    memcpy (OUT->scope, IN->scope, SZ_scope);
+    mytmfmt1 (OUT->dateissued, SZ_dateissued, "%Y.%m.%d", &t);
+    mytmfmt2 (OUT->hourissued, SZ_hourissued, "%H", &t);
+    OUT->timeissued = t;
+    memcpy (OUT->level, IN->level1, SZ_level);
+    memcpy (OUT->id, IN->id1, SZ_id);
+    strcpy (OUT->key, "alarm_volume._total");
+    strcpy (OUT->unit, "");
+    if (!havefirsttime) {
+        sfsprintf (buf, 1000, "%s-%s:00:00", OUT->dateissued, OUT->hourissued);
+        baset = tmdate (buf, &s, &t);
+        firstt = baset + interval * ((t - baset) / interval);
+        firstframe = (OUT->timeissued - firstt) / interval;
+        havefirsttime = TRUE;
+    }
+    OUT->frame = (OUT->timeissued - firstt) / interval;
+    if (mode == 1)
+        OUT->frame = OUT->frame / fph;
+    else if (mode == 2)
+        OUT->frame = OUT->frame / (24 * fph);
+    if (!notimenorm)
+        OUT->timeissued = baset + interval * ((t - baset) / interval);
+    lastt = OUT->timeissued;
+    lastframe = OUT->frame;
+    OUT->val = 1.0;
+    strcpy (OUT->label, "Alarm Volume");
+    memcpy (OUT->ilevel, IN->ilevel1, SZ_ilevel);
+    memcpy (OUT->iid, IN->iid1, SZ_iid);
+    OUT->iclass = IN->iclass1;
+    if (OUT->iclass == VG_QUERY_N_CLASS_PRIMARY)
+        EMIT;
+    else
+        return 0;
+}
+END{
+    sfprintf (fp3, "%d %d %ld %ld\n", firstframe, lastframe, firstt, lastt);
+}

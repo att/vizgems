@@ -1,0 +1,158 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+function confirm {
+    [[ $force == y ]] && return
+
+    typeset -l yn
+    print -n "really ${1}? [y/n] "
+    read yn
+    if [[ $yn != y ]] then
+        print -u2 aborting
+        exit
+    fi
+}
+
+function esc {
+    typeset s=$1
+
+    s=${s//'%'/'%25'}
+    s=${s//';'/'%3B'}
+    s=${s//'&'/'%26'}
+    s=${s//'|'/'%7C'}
+    s=${s//"'"/'%27'}
+    s=${s//'"'/'%22'}
+    s=${s//'<'/'%3C'}
+    s=${s//'>'/'%3E'}
+
+    print -r "$s"
+}
+
+. vg_hdr
+
+force=n
+if [[ $1 == -f ]] then
+    force=y
+    shift
+fi
+
+done=n
+
+typeset -l id
+
+ccid=
+id=
+txt=
+
+case $1 in
+c)
+    ccid=$2
+    id=$3
+    txt=$4
+    ch=1
+    done=y
+    ;;
+o)
+    id=$2
+    txt=$3
+    ch=2
+    done=y
+    ;;
+A)
+    id=__all_clear__
+    txt=$2
+    ch=3
+    done=y
+    ;;
+esac
+
+while [[ $done == n ]] do
+    print "1. clear alarms for a CCID"
+    print "2. clear alarms for an asset"
+    print "3. clear all alarms"
+    print "4. quit"
+    print -n "choice: "
+    read ch
+    if [[ $ch == 1 || $ch == 2 || $ch == 3 ]] then
+        done=y
+    elif [[ $ch == 4 ]] then
+        exit
+    fi
+done
+
+case $ch in
+1)
+    [[ $ccid == '' ]] && read ccid?"CCID to clear alarms for: "
+    if [[ $ccid == '' ]] then
+        print -u2 no CCID specified - exiting
+        exit
+    fi
+    if [[ $ccid != *.[0-9]* ]] then
+        print -u2 "CCID must have the form: <prefix>.<number>"
+        exit
+    fi
+    [[ $id == '' ]] && read id?"asset associated with CCID: "
+    if [[ $id == '' ]] then
+        print -u2 no asset specified - exiting
+        exit
+    fi
+    text="All alarms for $ccid cleared by $(id -u -n) through the CLI"
+    confirm "clear all alarms for CCID $ccid"
+    ;;
+2)
+    [[ $id == '' ]] && read id?"asset to clear alarms for: "
+    if [[ $id == '' ]] then
+        print -u2 no asset specified - exiting
+        exit
+    fi
+    text="All alarms for $id cleared by $(id -u -n) through the CLI"
+    confirm "clear all alarms for asset $id"
+    ;;
+3)
+    [[ $id == '' ]] && id=__all_clear__
+    text="All alarms cleared by $(id -u -n) through the CLI"
+    confirm "clear all alarms for all assets"
+    ;;
+esac
+[[ $txt != '' ]] && text=$txt
+
+s=$(printf '%(%#)T')
+dat=$(printf '%(%Y.%m.%d.%H.%M.%S)T' \#$s)
+
+text=$(esc "$text")
+
+(
+    print "<alarm>"
+    print "<v>$VG_S_VERSION</v><aid></aid>"
+    print "<ccid>$ccid</ccid><st></st><sm></sm>"
+    print "<vars></vars><di></di>"
+    print "<hi></hi>"
+    print "<tc></tc><ti>$s</ti>"
+    print "<tp>CLEAR</tp><so></so><pm>passthrough</pm>"
+    print "<lv1></lv1><id1>$id</id1><lv2></lv2><id2></id2>"
+    print "<tm></tm><sev>5</sev>"
+    print "<txt>VG CLEAR $text</txt><com></com>"
+    print "</alarm>"
+) > SWIFT_CFG_DSYSTEMDIR/incoming/alarm/alarms.${dat}.$$U.tmp
+mv \
+    SWIFT_CFG_DSYSTEMDIR/incoming/alarm/alarms.${dat}.$$U.tmp \
+SWIFT_CFG_DSYSTEMDIR/incoming/alarm/alarms.${dat}.$$U.xml
+
+print "Clear request queued"

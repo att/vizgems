@@ -1,0 +1,16 @@
+VARS{
+#define SZ_id1 DDSSZ_outrec_inv_map_id1
+#define SZ_id2 DDSSZ_outrec_inv_map_id2
+#define SZ_key DDSSZ_outrec_inv_map_key
+#define SZ_level1 DDSSZ_outrec_inv_map_level1
+#define SZ_level2 DDSSZ_outrec_inv_map_level2
+#define SZ_val DDSSZ_outrec_inv_map_val
+}
+{
+    memcpy (OUT->level1, IN->level2, SZ_level1);
+    memcpy (OUT->id1, IN->id2, SZ_id1);
+    memcpy (OUT->level2, IN->level1, SZ_level2);
+    memcpy (OUT->id2, IN->id1, SZ_id2);
+    memcpy (OUT->key, IN->key, SZ_key);
+    memcpy (OUT->val, IN->val, SZ_val);
+}

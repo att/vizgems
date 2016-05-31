@@ -1,0 +1,8 @@
+swift-base :PACKAGE: ast \
+	INITgraphviz INITswift aggr dds dotty geom gv ndfs lefty lefty0d \
+	libXaw3d libaggr libdds libgd libgraph libgv libswift \
+	swift tiger vpm
+
+:DESCRIPTION:
+	The AT&T Labs Research swift package contains all of the swift source
+	and is for internal distribution and testing.

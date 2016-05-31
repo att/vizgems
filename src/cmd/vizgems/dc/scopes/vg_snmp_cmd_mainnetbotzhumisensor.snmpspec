@@ -1,0 +1,124 @@
+rec=(
+    keys='SID SNAME EID ENAME PID PNAME'
+    walk0=(
+        name='.1.3.6.1.4.1.5528.100.4.1.2.1.1.${SID}' # humiSensorId
+        type=STRING
+        value='${SNAME}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.5528.100.4.1.2.1.4.${SID}' # humiSensorLabel
+        type=STRING
+        value='${SLABEL}'
+    )
+    walk2=(
+        name='.1.3.6.1.4.1.5528.100.4.1.2.1.8.${SID}' # humiSensorValueInt
+        type=INTEGER
+        value='${SVALUE}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.5528.100.4.1.2.1.5.${SID}' # humiSensorEncId
+        type=STRING
+        value='${ENAME}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.5528.100.4.1.2.1.6.${SID}' # humiSensorPortId
+        type=STRING
+        value='${PNAME}'
+        varappend='[[ $PNAME == "" ]] && PNAME=NONE$RANDOM'
+    )
+    walk5=(
+        name='.1.3.6.1.4.1.5528.100.2.1.1.1.${EID}' # enclosureId
+        type=STRING
+        value='${ENAME}'
+    )
+    walk6=(
+        name='.1.3.6.1.4.1.5528.100.2.1.1.4.${EID}' # enclosureLabel
+        type=STRING
+        value='${ELABEL}'
+    )
+    walk7=(
+        name='.1.3.6.1.4.1.5528.100.3.1.1.1.${PID}' # dinPortId
+        type=STRING
+        value='${PNAME}'
+    )
+    walk8=(
+        name='.1.3.6.1.4.1.5528.100.3.1.1.3.${PID}' # dinPortLabel
+        type=STRING
+        value='${PLABEL}'
+    )
+    outkey=SID
+    output='${SID}|${SNAME}|${SVALUE}|${SLABEL}|${ELABEL}|${PLABEL}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r sid sname svalue slabel elabel plabel; do
+                sname=${sname//\"/}
+                slabel=${slabel//\"/}
+                elabel=${elabel//\"/}
+                plabel=${plabel//\"/}
+                if [[ $plabel != "" ]] then
+                    label=$plabel
+                elif [[ $elabel != "" ]] then
+                    label=$elabel
+                    if [[ $sname == *[0-9] && $elabel == *0 ]] then
+                        label=${elabel%?}${sname: -1:1}
+                    fi
+                else
+                    label=$sname
+                fi
+                if [[ $label == @(*" "*|Camera) ]] then
+                    label=${label##+([ 	])}
+                    typeset -l l=${label:0:1}
+                    label=$INV_TARGET$l
+                fi
+                print "node|o|$INV_TARGET|si_humiid$sid|$sid"
+                print "node|o|$INV_TARGET|si_humilabel$sid|$label"
+                print "node|r|$label|name|$label"
+                print "node|r|$label|nodename|$label"
+                print "map|r|$label|o|$INV_TARGET||"
+                print "edge|r|$label|r|$label|mode|virtual"
+                print -u3 "ifs[$sid]=1"
+            done 3> netbotzhumisensor.list.new
+            mv netbotzhumisensor.list.new netbotzhumisensor.list
+            ;;
+        *)
+            typeset -A ifs
+            [[ -f ./netbotzhumisensor.list ]] && . ./netbotzhumisensor.list
+            in=0
+            while read -r sid sname svalue slabel elabel plabel; do
+                sname=${sname//\"/}
+                slabel=${slabel//\"/}
+                elabel=${elabel//\"/}
+                plabel=${plabel//\"/}
+                if [[ $plabel != "" ]] then
+                    label=$plabel
+                elif [[ $elabel != "" ]] then
+                    label=$elabel
+                    if [[ $sname == *[0-9] && $elabel == *0 ]] then
+                        label=${elabel%?}${sname: -1:1}
+                    fi
+                else
+                    label=$sname
+                fi
+                if [[ $label == @(*" "*|Camera) ]] then
+                    label=${label##+([ 	])}
+                    typeset -l l=${label:0:1}
+                    label=$VG_TARGETNAME$l
+                fi
+                if (( ifs[$sid] < 1 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+                ifs[$sid]=3
+                (( in++ ))
+                print "rt=STAT alvids=\"r:$label\" name=\"sensor_humi.${sid}\" type=number num=$svalue unit=% label=\"$slabel ($label)\""
+            done
+            for sid in "${!ifs[@]}"; do
+                if (( in > 0 && ifs[$sid] != 3 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+            done
+            ;;
+        esac
+    }'
+)

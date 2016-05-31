@@ -1,0 +1,70 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VG_SYSNAME=SWIFT_CFG_SYSNAME
+export VG_SYSMODE=SWIFT_CFG_SYSMODE
+export VG_NFSMODE=SWIFT_CFG_NFSMODE
+
+export VG_SSYSTEMDIR=SWIFT_CFG_SSYSTEMDIR
+export VG_SSCOPESDIR=SWIFT_CFG_SSCOPESDIR
+export VG_SWWWDIR=SWIFT_CFG_SWWWDIR
+export VG_SSNMPDIR=SWIFT_CFG_SSNMPDIR
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+export VG_DPSYSTEMDIR=SWIFT_CFG_DPSYSTEMDIR
+export VG_DASYSTEMDIR=SWIFT_CFG_DASYSTEMDIR
+export VG_DSCOPESDIR=SWIFT_CFG_DSCOPESDIR
+export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
+export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=SWIFT_CFG_DPSYSTEMDIR
+
+export LC_ALL=C LANG=C
+
+PATH=$PATH:/usr/sbin:/sbin
+
+if [[
+    $VG_DSYSTEMDIR/tmp/actions/cache1 -nt \
+    $VG_DSYSTEMDIR/uifiles/dataqueries/actions.txt
+]] then
+    touch $VG_DSYSTEMDIR/tmp/actions/cache1
+    touch $VG_DSYSTEMDIR/tmp/actions/cache2
+    exit 0
+fi
+
+mkdir -p $VG_DSYSTEMDIR/tmp/actions
+
+ifs="$IFS"
+IFS='|'
+egrep '^node\|' $VG_DSYSTEMDIR/uifiles/dataqueries/actions.txt \
+| sort -u | while read -r j l1 i1 l2 i2 g u an al ae; do
+    cl1=${l1//[!.a-zA-Z0-9_:-]/}
+    ci1=${i1//[!.a-zA-Z0-9_:-]/}
+    cl2=${l2//[!.a-zA-Z0-9_:-]/}
+    ci2=${i2//[!.a-zA-Z0-9_:-]/}
+    line="$l1|$i1|$l2|$i2|$g|$u|$an|$al|$ae"
+    if [[
+        $cl1 == "$l1" && $ci1 == "$i1" && $cl2 == "$l2" && $ci2 == "$i2"
+    ]] then
+        print -u3 -r "$line"
+    else
+        print -u4 -r "$line"
+    fi
+done 3> $VG_DSYSTEMDIR/tmp/actions/cache1 4> $VG_DSYSTEMDIR/tmp/actions/cache2
+IFS="$ifs"

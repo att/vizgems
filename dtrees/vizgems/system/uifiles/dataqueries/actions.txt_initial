@@ -1,0 +1,2 @@
+#node or edge|level1|id1 (RE)|level2|id2 (RE)|groups|users|unique-name|label|url
+node|o|.*url.*|||.*|.*|view|Visit URL|http://${id#*url}

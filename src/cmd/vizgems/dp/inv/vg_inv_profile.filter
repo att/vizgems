@@ -1,0 +1,94 @@
+VARS{
+#include <time.h>
+#include <ctype.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "vgprofile_pub.h"
+#include "sl_inv_node.c"
+
+#define SZ_key DDSSZ_rec_inv_node_key
+}
+LIBS{
+-lvgprofile
+}
+BEGIN{
+    if (profileload (
+        getenv ("PROFILEFILE"), getenv ("DEFAULTFILE"), getenv ("ACCOUNTFILE")
+    ) == -1)
+        SUwarning (0, "vg_profile", "cannot load profile data");
+    sl_inv_nodeopen (getenv ("INVNODEATTRFILE"));
+}
+{
+    profile_t *profilep;
+    default_t *defaultp;
+    sl_inv_node_t *np;
+    char skey1[SZ_key], skey2[SZ_key], *s;
+
+    DROP;
+
+    for (
+        profilep = profilefindfirst (level, id);
+        profilep;
+        profilep = profilefindnext (level, id)
+    ) {
+        if (strcmp (profilep->sstatus, "keep") != 0)
+            continue;
+        if (!strchr (profilep->svalue, '%') || strchr (profilep->sname, '.')) {
+            s = svalueparse (level, id, profilep->sname, profilep->svalue);
+            if (s)
+                sfprintf (
+                    sfstdout, "%s|%s|%s|%s\n", level, id, profilep->sname, s
+                );
+        } else {
+            sfsprintf (skey1, SZ_key, "si_sz_%s", profilep->sname);
+            sfsprintf (skey2, SZ_key, "scopeinv_size_%s", profilep->sname);
+            for (
+                np = sl_inv_nodefindfirst (level, id); np;
+                np = sl_inv_nodefindnext (level, id)
+            ) {
+                if (
+                    strstr (np->sl_key, skey1) != np->sl_key &&
+                    strstr (np->sl_key, skey2) != np->sl_key
+                )
+                    continue;
+                s = svalueparse (level, id, np->sl_key + 14, profilep->svalue);
+                if (s)
+                    sfprintf (
+                        sfstdout, "%s|%s|%s|%s\n", level, id, np->sl_key + 14, s
+                    );
+            }
+        }
+    }
+
+    for (
+        defaultp = defaultfindfirst (level, id);
+        defaultp;
+        defaultp = defaultfindnext (level, id)
+    ) {
+        if (!strchr (defaultp->svalue, '%') || strchr (defaultp->sname, '.')) {
+            s = svalueparse (level, id, defaultp->sname, defaultp->svalue);
+            if (s)
+                sfprintf (
+                    sfstdout, "%s|%s|%s|%s\n", level, id, defaultp->sname, s
+                );
+        } else {
+            sfsprintf (skey1, SZ_key, "si_sz_%s", defaultp->sname);
+            sfsprintf (skey2, SZ_key, "scopeinv_size_%s", defaultp->sname);
+            for (
+                np = sl_inv_nodefindfirst (level, id); np;
+                np = sl_inv_nodefindnext (level, id)
+            ) {
+                if (
+                    strstr (np->sl_key, skey1) != np->sl_key &&
+                    strstr (np->sl_key, skey2) != np->sl_key
+                )
+                    continue;
+                s = svalueparse (level, id, np->sl_key + 14, defaultp->svalue);
+                if (s)
+                    sfprintf (
+                        sfstdout, "%s|%s|%s|%s\n", level, id, np->sl_key + 14, s
+                    );
+            }
+        }
+    }
+}

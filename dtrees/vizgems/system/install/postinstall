@@ -1,0 +1,582 @@
+#!/bin/ksh
+
+if [ ! -d incoming/runigems ]; then
+    if [[ -d /export/home/igems/v5/output ]] then
+        ln -s /export/home/igems/v5/output incoming/runigems
+    elif [[ -d /export/home/igems/latest/output ]] then
+        ln -s /export/home/igems/latest/output incoming/runigems
+    else
+        mkdir incoming/runigems
+    fi
+fi
+
+if [ ! -d outgoing/runigems ]; then
+    if [[ -d /export/home/igems/v5/events ]] then
+        ln -s /export/home/igems/v5/events outgoing/runigems
+    elif [[ -d /export/home/igems/latest/events ]] then
+        ln -s /export/home/igems/latest/events outgoing/runigems
+    else
+        mkdir outgoing/runigems
+    fi
+fi
+
+if [[ -f dpfiles/alarm/empty.dds ]] then
+    wc -c < dpfiles/alarm/empty.dds | read s
+    if (( s != 1756 )) then
+        print -u2 removing old correlation state
+        rm -f dpfiles/alarm/empty.dds dpfiles/alarm/ce.state
+    fi
+fi
+
+rm -rf cache/profiles
+
+rm -f uifiles/dataqueries/levelorder.txt_sample
+
+./etc/updategeomfiles
+
+if [[ -d $VGINSTALLROOTDIR/sw/system/current.old/bin ]] then
+    op=$VGINSTALLROOTDIR/sw/system/current.old/bin
+    np=$VGINSTALLROOTDIR/sw/system/current/bin
+    ov=$(PATH=$op:$PATH ksh $op/vg_version 2> /dev/null)
+    ov=${ov:-6.0}
+    nv=$(PATH=$np:$PATH ksh $np/vg_version)
+
+    if (( ov < nv )) then
+        for a in install/$ov/action[0-9]*.sh; do
+            [[ ! -f $a ]] && continue
+            ksh $a
+        done
+    fi
+    rm -rf install/$ov
+fi
+
+if [[ $VGNFSMODE == client ]] then
+    print updating nfs client links
+    ./etc/updatenfslinks
+fi
+
+if [[ -f dpfiles/inv/parameter.txt ]] then
+    print "\nparameter.txt has moved to dpfiles/stat AND CHANGED FORMAT\n"
+    mv dpfiles/inv/parameter.txt tmp || rm dpfiles/inv/parameter.txt
+fi
+
+if [[ -f dpfiles/inv/threshold.txt ]] then
+    print "\nthreshold.txt has moved to dpfiles/stat\n"
+    mv dpfiles/inv/threshold.txt dpfiles/stat/threshold.txt
+    rm dpfiles/inv/threshold.txt_initial
+fi
+
+if [[ -f dpfiles/account.filter ]] then
+    if [[ $( \
+        cat dpfiles/account.filter | egrep '\|.*\|.*\|' | sort -u \
+    ) == '' ]] then
+        print updating account info file
+        sed -E 's/(^[^|]*)\|/\1|1|/' dpfiles/account.filter \
+        > dpfiles/account.filter.new \
+        && mv dpfiles/account.filter.new dpfiles/account.filter
+        touch -d '2000-01-01 00:00:00' dpfiles/account.filter
+    fi
+fi
+
+if [[ $(egrep 'ALARMPARAMS' etc/propdata.info) == '' ]] then
+    (
+        print ''
+        print '# propagation parameters'
+        print '# NOTE: setting any parameters increases the load on the system'
+        print '# use only when absolutely necessary'
+        print '#'
+        print '# when a remote server must receive only a subset of all the data on this'
+        print '# server, the following variables can be set to specify the constraints of'
+        print '# the feed.'
+        print '# the subscripts in these arrays must match the user and server strings'
+        print '# for this feed:'
+        print '#'
+        print '# STATPARAMS["user1@server1"]=('
+        print '#   level_c="acme|att"'
+        print '#   level_o="abc123"'
+        print '# )'
+        print '# there should be only one entry per asset level (c, o, etc)'
+        print ''
+        print 'typeset -A ALARMPARAMS STATPARAMS CMPARAMS'
+    ) >> etc/propdata.info
+fi
+
+if [[ $(egrep 'TRANSRATE' etc/propdata.info) == '' ]] then
+    (
+        print ''
+        print '# network speed in bits per second of this system'
+        print 'TRANSRATE=1000000'
+    ) >> etc/propdata.info
+fi
+
+if [[ $(egrep 'TRANSJOBS' etc/propdata.info) == '' ]] then
+    (
+        print ''
+        print '# max number of parallel transfer jobs'
+        print 'TRANSJOBS=8'
+    ) >> etc/propdata.info
+fi
+
+if [[ $(egrep 'AUTOINVINTERVAL' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# interval in minutes for injesting new autoinv files from scopes'
+        print 'AUTOINVINTERVAL=60'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'GCEPHASEON' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# use graph correlation engine'
+        print 'GCEPHASEON=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'PCEPHASEON' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# use profile correlation engine'
+        print 'PCEPHASEON=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'MAXSCOPEDELAY' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# number of seconds to wait before assuming a scope is down'
+        print '# leave empty to use STATINTERVAL + 30'
+        print 'MAXSCOPEDELAY='
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'PROFILESAMPLES' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# number of samples to use for profile generation'
+        print 'PROFILESAMPLES=5'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ENCRYPTMODE' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# store all passwords and snmp community strings encrypted'
+        print '# run: confmgr -updatephrase'
+        print '# to set up the encryption phrase'
+        print 'ENCRYPTMODE=n'
+        print "ENCRYPTFIELDS='scope_pass|scope_snmpcommunity'"
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'NOTIMENORM' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# to stop stat record timestamps from getting'
+        print '# aligned to the system default interval set this to 1'
+        print 'NOTIMENORM=0'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'STATNOAGGR' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# disable the stat aggregation processing by setting this variable to 'y'"
+        print "STATNOAGGR=n"
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ALARMNOAGGR' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# disable the alarm aggregation processing by setting this variable to 'y'"
+        print "ALARMNOAGGR=n"
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'AGGRDELAY' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# how long to wait before aggregating raw data into hourly and daily bins'
+        print "AGGRDELAY='1 hour'"
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'CONCATDELAY' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# how long to wait before concatenating raw files into 1 raw file per hour'
+        print "CONCATDELAY='120 min'"
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'STANDBYMODE' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# (EMS only)'
+        print "# set to 'y' if this EMS is a DR system in standby mode"
+        print 'STANDBYMODE=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'FAILOVERINV' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# set to 'y' to cause auto inventory to happen on failover scopes"
+        print 'FAILOVERINV=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ALWAYSCOMPRESSDP' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# set to 'y' to cause all data files to be stored compressed"
+        print "# the default is to have the most recent files uncompressed"
+        print 'ALWAYSCOMPRESSDP=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ALWAYSCOMPRESSUI' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# set to 'y' to cause all data files in queries to be stored"
+        print "# compressed - the default is to not compress them"
+        print 'ALWAYSCOMPRESSUI=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'STRICTEDGEUI' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# set to 'y' to cause queries that return edges to only include"
+        print "# an edge when both sides belong to the same customer"
+        print 'STRICTEDGEUI=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'USESCOPEINVKEYS' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# set to 'y' to enable backwards compatibility for old scopeinv record keys"
+        print 'USESCOPEINVKEYS=y'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ALARMSPLITFILESIZE' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# limit the size of a file to process"
+        print "# files larger than this size will be split into smaller files"
+        print "# must be at least 100000 or 0 for no limit"
+        print 'ALARMSPLITFILESIZE=2000000'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'STATSPLITFILESIZE' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# limit the size of a file to process"
+        print "# files larger than this size will be split into smaller files"
+        print "# must be at least 100000 or 0 for no limit"
+        print 'STATSPLITFILESIZE=20000000'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ALARMMAXFILERUN' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# limit the number of files to be processed per run"
+        print "# must be at least 10 or 0 for no limit"
+        print 'ALARMMAXFILERUN=500'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'STATMAXFILERUN' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# limit the number of files to be processed per run"
+        print "# must be at least 10 or 0 for no limit"
+        print 'STATMAXFILERUN=500'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'ACCEPTOLDINCOMING' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print "# set to <integer>d (for days) or <integer>h (for hours)"
+        print "# to allow processing of old alarm and stat files even if"
+        print "# the data is for days that have been completed"
+        print 'ACCEPTOLDINCOMING='
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'SORTUNIQSTATS' dpfiles/config.sh) == '' ]] then
+    (
+        print '# sort-unique detailed stats records - set to yes to eliminate false dups'
+        print 'SORTUNIQSTATS=n'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep 'STANDBYMODE == y' dpfiles/config.sh) == '' ]] then
+    (
+        print ''
+        print '# drop all propagation actions if in standby mode'
+        print 'if [[ $STANDBYMODE == y ]] then'
+        print '    PROPCONFS=n'
+        print '    MASTERCONF=n'
+        print '    PROPALARMS=n'
+        print '    PROPSTATS=n'
+        print '    PROPEMAILS=n'
+        print 'fi'
+    ) >> dpfiles/config.sh
+fi
+
+if [[ $(egrep '^EMIT' dpfiles/alarm/ce.rules) == '' ]] then
+    cp dpfiles/alarm/ce.rules_initial dpfiles/alarm/ce.rules
+fi
+
+if [[ $(egrep '^node\|l2\|' dpfiles/inv/HOSTING-LEVELS.txt) == '' ]] then
+    mkdir -p saved6.4
+    print upgrading HOSTING-LEVELS.txt
+    cp dpfiles/inv/HOSTING-LEVELS.txt saved6.4
+    cp dpfiles/inv/HOSTING-LEVELS.txt_initial dpfiles/inv/HOSTING-LEVELS.txt
+fi
+
+if [[ $(egrep '^node\|l\|' dpfiles/inv/location.txt | tail -1) == '' ]] then
+    mkdir -p saved6.4
+    print upgrading location.txt
+    cp dpfiles/inv/location.txt saved6.4
+    cp dpfiles/inv/location.txt_initial dpfiles/inv/location.txt
+fi
+
+if [[ -f uifiles/geom/us.geom_initial ]] then
+    mkdir -p saved6.4
+    print removing us.geom_initial
+    mv uifiles/geom/us.geom_initial saved6.4
+fi
+
+if [[ -f uifiles/geom/world.geom_initial ]] then
+    mkdir -p saved6.4
+    print removing world.geom_initial
+    mv uifiles/geom/world.geom_initial saved6.4
+fi
+
+if [[ -f uifiles/images/list.txt_initial ]] then
+    mkdir -p saved6.4
+    print removing list.txt_initial
+    mv uifiles/images/list.txt_initial saved6.4
+fi
+
+if [[ -f uifiles/images/list.txt ]] then
+    mkdir -p saved6.4
+    print removing list.txt
+    mv uifiles/images/list.txt saved6.4
+fi
+
+if [[ -f uifiles/favorites.txt_initial ]] then
+    mkdir -p saved6.4
+    print removing favorites.txt_initial
+    mv uifiles/favorites.txt_initial saved6.4
+fi
+
+if [[ -f uifiles/favorites.txt ]] then
+    mkdir -p saved6.4
+    print migrating favorites.txt
+    mkdir -p uifiles/favorites
+    while read -r line; do
+        name=${line%%'|+|'*}; rest=${line##"$name"?('|+|')}
+        qstr=${rest%%'|+|'*}; rest=${rest##"$qstr"?('|+|')}
+        query=${qstr%:*}; qid=${qstr#*:}
+        params=${rest%%'|+|'*}; rest=${rest##"$params"?('|+|')}
+        uid=${rest%%'|+|'*}; rest=${rest##"$uid"?('|+|')}
+        extra=
+        case $query in
+        alarmquery|statquery)
+            query=dataquery
+            ;;
+        *)
+            print -u2 unknown query $query
+            ;;
+        esac
+        case $qid in
+        abstract|business|customer|detailed|relationship|element) qid=$qid ;;
+        resource) qid=$qid ;;
+        location) qid=location2 ;;
+        day)
+            qid=statchart
+            extra="&statlod=5min"
+            ;;
+        week)
+            qid=statchart
+            extra="&statlod=hourly&date=lastweek"
+            ;;
+        week2)
+            qid=statchart
+            extra="&statlod=hourly&date=last7days"
+            ;;
+        month)
+            qid=statchart
+            extra="&statlod=hourly&date=lastmonth"
+            ;;
+        month2)
+            qid=statchart
+            extra="&statlod=hourly&date=last31days"
+            ;;
+        year*)
+            qid=statchart
+            extra="&statlod=daily&date=this"
+            ;;
+        *)
+            print -u2 unknown qid $qid
+            ;;
+        esac
+        print -r "$name|+|$SWIFTWEBPREFIX/cgi-bin-vg-members/vg_dserverhelper.cgi?query=$query&qid=$qid&$params$extra|+|$uid" >> uifiles/favorites/$uid.txt
+    done < uifiles/favorites.txt
+    mv uifiles/favorites.txt saved6.4
+fi
+
+if [[ -f uifiles/favorites.txt ]] then
+    mkdir -p saved6.4
+    print removing favorites.txt
+    mv uifiles/favorites.txt saved6.4
+fi
+
+if [[ -f uifiles/favorites.6to7 ]] then
+    print migrating favorites
+    mkdir -p uifiles/favorites
+    for file in uifiles/favorites/*.txt; do
+        [[ ! -f $file ]] && continue
+        while read -r line; do
+            name=${line%%'|+|'*}; rest=${line##"$name"?('|+|')}
+            params=${rest%%'|+|'*}; rest=${rest##"$params"?('|+|')}
+            uid=${rest%%'|+|'*}; rest=${rest##"$uid"?('|+|')}
+            extra=
+            query=${params##*query=}; query=${query%%'&'*}
+            qid=${params##*qid=}; qid=${qid%%'&'*}
+            case $query in
+            alarmquery|statquery)
+                query=dataquery
+                params=${params//=alarmquery/=dataquery}
+                params=${params//=statquery/=dataquery}
+                ;;
+            esac
+            pqid=$qid
+            case $qid in
+            abstract|business|customer|detailed|relationship|element) qid=$qid ;;
+            resource) qid=$qid ;;
+            location) qid=location2 ;;
+            day)
+                qid=statchart
+                extra="&statlod=5min"
+                ;;
+            week)
+                qid=statchart
+                extra="&statlod=hourly&date=lastweek"
+                ;;
+            week2)
+                qid=statchart
+                extra="&statlod=hourly&date=last7days"
+                ;;
+            month)
+                qid=statchart
+                extra="&statlod=hourly&date=lastmonth"
+                ;;
+            month2)
+                qid=statchart
+                extra="&statlod=hourly&date=last31days"
+                ;;
+            year*)
+                qid=statchart
+                extra="&statlod=daily&date=this"
+                ;;
+            esac
+            params=${params//=$pqid/=$qid}
+            print -r "$name|+|$params$extra|+|$uid"
+        done < $file > $file.tmp
+        mv $file.tmp $file
+    done
+fi
+
+if [[ $(egrep 'alarmquery|statquery' uifiles/homequeries.txt) != '' ]] then
+    print migrating homequeries.txt
+    while read -r line; do
+        if [[ $line == LINE ]] then
+            print -r "$line"
+            continue
+        elif [[ $line == HTML* ]] then
+            print -r "$line"
+            continue
+        fi
+        if [[ $line == \#* || $line != *\|* ]] then
+            print -r "$line"
+            continue
+        fi
+        rest=$line
+        groups=${rest%%\|*}
+        rest=${rest#"$groups"\|}
+        ids=${rest%%\|*}
+        rest=${rest#"$ids"\|}
+        name=${rest%%\|*}
+        rest=${rest#"$name"\|}
+        query=${rest%%\|*}
+        rest=${rest#"$query"\|}
+        qid=${rest%%\|*}
+        rest=${rest#"$qid"\|}
+        params=${rest%%\|*}
+        rest=${rest#"$params"\|}
+        case $query in
+        alarmquery|statquery)
+            query=dataquery
+            ;;
+        esac
+        extra=
+        case $qid in
+        abstract|business|customer|detailed|relationship|element) qid=$qid ;;
+        resource) qid=$qid ;;
+        location) qid=location2 ;;
+        day)
+            qid=statchart
+            extra="&statlod=5min"
+            ;;
+        week)
+            qid=statchart
+            extra="&statlod=hourly&date=lastweek"
+            ;;
+        week2)
+            qid=statchart
+            extra="&statlod=hourly&date=last7days"
+            ;;
+        month)
+            qid=statchart
+            extra="&statlod=hourly&date=lastmonth"
+            ;;
+        month2)
+            qid=statchart
+            extra="&statlod=hourly&date=last31days"
+            ;;
+        year*)
+            qid=statchart
+            extra="&statlod=daily&date=this"
+            ;;
+        esac
+        print -r "$groups|$ids|$name|$query|$qid|$params$extra"
+    done < uifiles/homequeries.txt > uifiles/homequeries.txt.tmp
+    mv uifiles/homequeries.txt.tmp uifiles/homequeries.txt
+fi
+
+if [[ -f uifiles/alarmqueries/menuactions.txt ]] then
+    print migrating menuactions.txt
+    cp uifiles/alarmqueries/menuactions.txt uifiles/dataqueries/actions.txt
+fi
+
+if [[ -d uifiles/alarmqueries ]] then
+    mkdir -p saved6.4
+    print removing alarmqueries
+    mv uifiles/alarmqueries saved6.4
+fi
+
+if [[ -d uifiles/statqueries ]] then
+    mkdir -p saved6.4
+    print removing statqueries
+    mv uifiles/statqueries saved6.4
+fi

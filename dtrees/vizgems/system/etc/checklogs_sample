@@ -1,0 +1,192 @@
+#!/bin/ksh
+
+# added code from Jeff Fellin to optionally save the results in a log file
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+function nonemptyemail {
+    if [[ -s $tmpfile ]] then
+        [[ $lfile != '' ]] && cat $tmpfile >> $lfile
+        [[ $list != ''  ]] && mailx -s "VG $label" $list < $tmpfile
+    fi
+}
+
+tmpfile=/tmp/checklogs.$$
+exec > $tmpfile 2>&1
+trap 'rm -f $tmpfile' HUP QUIT TERM KILL EXIT
+CRITICALLIST=''
+IMPORTANTLIST=''
+ALLLIST=''
+list=$ALLLIST
+label="error report for ems $(uname -n)"
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/etc/checklogs.info ]] then
+    print -u2 SWIFT ERROR cannot find log checking config file
+    nonemptyemail
+    exit 1
+fi
+. SWIFT_CFG_DSYSTEMDIR/etc/checklogs.info
+list=$ALLLIST
+
+level=$1
+if [[ $level != critical && $level != important && $level != all ]] then
+    print -u2 SWIFT ERROR bad reporting level $level
+    nonemptyemail
+    exit 1
+fi
+
+span=$2
+if [[ $span != fifteen && $span != hourly && $span != daily ]] then
+    print -u2 SWIFT ERROR bad span parameter $level
+    nonemptyemail
+    exit 1
+fi
+
+case $level in
+critical)
+    list=$CRITICALLIST
+    label="Critical-$label"
+    ;;
+important)
+    list=$IMPORTANTLIST
+    label="Important-$label"
+    ;;
+all)
+    list=$ALLLIST
+    label="All-$label"
+    ;;
+esac
+list=",${list//' '/,},"
+list=${list//+(,)/,}
+list=${list#,}
+list=${list%,}
+[[ $list == '' ]] && exit 0
+if [[ ,${list}, == *,log,* ]] then
+    lfile=SWIFT_CFG_DSYSTEMDIR/logs/checklogs_$level.$(printf '%(%Y%m%d)T').log
+    list=",${list},"
+    while [[ ,${list}, == *,log,* ]] do
+        list=${list//,log,/,}
+    done
+    list=${list#,}
+    list=${list%,}
+fi
+
+case $span in
+fifteen)
+    t=$(printf '%(%#)T')
+    (( t -= (15 * 60 + 5) ))
+    label="$label for last 15 mins"
+    ;;
+hourly)
+    t=$(printf '%(%#)T')
+    (( t -= (60 * 60 + 5) ))
+    label="$label for last 60 mins"
+    ;;
+daily)
+    t=$(printf '%(%#)T')
+    (( t -= (24 * 60 * 60 + 5) ))
+    label="$label for last 24 hrs"
+    ;;
+esac
+
+tw -i -d SWIFT_CFG_DSYSTEMDIR/logs \
+    -e 'sort: name' \
+    -e "type==REG && mtime > $t && name != \"*-day*|checklogs*\"" cat \
+2> /dev/null \
+| egrep -v '^(begin|end|success|\+)' \
+| egrep -v '(VGMSG|MESSAGE|SWIFT MESSAGE)' \
+| egrep -v '^(compressing|filtering|adjusting)' \
+| egrep -v '\|(DATA INFO|RULE INFO|CORR INFO)\||record.*truncated|succeeded' \
+| egrep -v '(incoming|outgoing) .* file|compacting correlation data' \
+| egrep -v '^make:.*(action.* failed|don.t know how to make)' \
+| egrep -v 'PCE INFO|cannot open embed info file|splitting large .* file' \
+| egrep -v '^$' \
+| case $level in
+critical)
+    egrep -v 'failed to find.*for|^SWIFT WARNING:|\|DATA ERROR\|' \
+    | egrep -v 'copy of.*failed' \
+    | egrep -v 'has been replaced by an older version' \
+    | egrep -v 'the state file lock on.*has been overridden'
+    ;;
+important)
+    egrep -v 'failed to find.*for'
+    ;;
+all)
+    cat
+    ;;
+esac | sed -e 's/SWIFT WARNING:.*)/WARNING/' -e 's/SWIFT ERROR:.*)/ERROR/' \
+| sort | uniq -c | sort -rn 1>&2
+
+if [[ $span == hourly ]] then
+    hour=$(printf '%(%H)T' '180 min ago')
+    ct=$(printf '%(%#)T' '180 min ago')
+    cdate=$(printf '%(%Y/%m/%d)T' \#$ct)
+    pdate=$(printf '%(%Y/%m/%d)T' \#$(( $ct - 24 * 60 * 60 )))
+    cdir=SWIFT_CFG_DSYSTEMDIR/data/main/$cdate/processed/total
+    pdir=SWIFT_CFG_DSYSTEMDIR/data/main/$pdate/processed/total
+    if [[ ! -f $cdir/all.$hour.alarms.dds ]] then
+        print "No alarms data for $cdate-$hour"
+    fi
+    if [[
+        $(
+            ddsinfo -sum $cdir/all.$hour*.stats.dds 2> /dev/null | tail -1
+        ) != *total:*
+    ]] then
+        print "No stats data for $cdate-$hour"
+    elif [[ -f $pdir/all.$hour.stats.dds ]] then
+        cn=$(ddsinfo -sum $cdir/all.$hour*.stats.dds | egrep total:)
+        cn=${cn#*' '}
+        pn=$(ddsinfo $pdir/all.$hour.stats.dds | egrep nrecs:)
+        pn=${pn#*' '}
+        if (( pn > 0 )) then
+            (( r = (1.0 * cn) / pn ))
+            if (( r < 0.75 )) then
+                print "more than 25% drop in stat data for $cdate-$hour"
+            fi
+        fi
+    fi
+fi
+
+for i in SWIFT_CFG_DSYSTEMDIR/lock.*; do
+    [[ ! -f $i ]] && continue
+    ls -l $i 2> /dev/null | read j1 j2 j3 j4 j5 M D HM j6
+    [[ $M == '' || $D == '' || $HM == '' ]] && continue
+    ft=$(printf '%(%#)T' "$M $D $HM")
+    ct=$(printf '%(%#)T')
+    if (( ct - ft > 4 * 60 * 60 )) then
+        print "Old lock file $i"
+    fi
+done
+
+exec 2>&-
+
+if [[ ! -s $tmpfile || $level != all ]] then
+    nonemptyemail
+    exit 0
+fi
+
+tw -i -d SWIFT_CFG_DSYSTEMDIR/logs \
+    -e 'sort: name' -e "type==REG && mtime > $t && name != \"*day*\"" cat \
+| egrep '\|CORR INFO\|' | tail -1 >> $tmpfile
+
+nonemptyemail

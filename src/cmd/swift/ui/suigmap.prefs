@@ -1,0 +1,45 @@
+suigmap=(
+  label="3D Viewer"
+  langs="lefty java"
+  uselang=lefty
+  launch=yes
+  groups="default"
+  default=(
+    label="3D Viewer Preferences"
+    entrylist=" \
+      vieworigin viewsize viewcolor showtitle title showcontrol \
+      showlegends canvascolor \
+    "
+    entries=(
+      vieworigin=(
+        type=coord var=vieworigin val="0 0" label="Window Position"
+      )
+      viewsize=(
+        type=coord var=viewsize val="800 600" label="Window Size"
+      )
+      viewcolor=(
+        type=2colors var=viewcolor val="gray black"
+        label="Window Colors"
+      )
+
+      showtitle=(
+        type=yesno var=showtitle val=no label="Show Title"
+      )
+      title=(
+        type=text var=title val="SWIFTUI - 3D View" label="Title"
+      )
+
+      showcontrol=(
+        type=yesno var=showcontrol val=yes label="Show Controls"
+      )
+      showlegends=(
+        type=yesno var=showlegends val=yes label="Show Legends"
+      )
+      canvascolor=(
+        type=2colors var=canvascolor val="black white"
+        label="Canvas Colors"
+      )
+
+    )
+  )
+)

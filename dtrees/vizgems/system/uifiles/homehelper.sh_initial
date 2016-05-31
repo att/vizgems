@@ -1,0 +1,76 @@
+#!/bin/ksh
+
+#
+# NOTE: make this file executable to have it used by the home page tool
+#
+
+function home_gendqurl { # $1 = query $2 = qid $3 = params
+    print -rn "$SWIFTWEBPREFIX/cgi-bin-vg-members/vg_dserverhelper.cgi"
+    print -rn "?pid=${home_data.pid}&update=5&name=data.$$.$RANDOM.$RANDOM"
+    print -r "&query=$1&qid=$2&$(VG_urlenc "$3")"
+}
+
+case $1 in
+sectionorder)
+    print "alarmsummary quicklinks queries adminlinks news"
+    ;;
+sectionexample)
+    print "<tr class=page>"
+    print "<td align=right class=pageborder>"
+    print "</td>"
+    print "<td class=pageborder>"
+    print "</td>"
+    print "</tr>"
+    ;;
+quicklinks)
+    lastentry=line
+    while read -r line; do
+        if [[ $line == LINE ]] then
+            if [[ $lastentry != line ]] then
+                print "<tr class=page><td class=page>"
+                print -r "<hr style='width: 100%; height: 1px'>"
+                print "</td></tr>"
+            fi
+            lastentry=line
+            continue
+        elif [[ $line == HTML* ]] then
+            print -r "${line#HTML}"
+            lastentry=html
+            continue
+        fi
+        [[ $line == \#* || $line != *\|* ]] && continue
+        rest=$line
+        groups=${rest%%\|*}
+        rest=${rest#"$groups"\|}
+        ids=${rest%%\|*}
+        rest=${rest#"$ids"\|}
+        name=${rest%%\|*}
+        rest=${rest#"$name"\|}
+        query=${rest%%\|*}
+        rest=${rest#"$query"\|}
+        qid=${rest%%\|*}
+        rest=${rest#"$qid"\|}
+        params=${rest%%\|*}
+        rest=${rest#"$params"\|}
+        if [[ $groups != '' ]] && ! swmuseringroups "${groups//:/'|'}"; then
+            continue
+        fi
+        if [[ $ids != '' && :$ids: != *:$SWMID:* ]] then
+            continue
+        fi
+        if [[ $params == *HIGHALERTCUST* ]] then
+            custs=$(sed 's/ .*//' $SWIFTDATADIR/uifiles/highalertcusts.txt)
+            custs=${custs//$'\n'/';'}
+            params=${params//HIGHALERTCUST/$custs}
+        fi
+        url=$(home_gendqurl "$query" "$qid" "$params")
+        print "<tr class=page><td class=page>"
+        print -r "<a"
+        print -r "  class=page href='javascript:vg_runurl(\"$url\")'"
+        print -r "  title='click to run this query'"
+        print -r ">&nbsp;$name&nbsp;</a>"
+        print "</td></tr>"
+        lastentry=query
+    done < $SWIFTDATADIR/uifiles/homequeries.txt
+    ;;
+esac

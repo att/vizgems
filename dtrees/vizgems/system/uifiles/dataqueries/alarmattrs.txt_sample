@@ -1,0 +1,10 @@
+color=any:filtered:#A0A0A0:#000000|any:deferred:#C0C0C0:#000000|1:ticketed:#FF0000:#FFFFFF|2:ticketed:#FFA500:#000000|3:ticketed:#FFFF00:#000000|4:ticketed:#0000CD:#FFFFFF|5:ticketed:#00FF00:#000000|6:ticketed:#00FF00:#000000
+severitylabel=1:critical|2:major|3:minor|4:warning|5:normal|6:clear
+ticketlabel10=1:ticketed|2:correlated|3:filtered
+ticketlabel11=1:ticketed|2:non-ticketed
+ticketlabel12=1:ticketed|2:correlated|3:filtered
+ticketlabel13=1:ticketed|2:correlated|3:filtered
+ticketlabel20=ticketed:ticketed|correlated:correlated|filtered:filtered
+ticketlabel21=ticketed:ticketed|deferred:non-ticketed
+ticketlabel22=ticketed:ticketed|correlated:correlated|filtered:filtered
+ticketlabel23=ticketed:ticketed|correlated:correlated|filtered:filtered

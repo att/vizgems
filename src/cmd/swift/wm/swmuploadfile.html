@@ -1,0 +1,40 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">
+<html>
+<head>
+</head>
+<body>
+<h2>Upload a File</h2>
+<form
+  action=/cgi-bin-members/swmuploadfile.cgi enctype="multipart/form-data"
+  method=post
+>
+<table><tr>
+  <td><input type="submit"></td>
+  <td><input type="reset"></td>
+  <td><a href="#help">Help</a></td>
+</tr></table>
+<table border><tr>
+  <td>Local File to Upload:</td>
+  <td><input type="file" name=cfile value="file"></td>
+</tr><tr>
+  <td>File Name on Server:</td>
+  <td><input type="text" name=sfile value=""></td>
+</tr><tr>
+  <td>Description of Contents:</td>
+  <td><textarea name=descr rows=3></textarea></td>
+</tr></table>
+<br>
+</form>
+<a name=help>
+<h2>Help</h2>
+<h3>File to Upload</h3>
+Use the browse button to find the file on your local machine
+that you want to upload. The file must be a plain ascii file.
+<h3>File Name on Server</h3>
+Enter the name the file should have on your personal area on
+the SWIFT server.
+<h3>Description of Contents</h3>
+Describe the contents of the file. This description will be
+printed when you list your files on the SWIFT server.
+</body>
+</html>

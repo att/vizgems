@@ -1,0 +1,10 @@
+#!/bin/ksh
+
+for i in "$@"; do
+    print mktgz $i
+    if [[ $i == *.data ]] then
+        (cd $i && tar cf - . ) | gzip > ${i%/}.tgz
+    else
+        tar cf - ${i%/} | gzip > ${i%/}.tgz
+    fi
+done

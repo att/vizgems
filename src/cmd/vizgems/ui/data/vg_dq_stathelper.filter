@@ -1,0 +1,392 @@
+VARS{
+#include <regex.h>
+#include <vmalloc.h>
+#include <cdt.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_nodeattr.c"
+
+#define SZ_id DDSSZ_rec_stat_id
+#define SZ_level DDSSZ_rec_stat_level
+#define SZ_key DDSSZ_rec_stat_key
+#define SZ_label DDSSZ_rec_stat_label
+
+static char onelevel[SZ_level], oneid[SZ_id];
+static int stype;
+
+typedef struct fkey_t {
+    Dtlink_t link;
+    /* begin key */
+    char s_key[SZ_key];
+    /* end key */
+    char s_label[SZ_label];
+    int s_n;
+} fkey_t;
+
+static Dt_t *fkeydict;
+static Dtdisc_t fkeydisc = {
+    sizeof (Dtlink_t), SZ_key, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+typedef struct ikey_t {
+    Dtlink_t link;
+    /* begin key */
+    char s_key[SZ_key];
+    /* end key */
+    char s_label[SZ_label];
+} ikey_t;
+
+static Dt_t *ikeydict;
+static Dtdisc_t ikeydisc = {
+    sizeof (Dtlink_t), SZ_key, 0, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+typedef struct inv_t {
+    int s_kind;
+    char s_level[SZ_level], *s_idre;
+    regex_t s_code;
+} inv_t;
+#define IKIND 1
+#define NKIND 2
+
+static inv_t *ins;
+static int inn;
+
+typedef struct stat_t {
+    int s_param;
+    char *s_textre;
+    regex_t s_code;
+} stat_t;
+#define KEYPARAM   1
+#define LABELPARAM 2
+
+static stat_t *stats;
+static int statn;
+
+#define ICMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define ICMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, ICMPFLAGS) == 0)
+#define NCMPFLAGS (REG_NULL | REG_EXTENDED | REG_ICASE)
+#define NCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, NCMPFLAGS) == 0)
+#define SKCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT)
+#define SKCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, SKCMPFLAGS) == 0)
+#define SLCMPFLAGS (REG_NULL | REG_EXTENDED | REG_LEFT | REG_RIGHT | REG_ICASE)
+#define SLCMP(p, i, s) (regexec (&p[i].s_code, s, 0, NULL, SLCMPFLAGS) == 0)
+
+static sl_inv_nodeattr_t ina;
+
+static int maxn, showpartial, doenc;
+}
+BEGIN{
+    Sfio_t *fp;
+    char *line, *s1, *s2;
+    int statm, inm;
+
+    if (!(fkeydict = dtopen (&fkeydisc, Dtset)))
+        SUerror ("vg_dq_stathelper", "cannot create fkeydict");
+    if (!(ikeydict = dtopen (&ikeydisc, Dtset)))
+        SUerror ("vg_dq_stathelper", "cannot create ikeydict");
+
+    maxn = atoi (getenv ("MAXN"));
+    showpartial = atoi (getenv ("SHOWPARTIAL"));
+    doenc = atoi (getenv ("DOENC"));
+
+    inm = 0, inn = atoi (getenv ("INVNODEFILTERSIZE"));
+    if (inn > 0) {
+        if (!(ins = vmalloc (Vmheap, sizeof (inv_t) * inn)))
+            SUerror ("vg_dq_stathelper", "cannot allocate ins");
+        memset (ins, 0, sizeof (inv_t) * inn);
+        if (!(fp = sfopen (NULL, getenv ("INVNODEFILTERFILE"), "r")))
+            SUerror (
+                "vg_dq_stathelper", "cannot open inv filter file"
+            );
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (
+                    0, "vg_dq_stathelper", "bad line: %s", line
+                );
+                break;
+            }
+            *s1++ = 0;
+            if (line[0] == 'I' || line[0] == 'F')
+                ins[inm].s_kind = IKIND;
+            else if (line[0] == 'N')
+                ins[inm].s_kind = NKIND;
+            else {
+                SUwarning (
+                    0, "vg_dq_stathelper", "unknown tag %s", line
+                );
+                break;
+            }
+            if (!(s2 = strchr (s1, '|'))) {
+                SUwarning (0, "vg_dq_stathelper", "bad line: %s", s1);
+                break;
+            }
+            *s2++ = 0;
+            strcpy (ins[inm].s_level, s1);
+            if (!(ins[inm].s_idre = vmstrdup (Vmheap, s2))) {
+                SUwarning (
+                    0, "vg_dq_stathelper", "cannot allocate id: %s", s2
+                );
+                break;
+            }
+            if (regcomp (
+                &ins[inm].s_code, ins[inm].s_idre,
+                (ins[inm].s_kind == IKIND) ? ICMPFLAGS : NCMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_stathelper",
+                    "cannot compile regex %s", ins[inm].s_idre
+                );
+                break;
+            }
+            inm++;
+        }
+        sfclose (fp);
+    }
+    if (inm != inn)
+        inn = -1;
+
+    statm = 0, statn = atoi (getenv ("STATFILTERSIZE"));
+    if (statn > 0) {
+        if (!(stats = vmalloc (Vmheap, sizeof (stat_t) * statn)))
+            SUerror ("vg_dq_stathelper", "cannot allocate stats");
+        memset (stats, 0, sizeof (stat_t) * statn);
+        if (!(fp = sfopen (NULL, getenv ("STATFILTERFILE"), "r")))
+            SUerror ("vg_dq_stathelper", "cannot open stat filter file");
+        while ((line = sfgetr (fp, '\n', 1))) {
+            if (!(s1 = strchr (line, '|'))) {
+                SUwarning (0, "vg_dq_stathelper", "bad line: %s", line);
+                break;
+            }
+            *s1++ = 0;
+            if (!(s2 = strchr (s1, '|'))) {
+                SUwarning (0, "vg_dq_stathelper", "bad line: %s", s1);
+                break;
+            }
+            *s2++ = 0;
+            if (strcmp (s1, "key") == 0)
+                stats[statm].s_param = KEYPARAM;
+            else if (strcmp (s1, "label") == 0)
+                stats[statm].s_param = LABELPARAM;
+            else {
+                SUwarning (0, "vg_dq_stathelper", "unknown param: %s", s1);
+                break;
+            }
+            if (!(stats[statm].s_textre = vmstrdup (Vmheap, s2))) {
+                SUwarning (
+                    0, "vg_dq_stathelper", "cannot allocate text: %s", s2
+                );
+                break;
+            }
+            if (regcomp (
+                &stats[statm].s_code, stats[statm].s_textre,
+                (stats[statm].s_param == KEYPARAM) ? SKCMPFLAGS : SLCMPFLAGS
+            ) != 0) {
+                SUwarning (
+                    0, "vg_dq_stathelper",
+                    "cannot compile regex %s", stats[statm].s_textre
+                );
+                break;
+            }
+            statm++;
+        }
+        sfclose (fp);
+    }
+    if (statm != statn)
+        statn = -1;
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+
+    strcpy (ina.sl_key, "name");
+}
+{
+    sl_inv_nodeattr_t *inap;
+    int stati, statm, ini, inm, res;
+    char *m1p, *name, *s;
+    ikey_t ik, *ikmem;
+    fkey_t fk, *fkmem, *fkp;
+
+    DROP;
+
+    if (statn < 0 || inn < 0)
+        return __result;
+
+    for (stati = statm = 0; stati < statn; stati++) {
+        switch (stats[stati].s_param) {
+        case KEYPARAM:
+            res = SKCMP (stats, stati, key);
+            break;
+        case LABELPARAM:
+            res = SLCMP (stats, stati, label);
+            break;
+        }
+        if (!res)
+            break;
+        statm++;
+    }
+    if (statm != statn)
+        return __result;
+
+    inm = 0;
+    for (ini = 0; ini < inn; ini++) {
+        for (
+            m1p = M1F (level, id, ins[ini].s_level); m1p;
+            m1p = M1N (level, id, ins[ini].s_level)
+        ) {
+            if (ins[ini].s_kind == IKIND) {
+                if (ICMP (ins, ini, m1p)) {
+                    inm++;
+                    break;
+                }
+            } else {
+                if ((inap = sl_inv_nodeattrfind (
+                    ins[ini].s_level, m1p, ina.sl_key
+                )))
+                    name = inap->sl_val;
+                else
+                    name = m1p;
+                if (NCMP (ins, ini, name)) {
+                    inm++;
+                    break;
+                }
+            }
+        }
+        if (ini + 1 != inm)
+            break;
+    }
+    if (inm != inn)
+        return __result;
+
+    switch (stype) {
+    case 0:
+        strcpy (onelevel, level);
+        strcpy (oneid, id);
+        stype = 1;
+        break;
+    case 1:
+        if (strcmp (onelevel, level) != 0 || strcmp (oneid, id) != 0)
+            stype = 2;
+        break;
+    }
+
+    switch (stype) {
+    case 1:
+        memcpy (ik.s_key, key, SZ_key);
+        if (!dtsearch (ikeydict, &ik)) {
+            if (!(ikmem = vmalloc (Vmheap, sizeof (ikey_t))))
+                SUerror ("vg_dq_stathelper", "cannot allocate ikmem");
+            memset (ikmem, 0, sizeof (ikey_t));
+            memcpy (ikmem->s_key, key, SZ_key);
+            memcpy (ikmem->s_label, label, SZ_label);
+            if (dtinsert (ikeydict, ikmem) != ikmem)
+                SUerror ("vg_dq_stathelper", "cannot insert ikey");
+        }
+        if ((s = strchr (key, '.')))
+            *s = 0;
+        if ((s = strchr (label, '(')))
+            if (s > label && *(s - 1) == ' ')
+                *(s - 1) = 0;
+            else
+                *s = 0;
+        memset (fk.s_key, 0, SZ_key);
+        sfsprintf (fk.s_key, SZ_key, "%s.*", key);
+        if (!(fkp = dtsearch (fkeydict, &fk))) {
+            if (!(fkmem = vmalloc (Vmheap, sizeof (fkey_t))))
+                SUerror ("vg_dq_stathelper", "cannot allocate fkmem");
+            memset (fkmem, 0, sizeof (fkey_t));
+            sfsprintf (fkmem->s_key, SZ_key, "%s.*", key);
+            strncpy (fkmem->s_label, label, SZ_label);
+            if ((fkp = dtinsert (fkeydict, fkmem)) != fkmem)
+                SUerror ("vg_dq_stathelper", "cannot insert fkey");
+        }
+        fkp->s_n++;
+        break;
+    case 2:
+        if ((s = strchr (key, '.')))
+            *s = 0;
+        if ((s = strchr (label, '(')))
+            if (s > label && *(s - 1) == ' ')
+                *(s - 1) = 0;
+            else
+                *s = 0;
+        memset (fk.s_key, 0, SZ_key);
+        sfsprintf (fk.s_key, SZ_key, "%s.*", key);
+        if (!(fkp = dtsearch (fkeydict, &fk))) {
+            if (!(fkmem = vmalloc (Vmheap, sizeof (fkey_t))))
+                SUerror ("vg_dq_stathelper", "cannot allocate fkmem");
+            memset (fkmem, 0, sizeof (fkey_t));
+            sfsprintf (fkmem->s_key, SZ_key, "%s.*", key);
+            strncpy (fkmem->s_label, label, SZ_label);
+            if ((fkp = dtinsert (fkeydict, fkmem)) != fkmem)
+                SUerror ("vg_dq_stathelper", "cannot insert fkey");
+        }
+        fkp->s_n++;
+        break;
+    }
+}
+END{
+    char buf[4000];
+    fkey_t *fkp;
+    ikey_t *ikp;
+    int ikn, iki, fkn, fki;
+
+    ikn = dtsize (ikeydict);
+    fkn = dtsize (fkeydict);
+    if (maxn > 0 && ikn > maxn)
+        stype = 2;
+
+    switch (stype) {
+    case 1:
+        sfprintf (
+            sfstdout, "A|%d|1|%d\n",
+            (maxn > 0 && ikn + fkn > maxn) ? 0 : ikn, ikn
+        );
+        sfprintf (
+            sfstdout, "A|%d|2|%d\n", (maxn > 0 && fkn > maxn) ? 0 : fkn, fkn
+        );
+        iki = 0;
+        for (ikp = dtfirst (ikeydict); ikp; ikp = dtnext (ikeydict, ikp)) {
+            if (
+                maxn > 0 && ikn + fkn > maxn &&
+                (!showpartial || ++iki + fkn > maxn)
+            )
+                continue;
+            if (doenc)
+                VG_urlenc (ikp->s_label, buf, 4000);
+            else
+                strcpy (buf, ikp->s_label);
+            sfprintf (sfstdout, "B|%s|1|%s\n", ikp->s_key, buf);
+        }
+        fki = 0;
+        for (fkp = dtfirst (fkeydict); fkp; fkp = dtnext (fkeydict, fkp)) {
+            if (maxn > 0 && fkn > maxn && (!showpartial || ++fki > maxn))
+                continue;
+            if (doenc)
+                VG_urlenc (fkp->s_label, buf, 4000);
+            else
+                strcpy (buf, fkp->s_label);
+            sfprintf (sfstdout, "B|%s|2|%s\n", fkp->s_key, buf);
+        }
+        break;
+    case 2:
+        sfprintf (sfstdout, "A|0|1|0\n");
+        sfprintf (
+            sfstdout, "A|%d|2|%d\n", (maxn > 0 && fkn > maxn) ? 0 : fkn, fkn
+        );
+        fki = 0;
+        for (fkp = dtfirst (fkeydict); fkp; fkp = dtnext (fkeydict, fkp)) {
+            if (maxn > 0 && fkn > maxn && (!showpartial || ++fki > maxn))
+                continue;
+            if (doenc)
+                VG_urlenc (fkp->s_label, buf, 4000);
+            else
+                strcpy (buf, fkp->s_label);
+            sfprintf (sfstdout, "B|%s|2|%s\n", fkp->s_key, buf);
+        }
+        break;
+    }
+}

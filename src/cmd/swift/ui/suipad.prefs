@@ -1,0 +1,75 @@
+suipad=(
+  label="Selection Pad"
+  langs="ksh"
+  uselang=ksh
+  launch=no
+  groups="default"
+  default=(
+    label="Selection Pad Preferences"
+    entrylist=" \
+      viewcolor viewfontname viewfontsize showheader header showfooter footer \
+      showtitle title showdatesel showupdatesel showviewsel showcancelall \
+      showselparam rowhelper class_a_a_style
+    "
+    entries=(
+      viewcolor=(
+        type=2colors var=viewcolor val="gray black"
+        label="Window Colors"
+      )
+      viewfontname=(
+        type=fontname var=viewfontname val="Times-Roman"
+        label="Window Font Name"
+      )
+      viewfontsize=(
+        type=fontsize var=viewfontsize val=14 label="Window Font Size"
+      )
+
+      showheader=(
+        type=yesno var=showheader val=no label="Show Header"
+      )
+      header=(
+        type=text var=header val="" label="Header"
+      )
+
+      showfooter=(
+        type=yesno var=showfooter val=no label="Show Footer"
+      )
+      footer=(
+        type=text var=footer val="" label="Footer"
+      )
+
+      showtitle=(
+        type=yesno var=showtitle val=yes label="Show Title"
+      )
+      title=(
+        type=text var=title val="SWIFTUI - Selection Pad" label="Title"
+      )
+
+      showdatesel=(
+        type=yesno var=showdatesel val=yes label="Show Date Selection"
+      )
+      showupdatesel=(
+        type=yesno var=showupdatesel val=yes label="Show Update Selection"
+      )
+      showviewsel=(
+        type=yesno var=showviewsel val=yes label="Show View Selection"
+      )
+      showcancelall=(
+        type=yesno var=showcancelall val=no label="Show Cancel Button"
+      )
+      showselparam=(
+        type=yesno var=showselparam val=yes label="Show Selection Parameters"
+      )
+
+      rowhelper=(
+        type=text var=rowhelper val="" label="Row Helper"
+      )
+
+      class_a_a_style=(
+        type=style var=class_a_a_style
+        val="color: black"
+        label="Link Style"
+      )
+    )
+  )
+)

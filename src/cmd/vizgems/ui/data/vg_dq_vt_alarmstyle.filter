@@ -1,0 +1,115 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, openmode;
+static char *rendermode;
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("ALARMSTYLEATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot load attr file");
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_alarmstyle", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_ALARMGROUP].str)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot find alarmgroup");
+    if (strcmp (attrs[ATTR_ALARMGROUP].str, "open") == 0)
+        openmode = TRUE;
+
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot load sevmap file");
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot init UT");
+    if (RIinit (fprefix, iprefix, 1000) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot init RI");
+    if (EMinit (getenv ("ALARMSTYLEEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot init EM");
+    if (ASTinit (sevmapn, openmode) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot init AST");
+    if (!ASTinsert (
+        "_D_", "__DEFAULT__", "", "",
+        "_D_", "__DEFAULT__", "", "", 0, -123, -123
+    ))
+        SUerror ("vg_dq_vt_alarmstyle", "cannot insert node alarm");
+    if (!ASTinsert (
+        "_D_", "__DEFAULT__", "_D_", "__DEFAULT__",
+        "_D_", "__DEFAULT__", "_D_", "__DEFAULT__", 0, -123, -123
+    ))
+        SUerror ("vg_dq_vt_alarmstyle", "cannot insert edge alarm");
+}
+{
+    DROP;
+
+    if (!ASTinsert (
+        ilevel1, iid1, ilevel2, iid2, level1, id1, level2, id2,
+        type, tmode, severity
+    ))
+        SUerror ("vg_dq_vt_alarmstyle", "cannot insert alarm");
+}
+END{
+    int ali;
+
+    if (ASTflatten () == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot flatten");
+    if (ASTsetupprint (
+        rendermode,
+        attrs[ATTR_ALARMSTYLEATTR].str, attrs[ATTR_ALARMATTR].str
+    ) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot setup printing");
+
+    for (ali = 0; ali < ASTalarmn; ali++) {
+        if (!ASTalarms[ali]->iid2[0])
+            sfsprintf (
+                objstr, OBJLEN, "n|%s|%s",
+                ASTalarms[ali]->ilevel1, ASTalarms[ali]->iid1
+            );
+        else
+            sfsprintf (
+                objstr, OBJLEN, "e|%s|%s|%s|%s",
+                ASTalarms[ali]->ilevel1, ASTalarms[ali]->iid1,
+                ASTalarms[ali]->ilevel2, ASTalarms[ali]->iid2
+            );
+
+        if (ASTprintstyle (fprefix, findex, ali, objstr) == -1)
+            SUerror ("vg_dq_vt_alarmstyle", "cannot print alarmstyle %d", ali);
+        findex++;
+    }
+
+    if (ASTfinishprint (fprefix) == -1)
+        SUerror ("vg_dq_vt_alarmstyle", "cannot finish printing");
+}

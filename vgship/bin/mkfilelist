@@ -1,0 +1,9 @@
+
+cd $1 || { print -u2 ERROR cannot cd to $1; exit 1; }
+
+tw | while read file; do
+    print $file
+    if [[ $file == *_sample || $file == *_initial ]] then
+        print ${file%_*}
+    fi
+done | sort -u > etc/file.list

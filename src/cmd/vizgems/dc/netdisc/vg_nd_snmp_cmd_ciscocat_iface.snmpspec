@@ -1,0 +1,74 @@
+rec=(
+    keys='IFACE IPORT IP'
+    walk0=(
+        name='.1.3.6.1.2.1.2.2.1.8.${IFACE}' # ifOperStatus
+        type=STRING
+        value='${ISTATE}'
+    )
+    walk1=(
+        name='.1.3.6.1.2.1.31.1.1.1.1.${IFACE}' # ifName
+        type=STRING
+        value='${INAME}'
+    )
+    walk2=(
+        name='.1.3.6.1.2.1.2.2.1.2.${IFACE}' # ifDescr
+        type=STRING
+        value='${IDESCR}'
+    )
+    walk3=(
+        name='.1.3.6.1.4.1.9.5.1.4.1.1.11.${IPORT}' # portIfIndex
+        type=INTEGER
+        value='${IFACE}'
+    )
+    walk4=(
+        name='.1.3.6.1.4.1.9.5.1.4.1.1.4.${IPORT}' # portName
+        type=STRING
+        value='${IALIAS}'
+    )
+    walk5=(
+        name='.1.3.6.1.2.1.2.2.1.6.${IFACE}' # ifPhysAddress
+        type=STRING
+        value='${IMAC}'
+    )
+    walk6=(
+        name='.1.3.6.1.2.1.2.2.1.5.${IFACE}' # ifSpeed
+        type=INTEGER
+        value='${S}'
+    )
+    walk7=(
+        name='.1.3.6.1.2.1.4.20.1.2.${IP}' # ipAdEntIfIndex
+        type=INTEGER
+        value='${IFACE}'
+    )
+    walk8=(
+        name='.1.3.6.1.2.1.4.20.1.3.${IP}' # ipAdEntNetMask
+        type=INTEGER
+        value='${IMASK}'
+    )
+    outkey=IFACE
+    output='${IFACE}|${INAME}|${IDESCR}|${IALIAS}|${IMAC}|${S}|${ISTATE}|${IP}|${IMASK}'
+    outfilter='(
+        IFS="|"
+        while read -r iface ifname ifdescr ifalias ifmac ifspeed ifstate ifip ifmask; do
+            ifalias=${ifalias//\"/}
+            ifdescr=${ifdescr//\"/}
+            set -A ls ${ifmac//[: ]/"|"}
+            ifmac=$(
+                printf "%02..16d:%02..16d:%02..16d:%02..16d:%02..16d:%02..16d" \
+                16#${ls[0]} 16#${ls[1]} 16#${ls[2]} \
+                16#${ls[3]} 16#${ls[4]} 16#${ls[5]} \
+            )
+            print "cdpport2iface[$SNMPIP:$ifname]=\"$iface\""
+            print "ifnames[$SNMPIP:$iface]=\"$ifname\""
+            print "ifdescrs[$SNMPIP:$iface]=\"$ifdescr\""
+            print "ifaliass[$SNMPIP:$iface]=\"$ifalias\""
+            print "ifspeeds[$SNMPIP:$iface]=\"$ifspeed\""
+            print "ifstates[$SNMPIP:$iface]=\"$ifstate\""
+            print "ifmacs[$SNMPIP:$iface]=\"$ifmac\""
+            [[ $ifip != "" ]] && print "ifips[$SNMPIP:$iface]=\"$ifip\""
+            [[ $ifip != "" && $ifmac != "" && $ifmac != 00:00:00:00:00:00 ]] && print "ip2mac1[$ifip]+=\" $ifmac\""
+            [[ $ifip != "" && $ifmac != "" && $ifmac != 00:00:00:00:00:00 ]] && print "mac2ip1[$ifmac]+=\" $ifip\""
+            [[ $ifip != "" && $ifmask != "" ]] && print "ifmasks[$SNMPIP:$iface]=\"$ifmask\""
+        done
+    )'
+)

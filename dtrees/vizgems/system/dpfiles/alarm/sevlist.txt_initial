@@ -1,0 +1,8 @@
+# 0 is not a real severity
+0|none
+0|_default_
+1|critical
+2|major
+3|minor
+4|warning
+5|normal

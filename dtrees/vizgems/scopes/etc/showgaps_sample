@@ -1,0 +1,65 @@
+#!/bin/ksh
+
+# based on a similar script by Jeff Fellin
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSCOPESDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export LC_ALL=C LANG=C
+
+period=${1:-"24 hours"}
+
+typeset -A freqs lastreap
+typeset -F3 interval
+
+egrep '<jobid>.*</jobid>|<freq>.*</freq>' \
+    SWIFT_CFG_DSCOPESDIR/schedule \
+| while read line; do
+    case $line in
+    *jobid*jobid*)
+        asset=${line#'<jobid>'}
+        asset=${asset#*.}
+        asset=${asset%%'<'*}
+        ;;
+    *freq*freq*)
+        freq=${line#*'<ival>'}
+        freq=${freq%%'<'*}
+        freqs[$asset]=$freq
+        ;;
+    esac
+done
+
+fdate=$(printf '%(%Y%m%d-%H%M%S)T' "$period ago")
+
+for file in SWIFT_CFG_DSCOPESDIR/logs/schedule.*.log; do
+    [[ ${file##*/} < schedule.$fdate.log ]] && continue
+    egrep ':[0-9][0-9] (reap|late) ' $file
+done | while read -r line; do
+    ts=${line%%@(reap|late)*}
+    rest=${line#"$ts "}
+    [[ $rest == late* ]] && print -r $line
+    t=$(printf '%(%#)T' "$ts")
+    asset=${rest#*.}
+    asset=${asset%%' '*}
+    if [[ ${lastreap[$asset]} != '' && ${freqs[$asset]} != '' ]] then
+        if (( t - lastreap[$asset] >= freqs[$asset] * 2.0 )) then
+            (( interval = (0.0 + t - lastreap[$asset]) / freqs[$asset] - 1 ))
+            print "gap: asset=$asset time=$ts gap=$interval"
+        fi
+    fi
+    lastreap[$asset]=$t
+done

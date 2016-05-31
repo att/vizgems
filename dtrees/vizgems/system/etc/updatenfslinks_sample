@@ -1,0 +1,80 @@
+#!/bin/ksh
+
+usage=$'
+[-1p1?
+@(#)$Id: updatenfslinks (AT&T) 2007-06-18 $
+]
+[+NAME?updatenfslinks - fixes data dir symlinks]
+[+DESCRIPTION?\bupdatenfslinks\b creates and updates symlinks in the VizGEMS
+data area to point to the corrent nfs-mounted data directories when an
+nfs server is available.
+for any date that local data is not available but data is available on the
+nfs server, this script will create a symlink to the corresponding nfs
+directory.
+any symlinks pointing to non-existent directories on the nfs server
+(because data rolled of that server) will be deleted.
+]
+[200:show?show actions without doing.
+]
+[201:delete?perform symlink removals as well as creations.
+]
+[999:v?increases the verbosity level. May be specified multiple times.]
+'
+
+function showusage {
+    OPTIND=0
+    getopts -a updatenfslinks "$usage" opt '-?'
+}
+
+showonly=n
+alsodel=n
+
+while getopts -a updatenfslinks "$usage" opt; do
+    case $opt in
+    200) showonly=y ;;
+    201) alsodel=y ;;
+    999) (( SWIFTWARNLEVEL++ )) ;;
+    *) showusage; exit 1 ;;
+    esac
+done
+shift $OPTIND-1
+
+if [[ SWIFT_CFG_NFSMODE != client ]] then
+    print "this system is not an nfs client - nothing to do"
+    exit 0
+fi
+
+cd SWIFT_CFG_DSYSTEMDIR/data/main || exit 0
+
+if [[ ! -d SWIFT_CFG_DASYSTEMDIR/data/main ]] then
+    print -u2 ERROR nfs directory SWIFT_CFG_DASYSTEMDIR/data/main does not exist
+    exit 1
+fi
+
+now=$(printf '%(%#)T')
+(( last = now - 2 * 24 * 60 * 60 )) # 2 days ago
+
+for rdir in SWIFT_CFG_DASYSTEMDIR/data/main/????/??/??; do
+    [[ ! -d $rdir ]] && continue
+    ymd=${rdir##*main/}
+    [[ -d $ymd ]] && continue
+    dirt=$(printf '%(%#)T' ${ymd//\//.}-00:00:00)
+    (( last < dirt )) && continue
+    print ln -s $rdir $ymd
+    if [[ $showonly == n ]] then
+        ln -s $rdir $ymd
+    fi
+done
+
+if [[ $alsodel == y ]] then
+    for ldir in ????/??/??; do
+        [[ ! -L $rdir ]] && continue
+        ymd=${ldir}
+        rdir=SWIFT_CFG_DASYSTEMDIR/data/main/$ymd
+        [[ -d $ymd ]] && continue
+        print rm $ldir
+        if [[ $showonly == n ]] then
+            rm $ldir
+        fi
+    done
+fi

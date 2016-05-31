@@ -1,0 +1,629 @@
+#!/bin/ksh
+
+function timedrun { # $1 = timeout, $2-* cmd and args
+    typeset maxt jid i
+
+    maxt=$1
+    shift 1
+
+    set -o monitor
+    "$@" &
+    jid=$!
+    for (( i = 0; i < maxt; i += 0.1 )) do
+        kill -0 $jid 2> /dev/null || break
+        sleep 0.1
+    done
+    if (( i >= maxt )) then
+        if kill -9 -$jid 2> /dev/null; then
+            print -u2 propdata: timeout for job "$@"
+        fi
+    fi
+    wait $jid 2> /dev/null
+    return $?
+}
+
+function filter { # $1=hostspec $2=src $3=dest
+    typeset hostspec=$1 src=$2 dst=$3
+
+    typeset -n pr=params[$hostspec]
+    #eval pr=$(print ${params[$hostspec]})
+    typeset kind ddir
+
+    if [[ ${src##*/} == cm.* && ${pr.exclude} != '' ]] then
+        kind=${src##*/}
+        kind=${kind#cm.}
+        kind=${kind##+([0-9-]).}
+        kind=${kind%%.*}
+        if [[ " ${pr.exclude} " == *" $kind "* ]] then
+            return 0
+        fi
+    fi
+
+    case ${src##*/} in
+    cm.*.@(filter|alarmemail|profile|threshold|favorites).*)
+        ln $src $dst
+        return 0
+        ;;
+    cm.*.preferences.*)
+        ln $src $dst
+        return 0
+        ;;
+    cm.*.customer.*|cm.*.business.*|cm.*.location.*|cm.*.type.*)
+        ln $src $dst
+        return 0
+        ;;
+    esac
+
+    if [[ ! -f $tmpdir/$hostspec.filter ]] then
+        for level in "${!pr.@}"; do
+            [[ $level != *.level_* ]] && continue
+            lv=${level##*.level_}
+            typeset -n idr=$level
+            print -r "I|${level##*.level_}|${idr}"
+        done > $tmpdir/$hostspec.filter
+    fi
+    ddir=SWIFT_CFG_DSYSTEMDIR/data/main/latest/processed/total
+    export LEVELMAPFILE=$ddir/LEVELS-maps.dds
+    export INVMAPFILE=$ddir/inv-maps-uniq.dds
+    export INVPROPFILTERFILE=$tmpdir/$hostspec.filter
+    export INVPROPFILTERSIZE=$(wc -l < $INVPROPFILTERFILE)
+
+    case ${src##*/} in
+    cm.*.view.*|cm.*.scope.*)
+        if [[ ${pr.level_c} == '' || $src == *[-.]~(E)(${pr.level_c})-* ]] then
+            if [[ ${pr.filter} != '' ]] then
+                vg_prop_filter -mode inv < $src | ${pr.filter} inv > $dst
+            else
+                vg_prop_filter -mode inv < $src > $dst
+            fi
+        else
+            > $dst
+        fi
+        ;;
+    stats.*)
+        if [[ ${pr.filter} != '' ]] then
+            vg_prop_filter -mode stat < $src | ${pr.filter} stat > $dst
+        else
+            vg_prop_filter -mode stat < $src > $dst
+        fi
+        ;;
+    alarms.*)
+        if [[ ${pr.filter} != '' ]] then
+            vg_prop_filter -mode alarm < $src | ${pr.filter} alarm > $dst
+        else
+            vg_prop_filter -mode alarm < $src > $dst
+        fi
+        ;;
+    cm.*.passwd.*|cm.*.group.*|cm.*.account.*)
+        if [[ ${pr.excludeaccounts} != '' ]] then
+            case ${src##*/} in
+            *.passwd.*)
+                while read -r line; do
+                    if [[ $line == ~(E)(^${pr.excludeaccounts}:.*) ]] then
+                        continue
+                    fi
+                    print -r -- "$line"
+                done < $src > $dst
+                ;;
+            *.group.*)
+                while read -r line; do
+                    nline=${line%%:*}:
+                    for id in ${line#*:}; do
+                        if [[ $id == ~(E)(^${pr.excludeaccounts}$) ]] then
+                            continue
+                        fi
+                        nline+=" $id"
+                    done
+                    print -r -- "$nline"
+                done < $src > $dst
+                ;;
+            *.account.*)
+                while read -r line; do
+                    if [[ $line == ~(E)(^${pr.excludeaccounts};.*) ]] then
+                        continue
+                    fi
+                    print -r -- "$line"
+                done < $src > $dst
+                ;;
+            esac
+        else
+            ln $src $dst
+        fi
+        return 0
+        ;;
+    esac
+}
+
+function sendemail {
+    typeset fmstr tostr toarg sm dt ti li
+
+    fmstr="${pfaddr//,/' '}"
+    fmstr="${fmstr//+(' ')/, }"
+
+    tostr="${ptaddr//,/' '}"
+    tostr="${tostr//+(' ')/, }"
+    toarg="${ptaddr//,/' '}"
+
+    if [[ -x /usr/lib/sendmail ]] then
+        sm=/usr/lib/sendmail
+    elif [[ -x /usr/sbin/sendmail ]] then
+        sm=/usr/sbin/sendmail
+    else
+        print -u2 ERROR cannot locate sendmail program
+        return 1
+    fi
+
+    dt=$(printf '%(%F)T')
+
+    for ti in $toarg; do
+        (
+            case $pst in
+            sms)
+                print "From $fmstr $dt"
+                print "From: $fmstr"
+                print "X-Mailer: mailx"
+                print "Mime-Version: 1.0"
+                print "Date: $(printf '%(%a, %d %b %Y %H:%M:%S %z)T')"
+                print "To: $tostr"
+                print "Subject: $psub"
+                print ""
+                for (( li = 0; li < ${#plist[@]}; li++ )) do
+                    set -f
+                    set -A ls -- ${plist[$li]}
+                    set +f
+                    print "${ls[1]}, ${ls[2]}, ${ls[3]}, ${ls[4]}"
+                done
+                print ""
+                print ""
+                ;;
+            text)
+                print "From vizgems $dt"
+                print "From: $fmstr"
+                print "X-Mailer: mailx"
+                print "Mime-Version: 1.0"
+                print "Date: $(printf '%(%a, %d %b %Y %H:%M:%S %z)T')"
+                print "To: $tostr"
+                print "Subject: $psub"
+                print ""
+                for (( li = 0; li < ${#plist[@]}; li++ )) do
+                    set -f
+                    set -A ls -- ${plist[$li]}
+                    set +f
+                    print "object=${ls[1]}"
+                    print "severity=${ls[2]}"
+                    print "tmode=${ls[3]}"
+                    print "msg=${ls[4]}"
+                    print ""
+                done
+                print ""
+                print ""
+                ;;
+            html)
+                print "From vizgems $dt"
+                print "From: $fmstr"
+                print "X-Mailer: mailx"
+                print "Mime-Version: 1.0"
+                print -n "Content-Type: multipart/alternative;"
+                print " boundary=\"__VG_ALT_VG__\""
+                print "Date: $(printf '%(%a, %d %b %Y %H:%M:%S %z)T')"
+                print "To: $tostr"
+                print "Subject: $psub"
+                print ""
+                print "This is a multi-part message in MIME format."
+                print -- "--__VG_ALT_VG__"
+                print "Content-Type: text/plain; charset=ISO-8859-1;"
+                print " format=flowed"
+                print "Content-Transfer-Encoding: 7bit"
+                print ""
+                print "If you see this message, your mail reader does not"
+                print "handle HTML."
+                print ""
+                print ""
+                print -- "--__VG_ALT_VG__"
+                print "Content-Type: multipart/related;"
+                print " boundary=\"__VG__HTML__VG__\""
+                print ""
+                print ""
+                print -- "--__VG__HTML__VG__"
+                print "Content-Type: text/html; charset=ISO-8859-1"
+                print "Content-Transfer-Encoding: 7bit"
+                print ""
+                print "<html><body><table border=1>"
+                print "<tr>"
+                print "<th>Asset</th>"
+                print "<th>Severity</th>"
+                print "<th>Ticket Mode</th>"
+                print "<th>Message Text</th>"
+                print "</tr>"
+                for (( li = 0; li < ${#plist[@]}; li++ )) do
+                    set -f
+                    set -A ls -- ${plist[$li]}
+                    set +f
+                    print "<tr>"
+                    print "<td>${ls[1]}</td>"
+                    print "<td>${ls[2]}</td>"
+                    print "<td>${ls[3]}</td>"
+                    print "<td>${ls[4]}</td>"
+                    print "</tr>"
+                done
+                print "</table></body></html>"
+                print ""
+                print -- "--__VG__HTML__VG__--"
+                print ""
+                print -- "--__VG_ALT_VG__--"
+                print ""
+                print ""
+                ;;
+            esac
+        ) | ( $sm $ti || exit $? )
+    done
+}
+
+function synchost {
+    typeset mode=$1 hostspec=$2 dir=$3
+
+    typeset -A lcls rmts lfls
+    typeset ifs md5 file rfile ofile ts pfile sn
+
+    ifs="$IFS"
+    IFS='|'
+    while read md5 file rfile ofile; do
+        lcls[$file:$rfile]=$md5
+        lfls[$file:$rfile]=$ofile
+    done < $dir/lcl
+    while read md5 file rfile ofile; do
+        rmts[$file:$rfile]=$md5
+    done < $dir/rmt
+    IFS="$ifs"
+
+    for file in "${!lcls[@]}"; do
+        if [[ ${rmts[$file]} != ${lcls[$file]} ]] then
+            ts=$(printf '%(%Y%m%d-%H%M%S)T')
+            sn=SWIFT_CFG_SYSNAME
+            ofile=${lfls[$file]}
+            rfile=${file#*:}
+            file=${file%%:*}
+            if [[ $mode != reallysync ]] then
+                if [[ $rfile != '' ]] then
+                    print will update file $file/$rfile
+                else
+                    print will update file $file
+                fi
+                continue
+            fi
+            pfile=cm.$ts.$file.${rfile//./_X_X_}.$sn.$sn.$RANDOM.full.xml
+            pfile=SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec/$pfile
+            mkdir -p SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec
+            mkdir -p SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec
+            (
+                print "<a>full</a>"
+                print "<u>$sn</u>"
+                print "<f>"
+                cat $ofile
+                print "</f>"
+            ) > $pfile.tmp
+            if [[ ${params[@]} == '' || ${params[$hostspec]} == '' ]] then
+                mv $pfile.tmp $pfile
+            else
+                filter "$hostspec" $pfile.tmp $pfile.tmp.tmp
+                rm $pfile.tmp
+                mv $pfile.tmp.tmp $pfile
+            fi
+        fi
+    done
+    for file in "${!rmts[@]}"; do
+        if [[ ${lcls[$file]} == '' ]] then
+            ts=$(printf '%(%Y%m%d-%H%M%S)T')
+            sn=SWIFT_CFG_SYSNAME
+            rfile=${file#*:}
+            file=${file%%:*}
+            if [[ $mode != reallysync ]] then
+                if [[ $rfile != '' ]] then
+                    print will delete file $file/$rfile
+                else
+                    print will delete file $file
+                fi
+                continue
+            fi
+            pfile=cm.$ts.$file.${rfile//./_X_X_}.$sn.$sn.$RANDOM.remove.xml
+            pfile=SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec/$pfile
+            mkdir -p SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec
+            mkdir -p SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec
+            (
+                print "<a>remove</a>"
+                print "<u>$sn</u>"
+                print "<f>"
+                print "</f>"
+            ) > $pfile.tmp
+            if [[ ${params[@]} == '' || ${params[$hostspec]} == '' ]] then
+                mv $pfile.tmp $pfile
+            else
+                filter "$hostspec" $pfile.tmp $pfile.tmp.tmp
+                rm $pfile.tmp
+                mv $pfile.tmp.tmp $pfile
+            fi
+        fi
+    done
+}
+
+sfl='-C -o ConnectTimeout=60 -o ServerAliveInterval=15 -o ServerAliveCountMax=2'
+
+if [[ $1 == @(sync|reallysync) ]] then
+    dst=$2
+    if [[ $dst == *:* ]] then
+        dsthost=${dst%%:*}
+        dstdir=${dst#*:}
+    else
+        dsthost=$dst
+        dstdir=.
+    fi
+    if [[ ! -f SWIFT_CFG_DSYSTEMDIR/etc/propdata.info ]] then
+        print -u2 ERROR missing propdata.info file
+        exit 1
+    fi
+    . SWIFT_CFG_DSYSTEMDIR/etc/propdata.info
+    found=n
+    for spec in $CMSYS; do
+        if [[ $dstdir != . ]] then
+            if [[ $dsthost:$dstdir == $spec ]] then
+                found=y
+                break
+            fi
+        else
+            if [[ $dsthost == ${spec%%:*} ]] then
+                found=y
+                dstdir=${spec#*:}
+                break
+            fi
+        fi
+    done
+    if [[ $found == n ]] then
+        print -u2 ERROR host spec $dst not found in propdata.info file
+        exit 1
+    fi
+
+    typeset -n params=CMPARAMS
+    tmpdir=SWIFT_CFG_DSYSTEMDIR/tmp/prop.sync.$dsthost
+    mkdir -p $tmpdir
+    rm -f $tmpdir/*
+    timedrun 100 ssh $sfl $dsthost \
+        "${dstdir}/../etc/confmgr -printmd5" \
+    < /dev/null > $tmpdir/rmt
+    SWIFT_CFG_DSYSTEMDIR/etc/confmgr -printmd5 > $tmpdir/lcl
+    synchost $1 $dsthost $tmpdir
+    rm -rf $tmpdir
+    exit 0
+fi
+
+case $1 in
+group1) mode=group1 ;;
+group2) mode=group2 ;;
+*)      mode=all    ;;
+esac
+
+exitfile=SWIFT_CFG_DSYSTEMDIR/exit.prop.$mode
+lockfile=SWIFT_CFG_DSYSTEMDIR/lock.prop.$mode
+
+if [[ -f $exitfile ]] then
+    exit
+fi
+set -o noclobber
+if ! command exec 3> ${lockfile}; then
+    if kill -0 $(< ${lockfile}); then
+        exit 5
+    else
+        rm -f ${lockfile}
+        exit 0
+    fi
+fi 2> /dev/null
+print -u3 $$
+set +o noclobber
+
+trap 'rm -f ${lockfile}' HUP QUIT TERM KILL EXIT
+
+logfile=SWIFT_CFG_DSYSTEMDIR/logs/prop.$mode.$(date -f '%Y%m%d-%H%M%S').log
+exec 4>&1
+exec >> $logfile
+exec 2>&1
+
+tmpdir=SWIFT_CFG_DSYSTEMDIR/tmp/prop.$mode
+mkdir -p $tmpdir
+rm -f $tmpdir/*
+
+if [[ -f SWIFT_CFG_DSYSTEMDIR/etc/propdata.info ]] then
+    . SWIFT_CFG_DSYSTEMDIR/etc/propdata.info
+fi
+float transrate=${TRANSRATE:-1000000}
+transjobs=${TRANSJOBS:-8}
+
+tdir=SWIFT_CFG_DSYSTEMDIR/outgoing
+
+ALARMSYS=${ALARMSYS:-NONE}
+CLEARSYS=${CLEARSYS:-NONE}
+STATSYS=${STATSYS:-NONE}
+CMSYS=${CMSYS:-NONE}
+
+typeset -l sn=$VG_SYSNAME
+ct=$(printf '%(%#)T')
+
+typeset -u NAM
+
+case $mode in
+group1) dirs='alarm clear' ;;
+group2) dirs='stat email cm' ;;
+all)    dirs='alarm clear stat email cm' ;;
+esac
+
+allnone=y
+ssherri=0
+
+for dir in $dirs; do
+    tw -i -d $tdir/$dir -e 'type != DIR && mtime < "7 days ago"' rm
+    if [[ $dir == clear ]] then
+        dir2=alarm
+    else
+        dir2=$dir
+    fi
+    NAM=$dir
+    typeset -n specs=${NAM}SYS
+    typeset -n params=${NAM}PARAMS
+    if [[ $specs == NONE ]] then
+        for file in $tdir/$dir/*.xml; do
+            [[ ! -f $file ]] && continue
+            rm $file
+        done
+        continue
+    else
+        allnone=n
+    fi
+
+    havefiles=n
+    for file in $tdir/$dir/*.xml; do
+        [[ ! -f $file ]] && continue
+        if [[ ! -s $file ]] then
+            rm $file
+            continue
+        fi
+        if [[ $havefiles == n ]] then
+            mkdir -p $tdir/$dir/tmp
+            if [[ ! -d $tdir/$dir/tmp ]] then
+                print -u2 propdata: cannot create $tdir/$dir/tmp
+                exit 1
+            fi
+        fi
+        havefiles=y
+        tfile=${file##*/}
+        if [[ $dir == cm ]] then
+            mv $file $tdir/$dir/tmp
+        else
+            mv $file $tdir/$dir/tmp/${tfile%.xml}.$sn.$ct.xml
+        fi
+        (( ct++ ))
+    done
+
+    for spec in $specs; do
+        [[ $spec != *:* ]] && continue
+        hostspec=${spec%%:*}
+        rdir=${spec##"$hostspec"?(:)}
+        mkdir -p $tdir/$dir/tmp/$hostspec
+        if [[ ! -d $tdir/$dir/tmp/$hostspec ]] then
+            print -u2 propdata: cannot create $tdir/$dir/tmp/$hostspec
+            continue
+        fi
+        for file in $tdir/$dir/tmp/*.xml; do
+            [[ ! -f $file ]] && continue
+            [[ ! -s $file ]] && continue
+            if [[ ${params[@]} == '' || ${params[$hostspec]} == '' ]] then
+                ln $file $tdir/$dir/tmp/$hostspec/${file##*/}
+            else
+                filter "$hostspec" $file $tdir/$dir/tmp/$hostspec/${file##*/}
+            fi
+        done
+    done
+
+    for file in $tdir/$dir/tmp/*.xml; do
+        [[ ! -f $file ]] && continue
+        rm $file
+    done
+
+    [[ $havefiles == y ]] && rmdir $tdir/$dir/tmp/* 2> /dev/null
+
+    if [[ $dir == email ]] then
+        for spec in $specs; do
+            [[ $spec != *:* ]] && continue
+            hostspec=${spec%%:*}
+            ifs="$IFS"
+            IFS='|'
+            ecode=0
+            for file in $tdir/$dir/tmp/$hostspec/*.xml; do
+                [[ ! -f $file ]] && continue
+                pfaddr= ptaddr= pst= psub=
+                unset plist
+                sort -t'|' $file \
+                | while read -r faddr taddr st sub l1 id1 sev tm msg acc; do
+                    if [[
+                        $pfaddr != $faddr || $ptaddr != $taddr ||
+                        $pst != $st || $psub != $sub
+                    ]] then
+                        sendemail
+                        ecode=$?
+                        [[ $ecode != 0 ]] && break
+                        pfaddr=$faddr ptaddr=$taddr pst=$st psub=$sub
+                        unset plist
+                    fi
+                    msg=${msg//'+'/' '}
+                    msg=${msg//@([\'\\])/'\'\1}
+                    eval "msg=\$'${msg//'%'@(??)/'\x'\1"'\$'"}'"
+                    plist[${#plist[@]}]="$l1|$id1|$sev|$tm|$msg"
+                    print -u2 MESSAGE email id=$acc to=$taddr subject=$sub
+                done
+                if [[ $ptaddr != '' && $ecode == 0 ]] then
+                    sendemail
+                    ecode=$?
+                fi
+                if [[ $ecode != 0 ]] then
+                    print -u2 propdata: email of $file failed
+                else
+                    print -u2 propdata: email of $file succeeded
+                fi
+                rm $file
+            done
+            IFS="$ifs"
+        done
+    else
+        for spec in $specs; do
+            [[ $spec != *:* ]] && continue
+            hostspec=${spec%%:*}
+            rdir=${spec##"$hostspec"?(:)}
+            rm -f $tdir/$dir/tmp/$hostspec/failed[12]
+            for file in $tdir/$dir/tmp/$hostspec/*.xml; do
+                [[ ! -f $file ]] && continue
+                if [[ ! -s $file ]] then
+                    rm $file
+                    continue
+                fi
+                rfile=$rdir/$dir2/${file##*/}
+                if [[ $hostspec == localhost ]] then
+                    cp $file $rfile.tmp && mv $rfile.tmp $rfile && rm $file
+                    continue
+                fi
+                (
+                    fsize=$(ls -Z '%(size)d' $file)
+                    (( wt = 120 + ((9.0 * fsize) / transrate) * 18 ))
+                    timedrun $wt ssh $sfl $hostspec \
+                        "cat > $rfile.tmp && mv $rfile.tmp $rfile" \
+                    < $file 2> $tmpdir/ssh.err.$ssherri
+                    if [[ $? != 0 ]] then
+                        print -u2 propdata: copy of $file to $hostspec failed
+                        sed 's/^/SSH LOG: /' $tmpdir/ssh.err.$ssherri
+                        if [[ ! -f $tdir/$dir/tmp/$hostspec/failed1 ]] then
+                            touch $tdir/$dir/tmp/$hostspec/failed1
+                        else
+                            touch $tdir/$dir/tmp/$hostspec/failed2
+                        fi
+                    else
+                        print -u2 propdata: copy of $file to $hostspec succeeded
+                        rm $file
+                    fi
+                ) &
+                (( ssherri++ ))
+                sdpjobcntl $transjobs
+                [[ -f $tdir/$dir/tmp/$hostspec/failed2 ]] && break
+            done
+            rm -f $tdir/$dir/tmp/$hostspec/failed[12]
+        done
+    fi
+done
+wait; wait
+
+exec >&- 2>&-
+exec 1>&4
+if [[ ! -s $logfile ]] then
+    rm -f $logfile
+fi
+
+if [[ $allnone == y ]] then
+    exit 5
+fi
+
+exit 0

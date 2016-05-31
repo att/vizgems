@@ -1,0 +1,99 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+filterfile=$VGMAINDIR/dpfiles/alarm/alarm.filter
+if [[ SWIFT_CFG_SYSMODE == ems && ! -f $VGMAINDIR/outgoing/noticket ]] then
+    monthfile=$VGMAINDIR/outgoing/runigems/filters.$(printf '%(%m%d)T')
+else
+    monthfile=/dev/null
+fi
+
+if [[ ! -f $filterfile ]] then
+    print -u2 ERROR cannot access filter file: $filterfile
+    exit 1
+fi
+
+ct=$(printf '%(%#)T')
+date=$(printf '%(%Y%m%d.%H%M%S)T')
+(( month = ct - (31 * 24 * 60 * 60) ))
+
+typeset -A fs
+nu='+([0-9])'
+
+while read -r line; do
+    rest=$line
+    for (( i = 0; i < 13; i++ )) do
+        fs[$i]=${rest%%\|+\|*}
+        rest=${rest#"${fs[$i]}"\|+\|}
+    done
+    keep=n
+    [[ ${fs[3]} != $nu ]] && fs[3]=0
+    [[ ${fs[4]} != $nu ]] && fs[4]=0
+    [[ ${fs[5]} != $nu ]] && fs[5]=0
+    [[ ${fs[6]} != @($nu|indefinitely) ]] && fs[6]=0
+
+    (( st = fs[3] * 60 ))
+    (( et = fs[4] * 60 ))
+    if (( fs[4] < fs[3] )) then
+        (( et += (24 * 60 * 60) ))
+    fi
+    (( dt = et - st + 1 ))
+
+    case ${fs[7]} in
+    once)
+        if \
+            [[ ${fs[6]} == 'indefinitely' ]] || \
+            (( ct <= fs[6] + st + dt )) \
+        then
+            keep=y
+        fi
+        ;;
+    *)
+        if \
+            [[ ${fs[6]} == 'indefinitely' ]] || \
+            (( ct <= fs[6] + st + dt )) \
+        then
+            keep=y
+        fi
+        ;;
+    esac
+    if [[ $keep == y ]] then
+        print -r "$line"
+    fi
+    if \
+      [[ ${fs[6]} == 'indefinitely' && ${fs[7]} == once ]] && \
+      (( fs[5] < month )) \
+    then
+        print -u3 -rn "month-old filter $(printf '%(%Y.%m.%d)T' \#${fs[5]})"
+        print -u3 -r ": $line"
+    fi
+done < $filterfile > $filterfile.tmp.prune 3>> $monthfile
+
+if ! cmp $filterfile $filterfile.tmp.prune > /dev/null; then
+    cp $filterfile \
+    $VGMAINDIR/data/cm/0000/00/00/processed/save/${filterfile##*/}.$date.prune
+    mv $filterfile.tmp.prune $filterfile
+else
+    rm $filterfile.tmp.prune
+fi

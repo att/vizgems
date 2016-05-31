@@ -1,0 +1,744 @@
+#!/bin/ksh
+
+PATH=$PATH:/usr/sbin:/sbin
+
+exec 3> vginstall.log
+
+function msg { # $@ = message
+    print -u2 "$@"
+    print -u3 "$@"
+}
+
+function ask { # $1 = variable $2 = prompt $3 = default
+    typeset q
+
+    if [[ $automode == y ]] then
+        msg auto: $1:$2:$3
+        q=$3
+    else
+        read q?"$2 ($3) "
+    fi
+    if [[ $q == '' ]] then
+        q=$3
+    fi
+    typeset -n ans=$1; ans=$q; typeset +n ans
+}
+
+function askdir { # $1 = variable $2 = prompt $3 = default
+    typeset dirq
+
+    if [[ $automode == y ]] then
+        msg auto: $1:$2:$3
+        dirq=$3
+    else
+        read dirq?"$2($3) "
+    fi
+    if [[ $dirq == '' ]] then
+        dirq=$3
+    fi
+    typeset -n ans=$1; ans=$dirq; typeset +n ans
+}
+
+function askyn { # $1 = variable $2 = prompt $3 = default
+    typeset -l ynq
+
+    if [[ $automode == y ]] then
+        msg auto: $1:$2:$3
+        ynq=$3
+    else
+        read ynq?"$2($3) "
+    fi
+    if [[ $ynq == '' ]] then
+        ynq=$3
+    fi
+    typeset -n ans=$1; ans=$ynq; typeset +n ans
+}
+
+function askch { # [-m] $1 = variable $2 = prompt $3-$N = choices
+    typeset var chq="" file chlist multichoice=n a
+    integer n=0
+
+    if [[ $1 == -m ]] then
+        multichoice=y
+        shift
+    fi
+    var=$1
+    msg "$2:"
+    shift; shift
+    for file in "$@"; do
+        if [[ $file == '' ]] then
+            continue
+        fi
+        msg $n: $file
+        a[$n]=$file
+        (( n = n + 1 ))
+    done
+    if [[ $multichoice == y ]] then
+        msg $n: done
+        a[$n]=done
+        (( n = n + 1 ))
+    fi
+    msg $n: none
+    a[$n]=none
+    while true; do
+        if [[ $automode == y && $n != 0 ]] then
+            msg auto: $1:$2:${a[0]}
+            chq=0
+            multichoice=n
+        else
+            read chq?"choose file: "
+        fi
+        if [[ ${a[$chq]} != '' ]] then
+            if [[ ${a[$chq]} == 'done' || ${a[$chq]} == 'none' ]] then
+                break
+            fi
+            chlist="$chlist ${a[$chq]}"
+            if [[ $multichoice == n ]] then
+                break
+            fi
+        fi
+    done
+    chlist=${chlist#\ }
+    typeset -n ans=$var; ans=$chlist; typeset +n ans
+}
+
+function askquestions {
+    typeset line comp
+
+    ask sysname "system name (uname -n or vip name)" $sysname
+    nsysname=${sysname//[!.a-zA-Z0-9_]/}
+    if [[ $nsysname != $sysname ]] then
+        msg "\nIMPORTANT: system name changed to $nsysname to exclude illegal characters"
+        sysname=$nsysname
+    fi
+    ask sysmode "system mode (ems, viz, scope)" $sysmode
+    ask systz "timezone" $systz
+    ask usr "user name" $usr
+    ask grp "group name" $grp
+    ask homedir "home directory" $homedir
+    ask rootdir "VisGEMS directory" $rootdir
+    ask nfsmode "NFS mode (standalone, server, client)" $nfsmode
+
+    typeset -A cyn
+    case $sysmode in
+    ems)   cyn[system]=yy cyn[www]=yy cyn[snmp]=yn cyn[scopes]=yy ;;
+    viz)   cyn[system]=yy cyn[www]=yy cyn[snmp]=yn cyn[scopes]=yn ;;
+    scope) cyn[system]=yn cyn[www]=nn cyn[snmp]=yn cyn[scopes]=yy ;;
+    esac
+
+    if [[ $id == 0 ]] then
+        pkg=${allpkgs##*\ }
+    else
+        askch pkg "software version to install" $allpkgs
+    fi
+    if [[ $pkg != '' ]] then
+        tar tvf $pkg | sed 's/^.* //g' | while read line; do
+            [[ $line != vg.*.tgz ]] && continue
+            comp=${line#vg.}
+            comp=${comp%%.*}
+            type=${line%.tgz}
+            type=${type##*.}
+            paths[$comp.$type]=$line
+            comp=${comp%-*}
+            comps[$comp]=y
+        done
+    fi
+    for comp in ${!comps[@]}; do
+        [[ ${comps[$comp]} != y ]] && continue
+        askyn yn "install $comp package" ${cyn[$comp]:0:1}
+        if [[ $yn != y ]] then
+            comps[$comp]=n
+            continue
+        fi
+        askyn yn "activate $comp package" ${cyn[$comp]:1:1}
+        if [[ $yn != y ]] then
+            continue
+        fi
+        if [[ $comp == www ]] then
+            ask wwwtype "protocol (http/https)" $wwwtype
+            ask wwwhost "web host name" $wwwhost
+            ask wwwport "web host port" $wwwport
+            ask wwwemail "web errors email" $wwwemail
+            if [[ $wwwtype != https ]] then
+                msg "\nIMPORTANT: since you did not select the https protocol,"
+                msg "allowing internal cookie access below is strongly discouraged\n"
+            fi
+            ask wwwuseosm "use OSM geomaps" $wwwuseosm
+            if [[ $wwwuseosm == y ]] then
+                ask wwwosmserver "full URL of OSM tile server" $wwwosmserver
+            else
+                wwwosmserver=
+            fi
+            ask yn "allow internal cookie access (y/n)" $wwwswmaccess
+            wwwswmaccess=$yn
+            if [[ $wwwswmaccess == y ]] then
+                ask wwwswmidle "internal cookie idle timeout in sec - use 0 for no timeout" "$wwwswmidle"
+            else
+                wwwswmidle=0
+            fi
+            ask yn "allow at&t e-access (y/n)" $wwwatteaccess
+            wwwatteaccess=$yn
+            ask yn "allow at&t cloud-access (y/n)" $wwwcloudaccess
+            wwwcloudaccess=$yn
+            if [[ $wwwcloudaccess == y ]] then
+                ask wwwcloudurl "cloud authorization URL" "$wwwcloudurl"
+                ask wwwclouduser "cloud authorization info (user:pass)" $wwwclouduser
+            else
+                wwwcloudurl=
+                wwwclouduser=
+            fi
+            ask yn "allow ebig access (y/n)" $wwwebigaccess
+            wwwebigaccess=$yn
+            if [[ $wwwebigaccess == y ]] then
+                ask wwwebigurl "ebig authorization URL" "$wwwebigurl"
+            else
+                wwwebigurl=
+            fi
+            ask yn "allow business direct access (y/n)" $wwwbdaccess
+            wwwbdaccess=$yn
+            if [[ $wwwbdaccess == y ]] then
+                ask wwwcookieip "ip address/subnet of BD server" "$wwwcookieip"
+            else
+                wwwcookieip=0.0.0.0
+            fi
+            ask wwwprefix "url prefix for access from portals" $wwwprefix
+        fi
+        comps[$comp]=r
+    done
+}
+
+function loadstate {
+    if [[ -f vginstall.state ]] then
+        . ./vginstall.state
+    fi
+}
+
+function savestate {
+    for v in $vars2save; do
+        typeset -n vr=$v
+        print "$v=\"$vr\""
+        typeset +n vr
+    done > vginstall.state
+}
+
+function domkuser {
+    typeset uname gname passwd uid junk1 junk2
+
+    egrep "^$grp:" /etc/group | sed 's/[         ]//g' | sed 's/:/ /g' \
+    | read gname junk1 gid junk2
+    if [[ $gname == '' ]] then
+        case $machtype in
+        SunOS*)
+            groupadd $grp
+            ;;
+        Linux*)
+            groupadd $grp
+            ;;
+        *)
+            msg ERROR: no method for creating groups on $machtype
+            return 1
+            ;;
+        esac
+    fi
+    egrep "^$grp:" /etc/group | sed 's/[         ]//g' | sed 's/:/ /g' \
+    | read gname junk1 gid junk2
+    if [[ $gname == '' ]] then
+        msg ERROR: failed to create group $grp
+        return 1
+    fi
+
+    egrep "^$usr:" /etc/passwd | sed 's/[        ]//g' | sed 's/:/ /g' \
+    | read uname passwd uid junk1
+    if [[ $uname == '' ]] then
+        case $machtype in
+        SunOS*)
+            useradd -m -g $grp -d $homedir -s /bin/ksh -e "" $usr
+            passwd "$usr"
+            ;;
+        Linux*)
+            useradd -m -g $grp -d $homedir -s /bin/ksh -e "" $usr
+            passwd "$usr"
+            ;;
+        *)
+            msg ERROR: no method for creating accounts on $machtype
+            return 1
+            ;;
+        esac
+    fi
+    egrep "^$usr:" /etc/passwd | sed 's/[        ]//g' | sed 's/:/ /g' \
+    | read uname passwd uid junk1
+    if [[ $uname == '' ]] then
+        msg ERROR: failed to create user $usr
+        return 1
+    fi
+
+    if [[ -f /etc/cron.d/cron.allow ]] then
+        egrep "^$usr\$" /etc/cron.d/cron.allow | read uname
+        if [[ $uname == '' ]] then
+            echo $usr >> /etc/cron.d/cron.allow
+        fi
+        egrep "^$usr\$" /etc/cron.d/cron.allow | read uname
+        if [[ $uname == '' ]] then
+            msg ERROR: failed to add user $usr to cron.allow
+            return 1
+        fi
+    fi
+    if [[ $(crontab -u "$usr" -l 2> /dev/null) == '' ]] then
+        echo '# SWIFT crontab' | su - $usr -c crontab -
+    fi
+
+    return 0
+}
+
+function domkinit {
+    typeset dir inst
+
+    (
+        echo "#!/bin/ksh"
+        echo "# Control SWIFT processes"
+        echo "case \"\$1\" in"
+        echo "'start')"
+        echo "echo 'Starting VizGEMS'"
+        for comp in ${!comps[@]}; do
+            [[ ${comps[$comp]} == n ]] && continue
+            case $machtype in
+            *UWIN*)
+                echo "$rootdir/data/$comp/etc/${comp}_control start"
+                ;;
+            *)
+                echo "su - $usr -c '$rootdir/data/$comp/etc/${comp}_control start'"
+                ;;
+            esac
+        done
+        echo ";;"
+        echo "'stop')"
+        echo "echo 'Stopping VizGEMS'"
+        for comp in ${!comps[@]}; do
+            [[ ${comps[$comp]} == n ]] && continue
+            case $machtype in
+            *UWIN*)
+                echo "$rootdir/data/$comp/etc/${comp}_control stop"
+                ;;
+            *)
+                echo "su - $usr -c '$rootdir/data/$comp/etc/${comp}_control stop'"
+                ;;
+            esac
+        done
+        echo ";;"
+        echo "esac"
+    ) > vizgems.init
+    if [[ $id == 0 ]] then
+        cp vizgems.init /etc/init.d/vizgems
+        chown root /etc/init.d/vizgems
+        chmod +x /etc/init.d/vizgems
+        ln -s -f /etc/init.d/vizgems /etc/rc3.d/S99vizgems
+        ln -s -f /etc/init.d/vizgems /etc/rc0.d/K00vizgems
+    fi
+    return 0
+}
+
+function domkdirs {
+    typeset comp
+
+    mkdir -p $rootdir
+    chmod o-rwx $rootdir
+    mkdir -p $rootdir/sw $rootdir/data
+    for comp in ${!comps[@]}; do
+        [[ ${comps[$comp]} == n ]] && continue
+        mkdir -p $rootdir/sw/$comp $rootdir/data/$comp
+        if [[ ! -d $rootdir/sw/$comp ]] then
+            msg ERROR: failed to create directory $rootdir/sw/$comp
+            return 1
+        fi
+        if [[ ! -d $rootdir/data/$comp ]] then
+            msg ERROR: failed to create directory $rootdir/data/$comp
+            return 1
+        fi
+    done
+    if [[ $id == 0 ]] then
+        chown -R $usr $rootdir
+        chgrp -R $grp $rootdir
+    fi
+    return 0
+}
+
+function doadd2sudo {
+    msg adding $usr in /etc/sudoers
+    if [[ ! -f /etc/sudoers ]] then
+        msg file /etc/sudoers does not exist
+        return 0
+    fi
+    egrep "^${usr}[ 	]" /etc/sudoers | read line
+    if [[ $line != '' ]] then
+        return 0
+    fi
+    print "$usr	ALL=(ALL) ALL" >> /etc/sudoers
+    egrep "^${usr}[ 	]" /etc/sudoers | read line
+    if [[ $line == '' ]] then
+        msg ERROR: cannot add $usr to /etc/sudoers
+        return 1
+    fi
+}
+
+function configfiles { # $1: path
+    typeset ifile ofile suffix permdir arcdir v
+
+    if [[ $nfsmode == server ]] then
+        permdir=$rootdir/archive/system
+    elif [[ $nfsmode == client ]] then
+        arcdir=$rootdir/archive/system
+    fi
+
+    if [[ ! -f $pkgdir/../vgfileconfig ]] then
+        {
+            print "#!/bin/ksh"
+            for v in shellversion permdir arcdir ldname $vars2save; do
+                typeset -n vr=$v
+                [[ $vr == *!* ]] && vr=${vr//!/\\!}
+                print -r "$v=\"$vr\""
+                typeset +n vr
+            done
+            print _havevars_=y
+            cat $pkgdir/vgfileconfig
+        } > $pkgdir/../vgfileconfig
+        chmod +x $pkgdir/../vgfileconfig
+    fi
+
+    find $1/. \( \( -name cache -o -name data -o -name incoming -o -name outgoing -o -name logs -o -name record \) -prune \) -o \( \( -name "*_sample" -o -name ".*_sample" -o -name "*_initial" -o -name ".*_initial" \) -print \) \
+    | while read ifile; do
+        VGCOMPPREFIX=$1 ksh $pkgdir/../vgfileconfig "$ifile"
+    done
+}
+
+shellversion=2012-08-02
+
+if [[ ${KSH_VERSION##*' '} < $shellversion ]] then
+    msg "\nERROR: the shell used to run this script"
+    msg is not ksh version $shellversion or higher
+    msg please extract a ksh binary from the package
+    msg that this install script came in:
+    msg '(pax -rvf vg.full.<version>.tar ksh)'
+    msg "and rerun this script with it: ./ksh ./vginstall\n"
+    exit 1
+fi
+
+id=$(id)
+id=${id%%\(*}
+id=${id#uid=}
+
+machtype=$(uname -s -r -m)
+case $machtype in
+IRIX*64*)
+    ldname=LD_LIBRARYN32_PATH
+    ;;
+*)
+    ldname=LD_LIBRARY_PATH
+    ;;
+esac
+
+allpkgs=''
+arch1=$(uname -m)
+for i in vg.full.*.tar; do
+    [[ ! -f $i ]] && continue
+    case $i in
+    *linux.i386-64*) arch2=x86_64 ;;
+    *linux.i386*)    arch2=i686   ;;
+    *linux.ia64*)    arch2=ia64   ;;
+    *sgi.*)          arch2=sgi6   ;;
+    *win32.i386*)    arch2=$arch1 ;;
+    *)               arch2=$arch1 ;;
+    esac
+    if [[ $arch1 != $arch2 ]] then
+        msg package $i is not compatible with this operating system
+        continue
+    fi
+    allpkgs="$i $allpkgs"
+done
+
+pkg=
+typeset -l yn
+typeset -A comps paths
+
+sysname=$(uname -n)
+sysname=${sysname//[!.a-zA-Z0-9_]/}
+sysmode=ems
+systz=EST5EDT
+usr=
+usr=$(id); usr=${usr#*uid=}; usr=${usr%%' '*}; usr=${usr#*'('}; usr=${usr%')'*}
+[[ $usr == '' || $usr == root ]] && usr=swift
+grp=
+grp=$(id); grp=${grp#*gid=}; grp=${grp%%' '*}; grp=${grp#*'('}; grp=${grp%')'*}
+[[ $grp == '' || $grp == root ]] && grp=swift
+homedir=$HOME
+rootdir=$HOME/vizgems
+nfsmode=standalone
+
+wwwtype=http
+wwwhost=$(hostname)
+wwwport=8000
+wwwemail=swift
+wwwuseosm=n
+wwwosmserver=
+wwwswmaccess=n
+wwwswmidle=0
+wwwatteaccess=n
+wwwcloudaccess=n
+wwwcloudurl=
+wwwclouduser=
+wwwebigaccess=n
+wwwebigurl=
+wwwbdaccess=n
+wwwcookieip=0.0.0.0
+wwwprefix=
+
+version=
+
+vars2save="sysname sysmode systz usr grp homedir rootdir nfsmode wwwtype wwwhost wwwport wwwswmaccess wwwswmidle wwwatteaccess wwwebigaccess wwwebigurl wwwcloudaccess wwwcloudurl wwwclouduser wwwbdaccess wwwcookieip wwwprefix wwwemail wwwuseosm wwwosmserver version"
+
+loadstate
+
+if [[ $1 == -auto ]] then
+    automode=y
+    for v in allpkgs $vars2save; do
+        typeset -n vr=$v
+        if [[ $vr == '' && $v != @(wwwprefix|wwwcloudurl|wwwclouduser|wwwebigurl|wwwosmserver|version) ]] then
+            automode=n
+            msg WARNING cannot use auto mode because $v is not set 
+        fi
+        typeset +n vr
+    done
+fi
+export VGINSTALLAUTO=$automode
+
+if [[ $id == 0 ]] then
+    msg "performing initial installation."
+    msg "this will perform actions that can only be done as root."
+    msg "(such as creating user accounts and directories)."
+    askquestions
+    domkuser || exit 1
+    domkinit || exit 1
+    domkdirs || exit 1
+    doadd2sudo || exit 1
+    mkdir -p ~$usr/vg_dist
+    chown "$usr" ~$usr/vg_dist
+    chgrp "$grp" ~$usr/vg_dist
+    cp $0 ~$usr/vg_dist
+    chown "$usr" ~$usr/vg_dist/vginstall
+    chgrp "$grp" ~$usr/vg_dist/vginstall
+    chmod +x ~$usr/vg_dist/vginstall
+    mv vg.full.*.tar ~$usr/vg_dist
+    mv vg.addons*.tar ~$usr/vg_dist 2> /dev/null
+    chown "$usr" ~$usr/vg_dist/vg.full.*.tar
+    chgrp "$grp" ~$usr/vg_dist/vg.full.*.tar
+    cd ~$usr/vg_dist || exit 1
+    savestate
+    chown "$usr" vginstall.state
+    chgrp "$grp" vginstall.state
+    msg "initial installation done."
+    msg "please login as $usr, cd to ~$usr/vg_dist and run"
+    msg "this script again to install the software."
+    exit 0
+fi
+
+askquestions
+
+version=${pkg%.tar}
+version=v${version##*.v}
+
+savestate
+domkdirs || exit 1
+
+# remove old versions of the software
+for comp in ${!comps[@]}; do
+    [[ ${comps[$comp]} == n ]] && continue
+    askyn yn "remove old versions of the $comp software" y
+    if [[ $yn != y ]] then
+        continue
+    fi
+    for dir in $rootdir/sw/$comp/vg.*.*; do
+        if [[ ! -d $dir || $dir -ef $rootdir/sw/$comp/current ]] then
+            continue
+        fi
+        rm -rf $dir
+    done
+done
+
+# unpack packages
+(
+    rm -rf ___tmp___
+    mkdir -p ___tmp___
+    cd ___tmp___
+    tar xvf ../$pkg
+)
+pkgdir=$PWD/___tmp___
+rm -f vgfileconfig
+
+# stop processing
+askyn yn "stop all running processes" y
+if [[ $yn != y ]] then
+    msg cannot proceed without stopping running processes
+    askyn yn "stop all running processes (last chance)" y
+    if [[ $yn != y ]] then
+        msg aborting
+        exit 0
+    fi
+fi
+export VGINSTALLSTOPPED=y
+msg stopping cron jobs
+crontab -l | sed 's/#STOP#//g' > vginstall.cron
+sed 's/^/#STOP#/' vginstall.cron | crontab -
+for comp in $rootdir/data/*; do
+    [[ ! -f $comp/active || ! -x $comp/etc/${comp##*/}_control ]] && continue
+    msg stopping ${comp##*/} component
+    $comp/etc/${comp##*/}_control stop
+    if [[ $comp == */www ]] then
+        pid=$(
+            cat $comp/logs/*.sui*.info 2> /dev/null \
+            | egrep pid | sed 's/^.* //'
+        )
+        [[ $pid != '' ]] && kill $pid 2> /dev/null
+    fi
+done
+sleep 5
+    
+# unpack new packages
+for comp in ${!comps[@]}; do
+    [[ ${comps[$comp]} == n ]] && continue
+    if [[ ${paths[$comp.data]} != '' ]] then
+        (
+            cd $rootdir/data/$comp \
+            && gunzip < $pkgdir/${paths[$comp.data]} | tar xf -
+        )
+        configfiles $rootdir/data/$comp
+        if [[ ${comps[$comp]} == r ]] then
+            print "active instance - do not remove" > $rootdir/data/$comp/active
+        else
+            rm -f $rootdir/data/$comp/active
+        fi
+    fi
+    if [[ ${paths[$comp.sw]} != '' ]] then
+        (
+            cd $rootdir/sw/$comp \
+            && gunzip < $pkgdir/${paths[$comp.sw]} | tar xf -
+        )
+        configfiles $rootdir/sw/$comp/${paths[$comp.sw]%.tgz}
+        mv $rootdir/sw/$comp/current $rootdir/sw/$comp/current.old 2> /dev/null
+        rm -rf $rootdir/sw/$comp/current
+        ln -s ${paths[$comp.sw]%.tgz} $rootdir/sw/$comp/current
+    fi
+done
+export VGSYSNAME=$sysname
+export VGSYSMODE=$sysmode
+export VGSYSTZ=$systz
+export VGNFSMODE=$nfsmode
+export VGINSTALLROOTDIR=$rootdir
+export VGINSTALLUSR=$usr
+export VGINSTALLGRP=$grp
+export VGINSTALLWTYPE=$wwwtype
+export VGINSTALLWHOST=$wwwhost
+export VGINSTALLWPORT=$wwwport
+export VGINSTALLWEMAIL=$wwwemail
+export VGINSTALLWUSEOSM=$wwwuseosm
+export VGINSTALLWOSMSERVER=$wwwosmserver
+export VGINSTALLWSWMACCESS=$wwwswmaccess
+export VGINSTALLWSWMIDLE=$wwwswmidle
+export VGINSTALLWATTEACCESS=$wwwatteaccess
+export VGINSTALLWCLOUDACCESS=$wwwcloudaccess
+export VGINSTALLWCLOUDURL=$wwwcloudurl
+export VGINSTALLWCLOUDUSER=$wwwclouduser
+export VGINSTALLWEBIGACCESS=$wwwebigaccess
+export VGINSTALLWEBIGURL=$wwwebigurl
+export VGINSTALLWBDACCESS=$wwwbdaccess
+export VGINSTALLWCOOKIEIP=$wwwcookieip
+export VGINSTALLWPREFIX=$wwwprefix
+for comp in ${!comps[@]}; do
+    [[ ${comps[$comp]} == n ]] && continue
+    if [[ ${paths[$comp.data]} != '' ]] then
+        if [[ -x $rootdir/data/$comp/install/postinstall ]] then
+            (
+                export PATH=$rootdir/sw/system/current/bin:$PATH
+                export LD_LIBRARY_PATH=$rootdir/sw/system/current/lib:$LD_LIBRARY_PATH
+                cd $rootdir/data/$comp && ksh ./install/postinstall
+            )
+        fi
+    fi
+    if [[ ${paths[$comp.sw]} != '' ]] then
+        if [[ -x $rootdir/sw/$comp/current/install/postinstall ]] then
+            (
+                export PATH=$rootdir/sw/system/current/bin:$PATH
+                export LD_LIBRARY_PATH=$rootdir/sw/system/current/lib:$LD_LIBRARY_PATH
+                cd $rootdir/sw/$comp/current && ksh ./install/postinstall
+            )
+        fi
+    fi
+done
+
+mayhaveaddons=n
+for addon in vg.addons-*.tar; do
+    [[ ! -f $addon ]] && continue
+    mayhaveaddons=y
+    continue
+done
+if [[ $mayhaveaddons == y && -x ./___tmp___/vginstalladdons ]] then
+    ./___tmp___/vginstalladdons
+fi
+
+# restart processing
+askyn yn "restart all processes" y
+if [[ $yn != y ]] then
+    msg it is recommended to restart processing
+    askyn yn "restart all processes (last chance)" y
+    if [[ $yn != y ]] then
+        msg exiting
+        exit 0
+    fi
+fi
+unset VGINSTALLSTOPPED
+> vginstall.cron.new
+for comp in ${!comps[@]}; do
+    [[ ${comps[$comp]} == n ]] && continue
+    [[ ! -f $rootdir/data/$comp/active ]] && continue
+    msg starting $comp component
+    $rootdir/data/$comp/etc/${comp}_control setup
+    $rootdir/data/$comp/etc/${comp}_control start
+    if [[ -f $rootdir/data/$comp/etc/crontab ]] then
+        cat $rootdir/data/$comp/etc/crontab >> vginstall.cron.new
+    fi
+done
+comm -2 -3 <(
+    egrep -v ^# vginstall.cron.new | sort -u
+) <(
+    egrep -v ^# vginstall.cron | sort -u
+) | while read -r line; do
+    msg ""
+    msg installed crontab does not contain the entry:
+    msg "$line"
+done
+crontab - < vginstall.cron
+
+domkinit
+case $machtype in
+UWIN*)
+    if ! cmp /etc/rc.d/vizgems vizgems.init; then
+        msg ""
+        msg installed /etc/rc.d/vizgems differs from new
+        msg please compare vizgems.init and /etc/rc.d/vizgems
+        msg and make any necessary changes
+    fi
+    ;;
+*)
+    if ! cmp /etc/init.d/vizgems vizgems.init; then
+        msg ""
+        msg installed /etc/init.d/vizgems differs from new
+        msg please compare vizgems.init and /etc/init.d/vizgems
+        msg and make any necessary changes
+    fi
+    ;;
+esac
+
+msg "attempting to delete this installation script to avoid"
+msg "using an outdated script when installing these packages"
+askyn yn "delete $0 (y/n)" y
+if [[ $yn == y ]] then
+    rm $0
+fi

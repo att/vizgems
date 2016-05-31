@@ -1,0 +1,41 @@
+
+case $(hostname) in
+*.research.att.com)
+    pref1=SWIFT_CFG_DSYSTEMDIR
+    pref2=SWIFT_CFG_DWWWDIR
+    export VGCM_BIZFILE=$pref1/dpfiles/inv/business.txt
+    export VGCM_LOCFILE=$pref1/dpfiles/inv/location.txt
+    export VGCM_CUSTFILE=$pref1/dpfiles/inv/customer.txt
+    export VGCM_TYPEFILE=$pref1/dpfiles/inv/type.txt
+    export VGCM_VIEWDIR=$pref1/dpfiles/inv/view
+    export VGCM_SCOPEDIR=$pref1/dpfiles/inv/scope
+    export VGCM_ALARMEMAILFILE=$pref1/dpfiles/alarm/alarmemail.filter
+    export VGCM_FILTERFILE=$pref1/dpfiles/alarm/alarm.filter
+    export VGCM_FAVORITESDIR=$pref1/uifiles/favorites
+    export VGCM_PREFERENCESDIR=$pref1/uifiles/preferences
+    export VGCM_PROFILEFILE=$pref1/dpfiles/stat/profile.txt
+    export VGCM_THRESHOLDFILE=$pref1/dpfiles/stat/threshold.txt
+    export VGCM_PASSWDFILE=$pref2/.passwd
+    export VGCM_GROUPFILE=$pref2/.group
+    export VGCM_ACCOUNTFILE=$pref2/accounts/current
+    ;;
+*)
+    pref1=SWIFT_CFG_DSYSTEMDIR
+    pref2=SWIFT_CFG_DWWWDIR
+    export VGCM_BIZFILE=$pref1/dpfiles/inv/business.txt
+    export VGCM_LOCFILE=$pref1/dpfiles/inv/location.txt
+    export VGCM_CUSTFILE=$pref1/dpfiles/inv/customer.txt
+    export VGCM_TYPEFILE=$pref1/dpfiles/inv/type.txt
+    export VGCM_VIEWDIR=$pref1/dpfiles/inv/view
+    export VGCM_SCOPEDIR=$pref1/dpfiles/inv/scope
+    export VGCM_ALARMEMAILFILE=$pref1/dpfiles/alarm/alarmemail.filter
+    export VGCM_FILTERFILE=$pref1/dpfiles/alarm/alarm.filter
+    export VGCM_FAVORITESDIR=$pref1/uifiles/favorites
+    export VGCM_PREFERENCESDIR=$pref1/uifiles/preferences
+    export VGCM_PROFILEFILE=$pref1/dpfiles/stat/profile.txt
+    export VGCM_THRESHOLDFILE=$pref1/dpfiles/stat/threshold.txt
+    export VGCM_PASSWDFILE=$pref2/.passwd
+    export VGCM_GROUPFILE=$pref2/.group
+    export VGCM_ACCOUNTFILE=$pref2/accounts/current
+    ;;
+esac

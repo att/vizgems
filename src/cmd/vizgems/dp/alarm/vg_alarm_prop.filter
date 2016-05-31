@@ -1,0 +1,70 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+
+static char *statemap[] = {
+    VG_ALARM_S_STATE_NONE, /* VG_ALARM_N_STATE_NONE */
+    VG_ALARM_S_STATE_INFO, /* VG_ALARM_N_STATE_INFO */
+    VG_ALARM_S_STATE_DEG,  /* VG_ALARM_N_STATE_DEG  */
+    VG_ALARM_S_STATE_DOWN, /* VG_ALARM_N_STATE_DOWN */
+    VG_ALARM_S_STATE_UP,   /* VG_ALARM_N_STATE_UP   */
+};
+
+static char *modemap[] = {
+    VG_ALARM_S_MODE_NONE,  /* VG_ALARM_N_MODE_NONE  */
+    VG_ALARM_S_MODE_KEEP,  /* VG_ALARM_N_MODE_KEEP  */
+    VG_ALARM_S_MODE_DEFER, /* VG_ALARM_N_MODE_DEFER */
+    VG_ALARM_S_MODE_DROP,  /* VG_ALARM_N_MODE_DROP  */
+};
+
+static char *typemap[] = {
+    VG_ALARM_S_TYPE_NONE,  /* VG_ALARM_N_TYPE_NONE  */
+    VG_ALARM_S_TYPE_ALARM, /* VG_ALARM_N_TYPE_ALARM */
+    VG_ALARM_S_TYPE_CLEAR, /* VG_ALARM_N_TYPE_CLEAR */
+};
+
+static char *sordermap[] = {
+    VG_ALARM_S_SO_NONE,     /* VG_ALARM_N_SO_NONE     */
+    VG_ALARM_S_SO_NORMAL,   /* VG_ALARM_N_SO_NORMAL   */
+    VG_ALARM_S_SO_OVERRIDE, /* VG_ALARM_N_SO_OVERRIDE */
+};
+
+static Sfio_t *fp;
+}
+BEGIN{
+    if (!(fp = sfnew (NULL, NULL, 4096, 3, SF_WRITE)))
+        SUerror ("vg_alarm_prop", "cannot write on channel 3");
+}
+{
+    char buf[2][4000];
+
+    KEEP;
+
+    if (strcmp (id1, "__ce_svc_upd__") != 0) {
+        VG_urlenc (text, buf[0], 4000);
+        VG_urlenc (comment, buf[1], 4000);
+        sfprintf (
+            fp,
+            "<alarm>"
+            "<v>%s</v><sid>%s</sid><aid>%s</aid>"
+            "<ccid>%s</ccid><st>%s</st><sm>%s</sm>"
+            "<vars>%s</vars>"
+            "<di>%s</di><hi>%s</hi>"
+            "<tc>%d</tc><ti>%d</ti>"
+            "<tp>%s</tp><so>%s</so><pm>%s</pm>"
+            "<lv1>%s</lv1><id1>%s</id1><lv2>%s</lv2><id2>%s</id2>"
+            "<tm>%s</tm><sev>%d</sev>"
+            "<txt>%s</txt><com>%s</com><origmsg>%s</origmsg>"
+            "</alarm>\n",
+            VG_S_VERSION, scope, alarmid,
+            ccid, statemap[state], modemap[smode],
+            variables,
+            dateissued, hourissued,
+            timecleared, timeissued,
+            typemap[type], sordermap[sortorder], VG_ALARM_S_PMODE_PASSTHROUGH,
+            level1, id1, level2, id2,
+            modemap[tmode], severity,
+            buf[0], buf[1], origmsg
+        );
+    }
+}

@@ -1,0 +1,32 @@
+VARS{
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+
+static Sfio_t *fp;
+}
+BEGIN{
+    if (!(fp = sfnew (NULL, NULL, 4096, 3, SF_WRITE)))
+        SUerror ("vg_stat_prop", "cannot write on channel 3");
+}
+{
+    KEEP;
+
+    sfprintf (
+        fp,
+        "<stat>"
+        "<v>%s</v><sid>%s</sid>"
+        "<di>%s</di><hi>%s</hi>"
+        "<ti>%d</ti>"
+        "<lv>%s</lv><id>%s</id>"
+        "<vars><var>"
+        "<k>%s</k><u>%s</u><fr>%d</fr>"
+        "<n>%f</n><l>%s</l><t>%s</t>"
+        "</var></vars>"
+        "</stat>\n",
+        VG_S_VERSION, scope,
+        dateissued, hourissued,
+        timeissued,
+        level, id,
+        key, unit, frame, val, label, "number"
+    );
+}

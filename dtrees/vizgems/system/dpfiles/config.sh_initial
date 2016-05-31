@@ -1,0 +1,143 @@
+#
+# General options
+#
+
+# the default asset level for alarm and stat records
+DEFAULTLEVEL=o
+
+# ignore case in asset names
+CASEINSENSITIVE=y
+
+# how long to wait before aggregating raw data into hourly and daily bins
+AGGRDELAY='1 hour'
+
+# (EMS only)
+# set to 'y' if this EMS is a DR system in standby mode
+STANDBYMODE=n
+
+# set to 'y' to cause all data files to be stored compressed
+# the default is to have the most recent files uncompressed
+ALWAYSCOMPRESSDP=n
+
+# set to 'y' to cause all data files in queries to be stored
+# compressed - the default is to not compress them
+ALWAYSCOMPRESSUI=n
+
+# set to 'y' to cause queries that return edges to only include
+# an edge when both sides belong to the same customer
+STRICTEDGEUI=n
+
+# set to <integer>d (for days) or <integer>h (for hours)
+# to allow processing of old alarm and stat files even if
+# the data is for days that have been completed
+ACCEPTOLDINCOMING=
+
+#
+# Alarm options
+#
+
+# number of minutes after which an alarm is automatically closed
+MAXALARMKEEPMIN=150
+
+# default ticket mode for VG alarms
+DEFAULTTMODE=keep
+
+# use graph correlation engine
+GCEPHASEON=n
+
+# disable the alarm aggregation processing by setting this variable to 'y'
+ALARMNOAGGR=n
+
+# limit the size of a file to process
+# files larger than this size will be split into smaller files
+# must be at least 100000 or 0 for no limit
+ALARMSPLITFILESIZE=2000000
+
+# limit the number of files to be processed per run
+# must be at least 10 or 0 for no limit
+ALARMMAXFILERUN=500
+
+#
+# Stat options
+#
+
+# frequency of stat collection in seconds
+STATINTERVAL=300
+
+# number of samples to use for profile generation
+PROFILESAMPLES=5
+
+# use profile correlation engine
+PCEPHASEON=n
+
+# to stop stat record timestamps from getting
+# aligned to the system default interval set this to 1
+NOTIMENORM=0
+
+# how long to wait before concatenating raw files into 1 raw file per hour
+CONCATDELAY='120 min'
+
+# disable the stat aggregation processing by setting this variable to 'y'
+STATNOAGGR=n
+
+# limit the size of a file to process
+# files larger than this size will be split into smaller files
+# must be at least 100000 or 0 for no limit
+STATSPLITFILESIZE=20000000
+
+# limit the number of files to be processed per run
+# must be at least 10 or 0 for no limit
+STATMAXFILERUN=500
+
+# sort-unique detailed stats records - set to yes to eliminate false dups
+SORTUNIQSTATS=n
+
+#
+# Scope options
+#
+
+# number of seconds to wait before assuming a scope is down
+# leave empty to use STATINTERVAL + 30
+MAXSCOPEDELAY=
+
+# store all passwords and snmp community strings encrypted
+# run: confmgr -updatephrase
+# to set up the encryption phrase
+ENCRYPTMODE=n
+ENCRYPTFIELDS='scope_pass|scope_snmpcommunity'
+
+# set to 'y' to cause auto inventory to happen on failover scopes
+FAILOVERINV=n
+
+# set to 'y' to enable backwards compatibility for old scopeinv record keys
+USESCOPEINVKEYS=n
+
+# interval in minutes for injesting new autoinv files from scopes
+AUTOINVINTERVAL=60
+
+#
+# CM options
+#
+
+# propagate configuration manager files to systems in propdata.info file
+# MASTERCONF indicates that this system is the master conf. manager
+PROPCONFS=n
+MASTERCONF=n
+
+# propagate alarms to systems in propdata.info file
+PROPALARMS=n
+
+# propagate stats to systems in propdata.info file
+PROPSTATS=n
+
+# send out alarm emails
+PROPEMAILS=n
+
+# drop all propagation actions if in standby mode
+if [[ $STANDBYMODE == y ]] then
+    PROPCONFS=n
+    MASTERCONF=n
+    PROPALARMS=n
+    PROPSTATS=n
+    PROPEMAILS=n
+fi

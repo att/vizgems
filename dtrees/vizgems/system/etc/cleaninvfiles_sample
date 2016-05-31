@@ -1,0 +1,134 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VG_SYSNAME=SWIFT_CFG_SYSNAME
+export VG_SYSMODE=SWIFT_CFG_SYSMODE
+export VG_NFSMODE=SWIFT_CFG_NFSMODE
+
+export VG_SSYSTEMDIR=SWIFT_CFG_SSYSTEMDIR
+export VG_SSCOPESDIR=SWIFT_CFG_SSCOPESDIR
+export VG_SWWWDIR=SWIFT_CFG_SWWWDIR
+export VG_SSNMPDIR=SWIFT_CFG_SSNMPDIR
+export VG_DSYSTEMDIR=SWIFT_CFG_DSYSTEMDIR
+export VG_DPSYSTEMDIR=SWIFT_CFG_DPSYSTEMDIR
+export VG_DASYSTEMDIR=SWIFT_CFG_DASYSTEMDIR
+export VG_DSCOPESDIR=SWIFT_CFG_DSCOPESDIR
+export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
+export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=SWIFT_CFG_DPSYSTEMDIR
+
+export LC_ALL=C LANG=C
+
+PATH=$PATH:/usr/sbin:/sbin
+
+IFS='|'
+
+typeset -A cmap
+typeset -l yn cid
+
+egrep -v '^#|^$' dpfiles/inv/customer.txt | while read -r cid cname j; do
+    cmap[$cid]=$cname
+done
+
+for i in $VGMAINDIR/dpfiles/inv/view/*; do
+    [[ ! -f $i ]] && continue
+    bad=n
+    if [[ $i != *-inv.txt ]] then
+        print ERROR file $i not recognised
+        bad=y
+    fi
+    cid=${i##*/}; cid=${cid%-inv.txt}
+    if [[ ${cmap[$cid]} == '' ]] then
+        print ERROR customer id $cid not in the customer file
+        bad=y
+    fi
+    if [[ ! -s $i ]] then
+        print WARNING file $i is empty
+    fi
+    if [[ $bad == y ]] then
+        read yn?"remove $i: "
+        [[ $yn == @(y|yes) ]] && rm $i
+    fi
+done
+for i in $VGMAINDIR/dpfiles/inv/scope/*; do
+    [[ ! -f $i ]] && continue
+    [[ $i == state ]] && continue
+    bad=n
+    if [[ $i != *-inv.txt ]] then
+        print ERROR file $i not recognised
+        bad=y
+    fi
+    cid=${i##*/}; cid=${cid%-inv.txt}
+    cid=${cid#'auto-'}
+    cid=${cid#*-}
+    if [[ ${cmap[$cid]} == '' ]] then
+        print ERROR customer id $cid not in the customer file
+        bad=y
+    fi
+    if [[ ! -s $i ]] then
+        print WARNING file $i is empty
+    fi
+    if [[ $bad == y ]] then
+        read yn?"remove $i: "
+        [[ $yn == @(y|yes) ]] && rm $i
+    fi
+done
+for i in $VGMAINDIR/dpfiles/inv/scope/state/*; do
+    [[ ! -f $i ]] && continue
+    bad=n
+    if [[ $i != *.txt ]] then
+        print ERROR file $i not recognised
+        bad=y
+    fi
+    [[ $i == */profile.txt ]] && continue
+    [[ $i == */threshold.txt ]] && continue
+    [[ $i == */scopedata.txt ]] && continue
+    if [[ ! -s $i ]] then
+        print WARNING file $i is empty
+    fi
+    if [[ $bad == y ]] then
+        read yn?"remove $i: "
+        [[ $yn == @(y|yes) ]] && rm $i
+    fi
+done
+
+for i in $VGMAINDIR/inv/*/cache/*-inv.txt; do
+    [[ ! -f $i ]] && continue
+    bad=n
+    if [[ $i == */inv/scope/* ]] then
+        if [[ ! -f $VGMAINDIR/dpfiles/inv/scope/${i##*/} ]] then
+            print ERROR scope import file ${i##*/} not in inventory
+            bad=y
+        fi
+    else
+        if [[ ! -f $VGMAINDIR/dpfiles/inv/view/${i##*/} ]] then
+            print ERROR view import file ${i##*/} not in inventory
+            bad=y
+        fi
+    fi
+    if [[ ! -s $i ]] then
+        print WARNING file $i is empty
+    fi
+    if [[ $bad == y ]] then
+        read yn?"remove $i: "
+        [[ $yn == @(y|yes) ]] && rm $i
+    fi
+done

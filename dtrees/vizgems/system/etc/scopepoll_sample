@@ -1,0 +1,85 @@
+#!/bin/ksh
+
+function timedrun { # $1 = timeout, $2-* cmd and args
+    typeset maxt jid i
+
+    maxt=$1
+    shift 1
+
+    set -o monitor
+    "$@" &
+    jid=$!
+    for (( i = 0; i < maxt; i += 0.1 )) do
+        kill -0 $jid 2> /dev/null || break
+        sleep 0.1
+    done
+    if (( $i >= maxt )) then
+        if kill -9 -$jid 2> /dev/null; then
+            print -u2 scopepoll: timeout for job "$@"
+        fi
+    fi
+    wait $jid 2> /dev/null
+    return $?
+}
+
+logfile=SWIFT_CFG_DSYSTEMDIR/logs/poll.all.$(date -f '%Y%m%d-%H%M%S').log
+exec 4>&1
+exec >> $logfile
+exec 2>&1
+
+if [[ -f SWIFT_CFG_DSYSTEMDIR/etc/scopepoll.info ]] then
+    . SWIFT_CFG_DSYSTEMDIR/etc/scopepoll.info
+fi
+
+tdir=SWIFT_CFG_DSYSTEMDIR/incoming
+sfl='-C -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2'
+
+typeset -l sn=$VG_SYSNAME
+
+POLLSYS=${POLLSYS:-NONE}
+if [[ $POLLSYS == NONE || $POLLSYS != *:* ]] then
+    exec >&- 2>&-
+    exec 1>&4
+    if [[ ! -s $logfile ]] then
+        rm -f $logfile
+    fi
+    exit 0
+fi
+
+mkdir -p SWIFT_CFG_DSYSTEMDIR/tmp/poll
+cd SWIFT_CFG_DSYSTEMDIR/tmp/poll || exit 0
+rm -rf SWIFT_CFG_DSYSTEMDIR/tmp/poll/*
+
+for spec in $POLLSYS; do
+    [[ $spec != *:* ]] && continue
+    hostspec=${spec%%:*}
+    rdir=${spec##"$hostspec"?(:)}
+    (
+        for dir in alarm stat autoinv health; do
+            mkdir -p $sn.$dir
+            cd $sn.$dir
+            timedrun 300 ssh $sfl $hostspec \
+                "tar cf - $rdir/$dir/tmp/HOLD4POLL@$sn 2> /dev/null" \
+            | pax -rf - -s!.*/!! 2>&1 | egrep -v '[0-9]* blocks$'
+            (
+                for file in *; do
+                    [[ ! -f $file ]] && continue
+                    [[ $file != *.xml ]] && continue
+                    mv $file SWIFT_CFG_DSYSTEMDIR/incoming/$dir
+                    print $file
+                    print -u2 SWIFT WARNING incoming scope file $file
+                done
+                print _exit_
+            ) | timedrun 300 ssh $sfl $hostspec \
+            "while read i; do [[ \$i == _exit_ ]] && break; rm -f $rdir/$dir/tmp/HOLD4POLL@$sn/\$i; done"
+        done
+    ) &
+    sdpjobcntl 16
+done
+wait; wait
+
+exec >&- 2>&-
+exec 1>&4
+if [[ ! -s $logfile ]] then
+    rm -f $logfile
+fi

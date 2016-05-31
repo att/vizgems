@@ -1,0 +1,71 @@
+rec=(
+    keys=INDEX
+    walk0=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.2.${INDEX}' # entPhysicalDescr
+        type=STRING
+        value='${NAME}'
+    )
+    walk1=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.4.${INDEX}' # entPhysicalContainedIn
+        type=INTEGER
+        value='${PINDEX}'
+    )
+    walk2=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.5.${INDEX}' # entPhysicalClass
+        type=INTEGER
+        value='${CLASS}'
+    )
+    walk3=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.6.${INDEX}' # entPhysicalParentRelPos
+        type=INTEGER
+        value='${PORDER}'
+    )
+    walk4=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.8.${INDEX}' # entPhysicalHardwareRev
+        type=STRING
+        value='${HWREV}'
+    )
+    walk5=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.9.${INDEX}' # entPhysicalFirmwareRev
+        type=STRING
+        value='${FWREV}'
+    )
+    walk6=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.10.${INDEX}' # entPhysicalSoftwareRev
+        type=STRING
+        value='${SWREV}'
+    )
+    walk7=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.11.${INDEX}' # entPhysicalSerialNum
+        type=STRING
+        value='${SN}'
+    )
+    walk8=(
+        name='.1.3.6.1.2.1.47.1.1.1.1.13.${INDEX}' # entPhysicalModelName
+        type=STRING
+        value='${MNAME}'
+    )
+    outkey=INDEX
+    output='${INDEX}|${PINDEX}|${PORDER}|${CLASS}|${NAME}|${HWREV}|${FWREV}|${SWREV}|${SN}|${MNAME}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r index pindex porder class name hwrev fwrev swrev sn mname; do
+                name=${name//[\"\|]/}
+                hwrev=${hwrev//[\"\|]/}; hwrev=${hwrev##+(" ")}; hwrev=${hwrev%%+(" ")}
+                fwrev=${fwrev//[\"\|]/}; fwrev=${fwrev##+(" ")}; fwrev=${fwrev%%+(" ")}
+                swrev=${swrev//[\"\|]/}; swrev=${swrev##+(" ")}; swrev=${swrev%%+(" ")}
+                sn=${sn//[\"\|]/}; sn=${sn##+(" ")}; sn=${sn%%+(" ")}
+                mname=${mname//[\"\|]/}; mname=${mname##+(" ")}; mname=${mname%%+(" ")}
+                print "node|o|$INV_TARGET|si_hwname$index|$name"
+                print "node|o|$INV_TARGET|si_hwinfo$index|:HW:$hwrev:FW:$fwrev:SW:$swrev:SN:$sn:MN:$mname"
+                print "node|o|$INV_TARGET|si_hwloc$index|$pindex:$porder:$class"
+            done
+            ;;
+        *)
+            cat > /dev/null
+            ;;
+        esac
+    }'
+)

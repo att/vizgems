@@ -1,0 +1,7 @@
+name inv_edge
+field level1 char 4
+field id1 char 64
+field level2 char 4
+field id2 char 64
+field key char 64
+field val char 128

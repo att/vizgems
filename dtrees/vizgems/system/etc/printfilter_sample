@@ -1,0 +1,74 @@
+#!/bin/ksh
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+if [[ ! -f SWIFT_CFG_DSYSTEMDIR/active ]] then
+    exit 0
+fi
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
+export VGPERMDIR=""
+
+export LC_ALL=C LANG=C
+
+filterfile=$VGMAINDIR/dpfiles/alarm/alarm.filter
+if [[ ! -f $filterfile ]] then
+    print -u2 ERROR cannot access filter file: $filterfile
+    exit 1
+fi
+
+typeset -A fs
+nu='+([0-9])'
+typeset -Z2 hh mm
+
+print -- "\"Asset Name\",\"Alarm ID\",\"Message Text\",\"Start Time\",\"End Time\",\"Start Date\",\"End Date\",\"Repeat\",\"Ticket Mode\",\"Viz Mode\",\"Severity\",\"Comment\",\"User\""
+while read -r line; do
+    rest=$line
+    for (( i = 0; i < 13; i++ )) do
+        fs[$i]=${rest%%\|+\|*}
+        rest=${rest#"${fs[$i]}"\|+\|}
+    done
+
+    if [[ ${fs[3]} != $nu ]] then
+        print -u2 bad start time: ${fs[3]}
+        st=ERR
+    else
+        (( hh = ${fs[3]} / 60 ))
+        (( mm = ${fs[3]} % 60 ))
+        st=$hh:$mm
+    fi
+    if [[ ${fs[4]} != $nu ]] then
+        print -u2 bad end time: ${fs[4]}
+        et=ERR
+    else
+        (( hh = ${fs[4]} / 60 ))
+        (( mm = ${fs[4]} % 60 ))
+        et=$hh:$mm
+    fi
+    if [[ ${fs[5]} != $nu ]] then
+        print -u2 bad start date: ${fs[5]}
+        sd=ERR
+    else
+        sd=$(printf '%(%Y/%m/%d)T' \#${fs[5]})
+    fi
+    if [[ ${fs[6]} != @($nu|indefinitely) ]] then
+        print -u2 bad end date: ${fs[6]}
+        ed=ERR
+    elif [[ ${fs[6]} == indefinitely ]] then
+        ed=indefinitely
+    else
+        ed=$(printf '%(%Y/%m/%d)T' \#${fs[6]})
+    fi
+    print -- "\"${fs[0]}\",\"${fs[1]}\",\"${fs[2]}\",\"${st}\",\"${et}\",\"${sd}\",\"${ed}\",\"${fs[7]}\",\"${fs[8]}\",\"${fs[9]}\",\"${fs[10]}\",\"${fs[11]}\",\"${fs[12]}\""
+done < $filterfile

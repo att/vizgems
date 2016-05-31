@@ -1,0 +1,817 @@
+#
+# SUIGMAP
+#
+
+suigmap = [
+    'insuigmap' = 'y';
+    'names' = [];
+    'namen' = 0;
+    'order' = [];
+    'geoms' = [];
+    'geomn' = 0;
+    'framei' = 0;
+    'framen' = 1;
+    'ds' = [
+        'gmapinit' = 0;
+        'allowinsert' = 0;
+        'numtostr' = 0;
+        'showtitle' = 0;
+        'title' = 'SWIFTUI - 3D View';
+        'viewtype' = 'glx';
+        'lmmode' = 'pick';
+        'showcontrol' = 1;
+        'showlegends' = 1;
+        'viewcolor' = [0 = 'gray'; 1 = 'black';];
+        'canvascolor' = [0 = 'black'; 1 = 'white';];
+        'vieworigin' = ['x' = 0; 'y' = 0;];
+        'viewsize' = ['x' = 710; 'y' = 600;];
+        'rect' = [0 = ['x' = 0; 'y' = 0;]; 1 = ['x' = 1; 'y' = 1;];];
+        'textheight' = 25;
+        'linewidth' = 1;
+        'sendcoords' = 0;
+        'fps' = 0;
+        'setframelabel' = function (framei) { return concat (framei); };
+        'getframelabel' = 0;
+        'uifuncs' = copy (gmap2l.uifuncs);
+        'cbfuncs' = copy (gmap2l.cbfuncs);
+        'text0' = 'SWIFT';
+        'text1' = '';
+        'text2' = 'AT&T InfoLab';
+        'sendnonzeroitems' = 1;
+    ];
+];
+
+#
+# startup functions
+#
+
+suigmap.init = function (dataspecific) {
+    local dst, dsi, nds;
+
+    for (dsi in dataspecific)
+        dst[dsi] = 1;
+    for (dsi in suigmap.ds)
+        if (dst[concat ('gmap', dsi)])
+            nds[dsi] = dataspecific[concat ('gmap', dsi)];
+        else if (dst[dsi])
+            nds[dsi] = dataspecific[dsi];
+    for (dsi in nds)
+        suigmap.ds[dsi] = nds[dsi];
+    gmap2l.init ();
+    if (suigmap.ds.gmapinit)
+        suigmap.ds.gmapinit ();
+    monitorfile = suigmap.monitorfile;
+};
+
+suigmap.main = function (mserver, dserver, localdir, prefprefix) {
+    local t;
+
+    suigmap.mserver = mserver;
+    suigmap.dserver = dserver;
+    suigmap.localdir = localdir;
+    suigmap.prefprefix = prefprefix;
+    t = split (mserver, '/');
+    suigmap.qsuffix = concat ('.query.', t[3], '.', t[4]);
+    if (~((suigmap.mpfd = suiutil.getserver (mserver, 'SWIFTMSERVER')) >= 0))
+        exit ();
+    monitor ('on', suigmap.mpfd);
+    suiutil.writecmd (suigmap.mpfd, 'echoon', null);
+    suiutil.writecmd (suigmap.mpfd, 'syncon', null);
+    suigmap.ds.cbfuncs.oldselection = suigmap.ds.cbfuncs.selection;
+    suigmap.ds.cbfuncs.selection = suigmap.selection;
+    suigmap.createview ();
+    suiutil.writecmd (suigmap.mpfd, 'history', []);
+};
+
+#
+# command handling functions
+#
+
+suigmap.insert = function (cmd) {
+    local namet, name;
+
+    if (suigmap.names[cmd.name]) {
+        if (cmd.replay ~= 1)
+            suiutil.msg (1, concat ('name ', cmd.name, ' already loaded'));
+        return;
+    };
+    namet.name = cmd.name;
+    namet.outcmd = copy (cmd);
+    remove ('cmd', namet.outcmd);
+    if (~(namet.cmd = suigmap.allowinsert (cmd)))
+        return;
+    namet.namei = suigmap.namen;
+    suiutil.setbusy (suigmap.widgets.canvas);
+    if (suiutil.updatefile (namet.cmd, suigmap) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        suiutil.unsetbusy (suigmap.widgets.canvas);
+        return;
+    }
+    suiutil.unsetbusy (suigmap.widgets.canvas);
+    if (namet.cmd.bggeomattr)
+        suigmap.setbackground (namet.cmd);
+    if (~(namet.valt = gmap2l.loadval (['name' = namet.cmd.localfile;]))) {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        return;
+    }
+    suigmap.calcmm (gmap.values[namet.valt.value]);
+    if (~(namet.geomt = suigmap.getgeom (namet.cmd))) {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.geom));
+        gmap2l.unloadval (namet.valt);
+        return;
+    }
+    suigmap.names[cmd.name] = namet;
+    suigmap.order[suigmap.namen] = namet.cmd.name;
+    suigmap.namen = suigmap.namen + 1;
+    suigmap.insertlegend (namet);
+    suigmap.setchainedmaps ();
+    for (name in suigmap.names)
+        if (suigmap.framen < suigmap.names[name].valt.framen)
+            suigmap.framen = suigmap.names[name].valt.framen;
+    for (name in suigmap.names) {
+        suigmap.names[name].framescale = (
+            suigmap.framen / suigmap.names[name].valt.framen
+        );
+        suigmap.names[name].valt.framescale = suigmap.names[name].framescale;
+    }
+    suigmap.viewt.cbfuncs.setframe (suigmap.framei);
+    updatewindows ();
+};
+
+suigmap.remove = function (cmd) {
+    local namet;
+
+    if (~(namet = suigmap.names[cmd.name]))
+        return;
+    gmap2l.unmapval2geom (namet.val2geomt);
+    suigmap.releasegeom (namet.geomt);
+    gmap2l.unloadval (namet.valt);
+    suigmap.removelegend (suigmap.names[cmd.name]);
+    remove (suigmap.names[cmd.name].namei, suigmap.order);
+    remove (cmd.name, suigmap.names);
+    suigmap.setchainedmaps ();
+    suigmap.viewt.cbfuncs.setframe (suigmap.framei);
+    updatewindows ();
+};
+
+suigmap.reload = function (cmd) {
+    local namet;
+
+    if (~(namet = suigmap.names[cmd.name]))
+        return;
+    suiutil.setbusy (suigmap.widgets.canvas);
+    if (suiutil.updatefile (namet.cmd, suigmap) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        suiutil.unsetbusy (suigmap.widgets.canvas);
+        return;
+    }
+    suiutil.unsetbusy (suigmap.widgets.canvas);
+    gmap2l.unmapval2geom (namet.val2geomt);
+    remove ('val2geomt', namet);
+    suigmap.releasegeom (namet.geomt);
+    remove ('geomt', namet);
+    gmap2l.unloadval (namet.valt);
+    if (~(namet.valt = gmap2l.loadval (['name' = namet.cmd.localfile;]))) {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.localfile));
+        return;
+    }
+    suigmap.calcmm (gmap.values[namet.valt.value]);
+    if (~(namet.geomt = suigmap.getgeom (namet.cmd))) {
+        suiutil.msg (1, concat ('cannot load ', namet.cmd.geom));
+        return;
+    }
+    suigmap.setchainedmaps ();
+    namet.valt.framescale = namet.framescale;
+    suigmap.viewt.cbfuncs.setframe (suigmap.framei);
+    updatewindows ();
+};
+
+suigmap.removeall = function () {
+    local name, names;
+
+    for (name in suigmap.names)
+        names[name] = suigmap.names[name];
+    for (name in names)
+        suigmap.remove (['name' = name;]);
+};
+
+suigmap.reloadall = function () {
+    local name;
+
+    for (name in suigmap.names)
+        suigmap.reload (suigmap.names[name]);
+};
+
+suigmap.removemany = function (cmd) {
+    local i;
+
+    if (cmd.name & strlen (cmd.name) > 0)
+        suigmap.remove (cmd);
+    else if (cmd.names)
+        for (i in cmd.names)
+            suigmap.remove (suigmap.names[cmd.names[i]]);
+    else
+        suigmap.removeall ();
+};
+
+suigmap.reloadmany = function (cmd) {
+    local i;
+
+    if (cmd.name & strlen (cmd.name) > 0)
+        suigmap.reload (cmd);
+    else if (cmd.names)
+        for (i in cmd.names)
+            suigmap.reload (suigmap.names[cmd.names[i]]);
+    else
+        suigmap.reloadall ();
+};
+
+suigmap.setframe = function (cmd) {
+    suigmap.framei = ston (cmd.framef);
+    suigmap.viewt.cbfuncs.setframe (suigmap.framei);
+    suigmap.setframelabel ();
+    updatewindows ();
+};
+
+suigmap.focus = function (cmd) {
+    local name, namet, ti;
+
+    if (cmd.coords | tablesize (cmd.items) ~= 1)
+        return;
+    for (name in suigmap.names) {
+        namet = suigmap.names[name];
+        for (ti = 0; namet.cmd.settypes[ti]; ti = ti + 1) {
+            suigmap.viewt.cbfuncs.pick (suigmap.viewt, null, [
+                'geometry' = namet.geomt.geometry;
+                'class' = cmd.class;
+                'item' = cmd.items[0];
+            ]);
+            break;
+        }
+    }
+};
+
+suigmap.unfocus = function (cmd) {
+    suigmap.viewt.cbfuncs.seteye (suigmap.viewt, 'reset', '', null);
+};
+
+suigmap.settitle = function (cmd) {
+    local color;
+
+    if (cmd.color)
+        color = suiutil.parsecolorcmd (cmd.color);
+    if (suigmap.ds.showtitle)
+        setwidgetattr (suigmap.widgets.title, [
+            'text' = cmd.title;
+            'color' = color;
+        ]);
+    setwidgetattr (suigmap.widgets.view, ['name' = cmd.title;]);
+};
+
+#
+# command handling support functions
+#
+
+suigmap.allowinsert = function (cmd) {
+    if (suigmap.ds.allowinsert)
+        if (~(cmd = suigmap.ds.allowinsert (cmd)))
+            return;
+    if (~cmd.label)
+        cmd.label = cmd.name;
+    if (~cmd.color) {
+        cmd.color = ['name' = 'white'; 'value' = 'white';];
+        cmd.geomattr.color = cmd.color.value;
+    }
+    if (~cmd.geomattr)
+        cmd.geomattr.color = cmd.color.value;
+    if (~cmd.file)
+        cmd.file = cmd.name;
+    return cmd;
+};
+
+suigmap.setbackground = function (cmd) {
+    local bggeomattr;
+
+    if (cmd.bggeomattr.name ~= suigmap.bggeomt.attr.sname) {
+        if (suigmap.bggeomt.attr.sname)
+            gmap2l.detachgeom2view (suigmap.bggeomt.geom2viewt);
+        suiutil.setbusy (suigmap.widgets.canvas);
+        if (suigmap.bggeoms[cmd.bggeomattr.name]) {
+            gmap2l.unloadgeom (suigmap.bggeoms[cmd.bggeomattr.name]);
+            remove (cmd.bggeomattr.name, suigmap.bggeoms);
+        }
+        if (suiutil.updatefile (cmd.bggeomattr, suigmap) == 'failed') {
+            suiutil.msg (1, concat ('cannot load ', cmd.bggeomattr.name));
+            suiutil.unsetbusy (suigmap.widgets.canvas);
+            return;
+        }
+        bggeomattr = copy (cmd.bggeomattr);
+        bggeomattr.pickmask = 1;
+        bggeomattr.sname = bggeomattr.name;
+        bggeomattr.name = bggeomattr.localfile;
+        suigmap.bggeomt = gmap2l.loadgeom (bggeomattr);
+        suigmap.bggeomt.attr = bggeomattr;
+        suigmap.bggeoms[bggeomattr.sname] = suigmap.bggeomt;
+        suigmap.bggeomt.geom2viewt = gmap2l.attachgeom2view (
+            suigmap.viewt, suigmap.bggeomt
+        );
+        suigmap.viewt.cbfuncs.seteye (
+            suigmap.viewt, "setreset", "",
+            suigmap.viewt.cbfuncs.bbox2eye (suigmap.bggeomt.bbox)
+        );
+        suiutil.unsetbusy (suigmap.widgets.canvas);
+    }
+};
+
+suigmap.getgeom = function (cmd) {
+    local geomi, geomt, geomattr;
+
+    for (geomi in suigmap.geoms) {
+        geomt = suigmap.geoms[geomi];
+        if (geomt.useflag ~= 1 & geomt.geomattr.sname == cmd.geomattr.name) {
+            geomt.useflag = 1;
+            geomt.geom2viewt = gmap2l.attachgeom2view (suigmap.viewt, geomt);
+            setgeometryattr (geomt.geometry, cmd.geomattr);
+            if (cmd.geomunload)
+                geomt.geomunload = 1;
+            return geomt;
+        }
+    }
+    suiutil.setbusy (suigmap.widgets.canvas);
+    if (suiutil.updatefile (cmd.geomattr, suigmap) == 'failed') {
+        suiutil.msg (1, concat ('cannot load ', cmd.geomattr.name));
+        suiutil.unsetbusy (suigmap.widgets.canvas);
+        return;
+    }
+    suiutil.unsetbusy (suigmap.widgets.canvas);
+    geomattr = copy (cmd.geomattr);
+    geomattr.sname = geomattr.name;
+    geomattr.name = geomattr.localfile;
+    geomattr.pickmask = 2;
+    if (~geomattr.linewidth)
+        geomattr.linewidth = suigmap.ds.linewidth;
+    if (~(geomt = gmap2l.loadgeom (geomattr))) {
+        suiutil.msg (1, concat ('cannot load ', geom));
+        return;
+    }
+    geomt.geom2viewt = gmap2l.attachgeom2view (suigmap.viewt, geomt);
+    suigmap.geoms[geomt.geometry] = geomt;
+    geomt.useflag = 1;
+    geomt.geomattr = geomattr;
+    if (cmd.geomunload)
+        geomt.geomunload = 1;
+    return geomt;
+};
+
+suigmap.releasegeom = function (geomt) {
+    geomt.useflag = 0;
+    gmap2l.detachgeom2view (geomt.geom2viewt);
+    if (geomt.geomunload) {
+        gmap2l.unloadgeom (geomt);
+        remove (geomt.geometry, suigmap.geoms);
+    }
+};
+
+suigmap.calcmm = function (values) {
+    local ci;
+
+    if (values.children) {
+        values.minvalue = 99999999;
+        values.maxvalue = -99999999;
+        for (ci = 0; values.children[ci]; ci = ci + 1) {
+            suigmap.calcmm (values.children[ci]);
+            if (values.minvalue > values.children[ci].minvalue)
+                values.minvalue = values.children[ci].minvalue;
+            if (values.maxvalue < values.children[ci].maxvalue)
+                values.maxvalue = values.children[ci].maxvalue;
+        }
+    }
+};
+
+suigmap.setchainedmaps = function () {
+    local name, namet, bygroup, minmax, namei, namej, namen;
+
+    namen = 0;
+    for (name in suigmap.names) {
+        namet = suigmap.names[name];
+        if (bygroup[namet.cmd.gmapvaluegroup])
+            minmax = bygroup[namet.cmd.gmapvaluegroup];
+        else {
+            minmax = [];
+            bygroup[namet.cmd.gmapvaluegroup] = minmax;
+            minmax.min = 999999;
+            minmax.max = -999999;
+        }
+        if (minmax.min > gmap.values[namet.valt.value].minvalue)
+            minmax.min = gmap.values[namet.valt.value].minvalue;
+        if (minmax.max < gmap.values[namet.valt.value].maxvalue)
+            minmax.max = gmap.values[namet.valt.value].maxvalue;
+        namen = namen + 1;
+    }
+    namej = 0;
+    for (namei = 0; namei < suigmap.namen; namei = namei + 1) {
+        if (~(name = suigmap.order[namei]))
+            continue;
+        namet = suigmap.names[name];
+        minmax = [
+            'min' = gmap.values[namet.valt.value].minvalue;
+            'max' = gmap.values[namet.valt.value].maxvalue;
+        ];
+        namet.map = namet.cmd.gmapvaluemap (
+            namet.cmd, minmax, bygroup[namet.cmd.gmapvaluegroup], namej, namen
+        );
+        if (namet.val2geomt.val2geom >= 0)
+            gmap2l.unmapval2geom (namet.val2geomt);
+        namet.val2geomt = gmap2l.mapval2geom (
+            namet.valt, namet.geomt, ['map' = namet.map;]
+        );
+        namej = namej + 1;
+    }
+};
+
+suigmap.dotopn = function (namet, mode) {
+    local cmd;
+
+    cmd = copy (namet.outcmd);
+    cmd.name = concat (cmd.name, suigmap.qsuffix);
+    if (mode == 0) {
+        cmd.framef = suigmap.framei;
+        cmd.framel = suigmap.framei;
+    } else {
+        cmd.framef = 0;
+        cmd.framel = suigmap.framen - 1;
+    }
+    cmd.query = 'topn';
+    cmd.format = 'text';
+    cmd.n = 10;
+    suiutil.writecmd (suigmap.mpfd, 'load', cmd);
+};
+
+suigmap.selection = function (viewt, mode, pos) {
+    local namei, name, namet, menu, menunames, menui;
+    local cmd, r, items, item, itemi;
+
+    suigmap.ds.cbfuncs.oldselection (viewt, mode, pos);
+    if (mode ~= 'end')
+        return;
+    if (tablesize (suigmap.names) > 1) {
+        menu[0] = 'Select Dataset:';
+        menui = 1;
+        for (namei = 0; namei < suigmap.namen; namei = namei + 1) {
+            if (~(name = suigmap.order[namei]))
+                continue;
+            menu[menui] = suigmap.names[name].cmd.label;
+            menunames[menui] = name;
+            menui = menui + 1;
+        }
+        if (~((menui = displaymenu (viewt.canvas, menu)) >= 1))
+            return;
+        namet = suigmap.names[menunames[menui]];
+    } else
+        for (name in suigmap.names)
+            namet = suigmap.names[name];
+    cmd = copy (namet.outcmd);
+    if (suigmap.ds.sendcoords) {
+        r = suigmap.viewt.seldata.rect;
+        cmd.coords = concat (
+            r[0].x, ',', r[0].y, ',-100,', r[1].x, ',', r[1].y, ',100'
+        );
+    } else {
+        cmd.items = getgeometryitems (
+            namet.geomt.geometry, cmd.class, suigmap.viewt.seldata.rect
+        );
+        remove ('geometry', cmd.items);
+        if (tablesize (cmd.items) == 0 & suigmap.viewt.seldata.item)
+            cmd.items = [0 = suigmap.viewt.seldata.item;];
+        if (suigmap.ds.sendnonzeroitems) {
+            items = getvalueitems (namet.valt.value, [
+                'frames' = [0 = toint (suigmap.framei / namet.framescale);];
+                'keys' = cmd.items;
+            ]);
+            cmd.items = [];
+            itemi = 0;
+            for (item in items.dict) {
+                cmd.items[itemi] = item;
+                itemi = itemi + 1;
+            }
+        }
+    }
+    cmd.framef = suigmap.framei;
+    cmd.framel = suigmap.framei;
+    suiutil.writecmd (suigmap.mpfd, 'focus', cmd);
+};
+
+suigmap.legendlabel = function (namet) {
+    return concat (namet.cmd.color.name, ': ', namet.cmd.label);
+};
+
+#
+# user interface functions
+#
+
+suigmap.createview = function () {
+    local widgett;
+
+    widgett.view = createwidget (-1, [
+        'type' = 'view'; 'name' = suigmap.ds.title;
+        'origin' = suigmap.ds.vieworigin; 'size' = suigmap.ds.viewsize;
+        'color' = suigmap.ds.viewcolor;
+    ]);
+    widgets[widgett.view].closeview = suigmap.cb.closeview;
+
+    widgett.areas = createwidget (widgett.view, [
+        'type' = 'array'; 'mode' = 'vertical';
+        'color' = suigmap.ds.viewcolor;
+    ]);
+
+    if (suigmap.ds.showtitle) {
+        widgett.title = createwidget (widgett.areas, [
+            'type' = 'label'; 'text' = suigmap.ds.title;
+            'size' = ['x' = 200; 'y' = suigmap.ds.textheight;];
+            'color' = suigmap.ds.viewcolor;
+        ]);
+    }
+
+    if (suigmap.ds.showcontrol) {
+        widgett.control = createwidget (widgett.areas, [
+            'type' = 'array'; 'mode' = 'horizontal';
+            'color' = suigmap.ds.viewcolor;
+        ]);
+        widgett.framel = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Showing Frame:';
+            'size' = ['x' = 200; 'y' = suigmap.ds.textheight;];
+            'color' = suigmap.ds.viewcolor;
+        ]);
+        widgett.framet = createwidget (widgett.control, [
+            'type' = 'text'; 'text' = ''; 'mode' = 'oneline';
+            'size' = ['x' = 200; 'y' = suigmap.ds.textheight;];
+            'color' = suigmap.ds.viewcolor;
+        ]);
+        widgets[widgett.framet].oneline = suigmap.cb.frame;
+        widgett.iteml = createwidget (widgett.control, [
+            'type' = 'label'; 'text' = 'Showing Location:';
+            'size' = ['x' = 200; 'y' = suigmap.ds.textheight;];
+            'color' = suigmap.ds.viewcolor;
+        ]);
+        widgets[widgett.iteml].leftdown = suigmap.cb.resetitem;
+        widgett.itemt = createwidget (widgett.control, [
+            'type' = 'text'; 'text' = ''; 'mode' = 'oneline';
+            'size' = ['x' = 200; 'y' = suigmap.ds.textheight;];
+            'color' = suigmap.ds.viewcolor;
+        ]);
+        widgets[widgett.itemt].oneline = suigmap.cb.item;
+    }
+
+    widgett.areas2 = createwidget (widgett.areas, [
+        'type' = 'array'; 'mode' = 'vertical';
+        'color' = suigmap.ds.viewcolor;
+        'borderwidth' = 0;
+    ]);
+    widgett.canvas = createwidget (widgett.areas2, [
+        'type' = 'canvas';
+        'mode' = 'gmap';
+        'size' = suigmap.ds.viewsize;
+        'color' = suigmap.ds.canvascolor;
+    ]);
+    suigmap.ds.canvas = widgett.canvas;
+    suigmap.ds.color = suigmap.ds.canvascolor[0];
+    suigmap.viewt = gmap2l.createviewandchannel (suigmap.ds);
+
+    if (suigmap.ds.showlegends) {
+        widgett.legends = createwidget (widgett.areas, [
+            'type' = 'array'; 'mode' = 'vertical';
+            'color' = suigmap.ds.viewcolor;
+        ]);
+        widgett.legendlist = [];
+    }
+
+    suigmap.widgets = widgett;
+    widgets[widgett.areas].resize = suigmap.cb.areasresize;
+    widgets[widgett.areas2].resize = suigmap.cb.areas2resize;
+    setwidgetattr (widgett.canvas, ['size' = ['x' = 200; 'y' = 200;];]);
+    if (suigmap.ds.showcontrol) {
+        widgets[widgett.control].resize = suigmap.cb.controlresize;
+        setwidgetattr (widgett.framel, ['size' = ['x' = 200; 'y' = 200;];]);
+    }
+    if (suigmap.ds.showlegends) {
+        widgets[widgett.legends].resize = suigmap.cb.legendsresize;
+        setwidgetattr (widgett.legends, ['size' = ['x' = 200; 'y' = 200;];]);
+    }
+};
+
+suigmap.destroyview = function () {
+    gmap2l.destroyview (suigmap.widgets.viewt);
+    destroywidget (suigmap.widgets.view);
+    remove ('widgets', suigmap);
+};
+
+suigmap.insertlegend = function (namet) {
+    local widgett, widgeti;
+
+    if (~suigmap.ds.showlegends)
+        return;
+    widgett = suigmap.widgets;
+    widgeti = createwidget (widgett.legends, [
+        'type' = 'label'; 'text' = suigmap.legendlabel (namet);
+        'size' = ['x' = 200; 'y' = suigmap.ds.textheight;];
+        'color' = suigmap.viewcolor;
+    ]);
+    widgett.legendlist[widgeti] = namet.namei;
+    widgets[widgeti].leftdown = suigmap.cb.legend;
+    setwidgetattr (widgett.canvas, ['size' = suigmap.ds.viewsize;]);
+};
+
+suigmap.changelegend = function (namet) {
+    local widgett, widgeti;
+
+    if (~suigmap.ds.showlegends)
+        return;
+    widgett = suigmap.widgets;
+    for (widgeti in widgett.legendlist)
+        if (widgett.legendlist[widgeti] == namet.namei) {
+            setwidgetattr (widgeti, ['text' = suigmap.legendlabel (namet);]);
+            break;
+        }
+};
+
+suigmap.removelegend = function (namet) {
+    local widgett, widgeti;
+
+    if (~suigmap.ds.showlegends)
+        return;
+    widgett = suigmap.widgets;
+    for (widgeti in widgett.legendlist)
+        if (widgett.legendlist[widgeti] == namet.namei) {
+            destroywidget (widgeti);
+            remove (widgeti, widgett.legendlist);
+            break;
+        }
+    setwidgetattr (widgett.canvas, ['size' = suigmap.ds.viewsize;]);
+};
+
+suigmap.setframelabel = function () {
+    if (suigmap.ds.showcontrol)
+        setwidgetattr (suigmap.widgets.framet, [
+            'text' = suigmap.ds.setframelabel (suigmap.framei);
+        ]);
+};
+
+#
+# Callbacks
+#
+
+suigmap.cb.closeview = function (data) {
+    exit ();
+};
+
+suigmap.cb.frame = function (data) {
+    local attr, framei;
+
+    attr = getwidgetattr (data.widget, [0 = 'text';]);
+    if (attr.text) {
+        if (suigmap.ds.getframelabel)
+            framei = suigmap.ds.setframelabel (attr.text);
+        else
+            framei = ston (attr.text);
+        if ((framei = ston (attr.text)))
+            suiutil.writecmd (suigmap.mpfd, 'play', ['framef' = framei;]);
+    }
+};
+
+suigmap.cb.resetitem = function (data) {
+    suiutil.writecmd (suigmap.mpfd, 'unfocus', []);
+};
+
+suigmap.cb.item = function (data) {
+    local attr, menu, menunames, menui, namei, name, namet, cmd, t;
+
+    attr = getwidgetattr (data.widget, [0 = 'text';]);
+    if (attr.text & strlen (attr.text) > 1) {
+        if (tablesize (suigmap.names) > 1) {
+            menu[0] = 'Select Dataset:';
+            menui = 1;
+            for (namei = 0; namei < suigmap.namen; namei = namei + 1) {
+                if (~(name = suigmap.order[namei]))
+                    continue;
+                menu[menui] = suigmap.names[name].cmd.label;
+                menunames[menui] = name;
+                menui = menui + 1;
+            }
+            if (~((menui = displaymenu (suigmap.widgets.canvas, menu)) >= 1))
+                return;
+            namet = suigmap.names[menunames[menui]];
+        } else
+            for (name in suigmap.names)
+                namet = suigmap.names[name];
+        cmd = copy (namet.outcmd);
+        t = split (attr.text, '\n');
+        cmd.items[0] = t[0];
+        cmd.framef = suigmap.framei;
+        cmd.framel = suigmap.framei;
+        suiutil.writecmd (suigmap.mpfd, 'focus', cmd);
+    } else
+        suiutil.writecmd (suigmap.mpfd, 'unfocus', []);
+};
+
+suigmap.cb.legendmenu = [
+    0 = 'top 10 this frame';
+    1 = 'top 10 all frames';
+];
+
+suigmap.cb.legend = function (data) {
+    local namei, i;
+
+    namei = suigmap.widgets.legendlist[data.widget];
+    if (~((i = displaymenu (data.widget, suigmap.cb.legendmenu)) >= 0))
+        return;
+    suigmap.dotopn (suigmap.names[suigmap.order[namei]], i);
+};
+
+#
+# resize functions
+#
+
+suigmap.cb.areasresize = function (data) {
+    local t, n, h, ret;
+
+    t = suigmap.widgets;
+    h = 0;
+    if (suigmap.ds.showtitle) {
+        ret[t.title] = ['x' = data.size.x; 'y' = suigmap.ds.textheight;];
+        h = h + suigmap.ds.textheight + 2;
+    }
+    if (suigmap.ds.showcontrol) {
+        ret[t.control] = ['x' = data.size.x; 'y' = suigmap.ds.textheight;];
+        h = h + suigmap.ds.textheight + 2;
+    }
+    if (suigmap.ds.showlegends) {
+        if ((n = tablesize (t.legendlist)) == 0)
+            n = 1;
+        ret[t.legends] = [
+            'x' = data.size.x; 'y' = n * (suigmap.ds.textheight + 2);
+        ];
+        h = h + n * (suigmap.ds.textheight + 2);
+    }
+    ret[t.areas2] = ['x' = data.size.x; 'y' = data.size.y - h;];
+    return ret;
+};
+
+suigmap.cb.areas2resize = function (data) {
+    local t, ret;
+
+    t = suigmap.widgets;
+    ret[t.canvas] = ['x' = data.size.x; 'y' = data.size.y;];
+    return ret;
+};
+
+suigmap.cb.controlresize = function (data) {
+    local t, ret;
+
+    t = suigmap.widgets;
+    ret = [
+        t.framel = ['x' = 3 * data.size.x / 8; 'y' = data.size.y;];
+        t.framet = ['x' = data.size.x / 8; 'y' = data.size.y;];
+        t.iteml = ['x' = 3 * data.size.x / 8; 'y' = data.size.y;];
+        t.itemt = ['x' = data.size.x / 8; 'y' = data.size.y;];
+    ];
+    return ret;
+};
+
+suigmap.cb.legendsresize = function (data) {
+    local t, legendi, ret;
+
+    t = suigmap.widgets;
+    for (legendi in t.legendlist)
+        ret[legendi] = ['x' = data.size.x; 'y' = suigmap.ds.textheight;];
+    return ret;
+};
+
+#
+# communication function
+#
+
+suigmap.monitorfile = function (data) {
+    local cmd;
+
+    if (~(cmd = suiutil.readcmd (suigmap.mpfd)))
+        exit ();
+    if (cmd.cmd == 'load')
+        suigmap.insert (cmd);
+    else if (cmd.cmd == 'unload')
+        suigmap.removemany (cmd);
+    else if (cmd.cmd == 'reload')
+        suigmap.reloadmany (cmd);
+    else if (cmd.cmd == 'play')
+        suigmap.setframe (cmd);
+    else if (cmd.cmd == 'focus') {
+        suigmap.setframe (cmd);
+        suigmap.focus (cmd);
+    } else if (cmd.cmd == 'unfocus')
+        suigmap.unfocus (cmd);
+    else if (cmd.cmd == 'settitle')
+        suigmap.settitle (cmd);
+    else if (cmd.cmd == 'gmapcntl')
+        run (cmd.run);
+    else if (cmd.cmd == 'sync')
+        suiutil.writecmd (suigmap.mpfd, concat ('sync ', cmd.id), null);
+};

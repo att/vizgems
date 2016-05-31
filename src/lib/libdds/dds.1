@@ -1,0 +1,233 @@
+.TH DDS 1
+.SH NAME
+.I DDS
+\- Dynamic Data Schema Toolkit
+.SH SYNOPSIS
+ddscommand [flags] ...
+.SH DESCRIPTION
+.I DDS
+is a toolkit for operating on fixed-record binary files.
+.I DDS
+is designed to work on large files.
+To achieve good performance,
+.I DDS
+constructs C code for processing records.
+It compiles this code into shared objects that it then loads and calls from
+the running process.
+.SH SCHEMA SPECIFICATION
+The record fields are described in a schema that can be either
+in the header of the data file or in a separate (ascii) schema file.
+A schema file can have the following sections:
+.PP
+.B name
+.I name
+.IP ""
+The name of the schema.
+.PP
+.B field
+.I name
+[\fBunsigned\fP]
+(\fBchar\fP|\fBshort\fP|\fBint\fP|\fBlong\fP|\fBfloat\fP|\fBdouble\fP)
+.I size
+.IP ""
+Name must be a unique C-style identifier.
+Size must be an integer >= 1.
+When size is greater than 1, the field is treated as an array.
+.B unsigned
+may not be used for floats and doubles.
+When
+.I DDS
+constructs C code, it generates a C struct from the schema.
+An implication of this is that there may be padding (extra bytes)
+between the various fields in the C struct.
+This padding must also exist in the data file.
+.SH ARGUMENTS
+.PP
+The following flags can be used on most
+.I DDS
+tools.
+.PP
+.B -is
+.I schemafile
+.IP ""
+Indicates that the input file has the specified schema.
+This flag overrides any schema specified in the data file.
+Can be used to ``import'' a fixed record data file that has no
+.I DDS
+header.
+.PP
+.B -osm
+(\fBfull\fP|\fBname\fP|\fBnone\fP)
+.IP ""
+Indicates that the output file should contain the complete schema,
+just the name of the schema, or no schema at all.
+When a data file contains just the schema name,
+.I DDS
+searches for a file with that name in the user's path (pointed to by the
+PATH environment variable).
+For every directory in the path, such as /home/ek/bin, the schema is searched
+for in the corresponding lib/swift directory, such as /home/ek/lib/swift.
+The last option, none, can be used to ``export'' a data file.
+The default is
+.IR full .
+.PP
+.B -oce
+.I "'cmd1 cmd2 ...'"
+.IP ""
+Indicates that the output data should be written to one or more pipelines.
+Each cmd is assumed to be a command that can be executed using the user's
+shell (pointed to by the SHELL environment variable).
+\fBAll commands must be DDS commands, or if the commands are scripts, they
+must use a DDS command to process the input data\fP.
+Each command should be enclosed in quotes if it contains spaces.
+The entire option string should be enclosed in quotes (different than
+the ones used per command).
+The default is to write the data to the standard output.
+Example:
+.EX
+-oce "'ddscount ...' 'ddsfilter ...'"
+.EE
+.PP
+.B -?e
+.I expression
+.PP
+.B -?f
+.I file
+.PP
+.B -?so
+.I SO file
+.IP ""
+These flags are used to specify expressions, either as strings on the
+command line (the ``e'' version), or in files (the ``f'' version),
+or as pre-compiled shared objects (the ``so'' version).
+The contents of the expressions depend on the specific tool but there
+are two general categories: space-separated lists of field names,
+and C-style expressions.
+The C-style expressions have four, optional, sections: VARS, BEGIN, LOOP, END.
+Each of these keywords must be followed by a C-style statement enclosed
+in ``{}''.
+VARS is used to define global variables.
+BEGIN and END is code that is executed once at the begining and end of the run.
+The LOOP section is called once per record.
+The LOOP keyword is optional.
+.I DDS
+generates a C file that includes these expressions.
+It compiles this file into a shared object and links it into
+the current process.
+The
+.B ddscc
+tool can be used to pre-compile an expression into a shared object.
+The shared object can then be loaded using the
+.B -?so
+flag, bypassing the compilation step and thus reducing the start-up time.
+.PP
+.B -v
+.IP ""
+Used for turning on various messages.
+Each appearance of this option increases the level of messages printed.
+.SH TOOLS
+.PP
+.B ddsinfo
+.IP ""
+Prints information such as the schema of a file, and the number of records.
+.PP
+.B ddsload
+.IP ""
+Converts an ascii file into records.
+.PP
+.B ddscat
+.IP ""
+Concatenates several files (of the same schema) into one.
+.PP
+.B ddssort
+.IP ""
+Either sorts one file, or merge-sorts several pre-sorted files by the
+specified key.
+.PP
+.B ddsfilter
+.IP ""
+Filters the records in a file, keeping only the ones that the specified
+expression indicates.
+.PP
+.B ddschoose
+.IP ""
+Extracts specific records from a file, based on their indices.
+.PP
+.B ddssplit
+.br
+.B ddsgroup
+.IP ""
+These tools split their input stream into multiple output streams, one for
+each unique combination of the fields specified as an argument (for
+.BR ddssplit ),
+or one for each different value returned by the specified expression (for
+.BR ddsgroup ).
+.PP
+.B ddsextract
+.br
+.B ddsconv
+.IP ""
+These tools convert data to a different schema.
+They use a space-separated list of fields to extract from the old schema (for
+.BR ddsextract )
+or the name of a new schema and a C expression that converts the data (for
+.BR ddsconv ).
+.PP
+.B ddscount
+.IP ""
+For each unique combination of the fields specified as an argument, it
+either counts how many times they appear on the input, or sums up the
+values of a specific field.
+.PP
+.B ddsaggr
+.br
+.B ddssplitnaggr
+.IP ""
+These tools can be used to compute summary information along two
+dimensions.
+.PP
+.B ddsprint
+.IP ""
+Prints the contents of a file in ascii.
+.PP
+.B ddscc
+.IP ""
+Pre-compiles expressions into shared objects for loading by various
+.PP
+.B ddsmkdict
+.IP ""
+Generate search code for
+.I DDS
+files.
+.PP
+.B ddsmkarray
+.IP ""
+Generate search code for
+.I DDS
+files.
+.PP
+.B ddsmkslist
+.IP ""
+Generate search code for
+.I DDS
+files.
+.SH SEE ALSO
+.IR dds(1) ,
+.IR ddsaggr(1) ,
+.IR ddscat(1) ,
+.IR ddschoose(1) ,
+.IR ddsconv(1) ,
+.IR ddscount(1) ,
+.IR ddsextract(1) ,
+.IR ddsfilter(1) ,
+.IR ddsgroup(1) ,
+.IR ddsinfo(1) ,
+.IR ddsload(1) ,
+.IR ddsprint(1) ,
+.IR ddssort(1) ,
+.IR ddssplit(1) ,
+.IR ddssplitnaggr(1) ,
+.IR ddsmkdict(1) ,
+.IR ddsmkarray(1) ,
+.IR ddsmkslist(1) ,
+.IR dds(3) .

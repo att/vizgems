@@ -1,0 +1,25 @@
+BEGIN
+ID GEN1_ANY
+DESCRIPTION group repeating alarms in one CC - 30 min window - 2 alarms or 5 min delay for first ticket - 2 hr ticket refresh
+FMATCH if (_alarm_alarmid == "any.1") { _result = TRUE; asset = _alarm_object; text = _alarm_text; counter = 0; }
+SMATCH if (_alarm_time - _lastalarmtime <= 1800 && _alarm_alarmid == "any.1" && asset == _alarm_object && text == _alarm_text) { _result = TRUE; }
+INSERT counter = counter + 1;
+REMOVE counter = counter - 1;
+FTICKET if (counter >= 2 || _currtime - _firstalarmtime > 300) { _result = TRUE; }
+STICKET if (_currtime - _tickettime > 7200) { _result = TRUE; }
+PRUNE { _result = PRUNEALARM; _prunetime = _currtime - 1800; }
+EMIT { _result = FALSE; }
+END
+
+BEGIN
+ID GEN2_BALANCE
+DESCRIPTION group multiple alarms (same alarm or up and down alarms) in one CC - alarm record must provide: matchwindow - match interval, ticketupdatetime - when to refresh alarm (0 to remove CC after first ticket), balancemode - 0 for same kind or 1 for up/down balance, ticketimmediatecount - min balance for issuing immediate ticket, ticketdefercount/ticketdefertime - min balance of alarms for issuing a ticket after so many seconds have elapsed
+FMATCH if (_alarm_unique) { _result = TRUE; asset = _alarm_object; unique = _alarm_unique; aid = _alarm_alarmid; matchwindow = _alarm_num_matchwindow; ticketupdatetime = _alarm_num_ticketupdatetime; balancemode = _alarm_num_balancemode; ticketimmediatecount = _alarm_num_ticketimmediatecount; ticketdefercount = _alarm_num_ticketdefercount; ticketdefertime = _alarm_num_ticketdefertime; counter = 0; active = 1; }
+SMATCH if (active == 1 && _alarm_time - _lastalarmtime <= matchwindow && asset == _alarm_object && unique == _alarm_unique && aid == _alarm_alarmid) { _result = TRUE; }
+INSERT if (balancemode == 0) counter = counter + 1; else if (_alarm_state == "down") counter = counter + 1; else if (_alarm_state == "up") counter = counter - 1;
+REMOVE if (balancemode == 0) counter = counter - 1; else if (_alarm_state == "down") counter = counter - 1; else if (_alarm_state == "up") counter = counter + 1;
+FTICKET if (counter >= ticketimmediatecount || (counter >= ticketdefercount && ticketdefertime > 0 && _currtime - _lastalarmtime > ticketdefertime)) { _result = TRUE; if (ticketupdatetime == 0) active = 0; }
+STICKET if (active == 1 && _currtime - _tickettime > ticketupdatetime) { _result = TRUE; }
+PRUNE if (active == 0) { _result = PRUNEMATCH; } else { _result = PRUNEALARM; _prunetime = _currtime - matchwindow; }
+EMIT { _result = FALSE; }
+END

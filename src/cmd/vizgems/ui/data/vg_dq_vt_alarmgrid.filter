@@ -1,0 +1,160 @@
+VARS{
+#include <vmalloc.h>
+#include <cdt.h>
+#include <tm.h>
+#define VG_DEFS_MAIN
+#include "vg_hdr.h"
+#include "sl_level_map.c"
+#include "sl_inv_map1.c"
+#include "sl_inv_map2.c"
+#include "sl_inv_nodeattr.c"
+#include "sl_inv_edgeattr.c"
+#include "vg_dq_vt_util_pub.h"
+#include "vg_dq_vt_attrs.c"
+#define VG_SEVMAP_MAIN
+#include "vg_sevmap.c"
+
+#define OBJLEN (2 * (SZ_level + SZ_id) + 6)
+static char objstr[OBJLEN];
+
+static char *fprefix, *iprefix;
+static int findex, maxpix, openmode;
+static char *rendermode, *pagemode;
+}
+LIBS{
+-lvg_dq_vt_util -lvgxml -lgv -lgraph -lgd
+}
+BEGIN{
+    if (attrload (getenv ("ALARMGRIDATTRFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot load attr file");
+
+    if (!attrs[ATTR_RUNID].str)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot find runid");
+    fprefix = attrs[ATTR_RUNID].str, findex = 0;
+    if (!(iprefix = getenv ("IMAGEPREFIX")))
+        SUerror ("vg_dq_vt_alarmgrid", "cannot find imageprefix");
+    if (!attrs[ATTR_RENDERMODE].str)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot find rendermode");
+    rendermode = attrs[ATTR_RENDERMODE].str;
+    if (!attrs[ATTR_MAXPIXEL].str)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot find maxpixel");
+    maxpix = atoi (attrs[ATTR_MAXPIXEL].str);
+    if (!attrs[ATTR_ALARMGROUP].str)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot find alarmgroup");
+    if (strcmp (attrs[ATTR_ALARMGROUP].str, "open") == 0)
+        openmode = TRUE;
+    if (!attrs[ATTR_PAGEMODE].str)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot find pagemode");
+    pagemode = attrs[ATTR_PAGEMODE].str;
+
+    if (sevmapload (getenv ("SEVMAPFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot load sevmap file");
+
+    sl_level_mapopen (getenv ("LEVELMAPFILE"));
+    sl_inv_map1open (getenv ("INVMAPFILE"));
+    sl_inv_map2open (getenv ("INVMAPFILE"));
+    M1I (TRUE);
+    M2I (TRUE);
+
+    sl_inv_nodeattropen (getenv ("INVNODEATTRFILE"));
+    sl_inv_edgeattropen (getenv ("INVEDGEATTRFILE"));
+
+    if (UTinit () == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot init UT");
+    if (RIinit (fprefix, iprefix, maxpix) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot init RI");
+    if (EMinit (getenv ("ALARMGRIDEMBEDLISTFILE")) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot init EM");
+    if (AGDinit (sevmapn, openmode, pagemode) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot init AGD");
+    if (!AGDinsert (
+        "_D_", "__DEFAULT__", "", "",
+        "_D_", "__DEFAULT__", "", "", 0, -123, -123
+    ))
+        SUerror ("vg_dq_vt_alarmgrid", "cannot insert node alarm");
+    if (!AGDinsert (
+        "_D_", "__DEFAULT__", "_D_", "__DEFAULT__",
+        "_D_", "__DEFAULT__", "_D_", "__DEFAULT__", 0, -123, -123
+    ))
+        SUerror ("vg_dq_vt_alarmgrid", "cannot insert edge alarm");
+}
+{
+    DROP;
+
+    if (!AGDinsert (
+        ilevel1, iid1, ilevel2, iid2, level1, id1, level2, id2,
+        type, tmode, severity
+    ))
+        SUerror ("vg_dq_vt_alarmgrid", "cannot insert alarm");
+}
+END{
+    int ali;
+    char sgurl[ATTRBUFLEN], tlurl[ATTRBUFLEN];
+    char xaurl[ATTRBUFLEN], yaurl[ATTRBUFLEN];
+
+    if (AGDflatten () == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot flatten");
+    if (AGDsetupdraw (
+        rendermode, attrs[ATTR_ALARMGRIDATTR].str, attrs[ATTR_ALARMATTR].str,
+        attrs[ATTR_XAXISATTR].str, attrs[ATTR_YAXISATTR].str
+    ) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot setup drawing");
+
+    for (ali = 0; ali < AGDalarmn; ali++) {
+        if (attreval (
+            AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1,
+            AGDalarms[ali]->ilevel2, AGDalarms[ali]->iid2,
+            ATTR_ALARMGRIDURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmgrid", "cannot get alarmgrid url");
+        strncpy (sgurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1,
+            AGDalarms[ali]->ilevel2, AGDalarms[ali]->iid2,
+            ATTR_TITLEURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmgrid", "cannot get title url");
+        strncpy (tlurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1,
+            AGDalarms[ali]->ilevel2, AGDalarms[ali]->iid2,
+            ATTR_XAXISURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmgrid", "cannot get xaxis url");
+        strncpy (xaurl, attrstr, ATTRBUFLEN);
+        if (attreval (
+            AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1,
+            AGDalarms[ali]->ilevel2, AGDalarms[ali]->iid2,
+            ATTR_YAXISURL, ATTRENC_URL
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmgrid", "cannot get yaxis url");
+        strncpy (yaurl, attrstr, ATTRBUFLEN);
+
+        if (attreval (
+            AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1,
+            AGDalarms[ali]->ilevel2, AGDalarms[ali]->iid2,
+            ATTR_TITLEATTR, ATTRENC_SIMPLE
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmgrid", "cannot get title attr");
+
+        if (!AGDalarms[ali]->iid2[0])
+            sfsprintf (
+                objstr, OBJLEN, "n|%s|%s",
+                AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1
+            );
+        else
+            sfsprintf (
+                objstr, OBJLEN, "e|%s|%s|%s|%s",
+                AGDalarms[ali]->ilevel1, AGDalarms[ali]->iid1,
+                AGDalarms[ali]->ilevel2, AGDalarms[ali]->iid2
+            );
+
+        if (AGDdrawgrid (
+            fprefix, findex, ali, attrstr, sgurl, tlurl, xaurl, yaurl, objstr
+        ) == -1)
+            SUerror ("vg_dq_vt_alarmgrid", "cannot draw alarmgrid %d", ali);
+        findex++;
+    }
+    if (AGDfinishdraw (fprefix) == -1)
+        SUerror ("vg_dq_vt_alarmgrid", "cannot finish drawing");
+}

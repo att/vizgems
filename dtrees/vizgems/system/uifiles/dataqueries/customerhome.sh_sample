@@ -1,0 +1,430 @@
+
+vars.level_o='.*'
+
+function runfunc {
+    typeset -A namemap
+
+    typeset ifs url1 url2 t lv id key val min max avg i sev tmode bg fg
+    typeset num an ut tn pn
+
+    ifs="$IFS"
+    IFS='|'
+    SHOWATTRS=1 vg_dq_invhelper s '.*' | while read t lv id key val; do
+        [[ $key != name ]] && continue
+        namemap[$id]=$val
+    done
+    IFS="$ifs"
+
+    > generic.list
+
+# cpu stats
+
+    url1="${dq_main_data.baseurl}"
+    url1+="&kind=node&qid=statchart&level_o=.*&stat_key=cpu_used..*"
+
+    args=(
+        type=image name=dashboard index=1 width=160 height=200
+        backgroundcolor=${prefpp.bgcolor}
+        typeset -A areas=(
+            [0]=(
+                tool=meter
+                x=0 y=0 w=160 h=200
+                minv=0 maxv=100 unit=% fontname=${prefpp.fontfamily}
+                fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                legend=(
+                    label='CPU Usage\\\n(across all assets)'
+                    fontname=${prefpp.fontfamily}
+                    fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                    url=$url1 info='click to show all CPU usage stats'
+                )
+                dial=(
+                    outlinecolor=black color=black
+                    backgroundcolor=${prefpp.bgcolor}
+                    typeset -A ranges=(
+                        [0]=(
+                            minv=0 maxv=10 color=blue
+                        )
+                        [1]=(
+                            minv=10 maxv=90 color=green
+                        )
+                        [2]=(
+                            minv=90 maxv=100 color=red
+                        )
+                    )
+                )
+                typeset -A needles
+            )
+        )
+    )
+
+    ifs="$IFS"
+    IFS='|'
+    for key in cpu_used._total; do
+        ddsfilter -osm none -fe 'VARS{
+            #include <ast_float.h>
+            static double min = DBL_MAX, max = DBL_MIN, sum = 0;
+            static int n;
+        }{
+            DROP;
+            if (strcmp (key, "'$key'") == 0 && strncmp (label, "___", 3) != 0) {
+                if (min > val)
+                    min = val;
+                if (max < val)
+                    max = val;
+                sum += val;
+                n++;
+            }
+        }
+        END{
+            if (n == 0)
+                min = max = sum = 0, n = 1;
+            sfprintf (sfstdout, "%.0lf|%.0lf|%.0lf\n", min, max, sum / n);
+        }' stat.dds
+    done | read min max avg
+    IFS="$ifs"
+
+    args.areas[0].needles[0]=(
+        v=$avg color=black label='(avg)'
+        fontname=${prefpp.fontfamily}
+        fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+        url=$url1 info="$avg% (avg) - click to show all CPU stats"
+    )
+    args.areas[0].needles[1]=(
+        v=$max color=black label='(max)'
+        fontname=${prefpp.fontfamily}
+        fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+        url=$url1 info="$max% (max) - click to show all CPU stats"
+    )
+
+    if [[ $max != 0* && $avg != 0* ]] then
+        vg_dq_vt_toolhelper args >> generic.list
+    fi
+
+#   alarm summary
+
+    url1="${dq_main_data.baseurl}"
+    url1+="&kind=node&qid=alarmtab&level_o=.*"
+    url2="${dq_main_data.baseurl}"
+    url2+="&kind=node&qid=alarmtab&level_o=.*&alarm_severity"
+
+    args=(
+        type=image name=dashboard index=2 width=160 height=200
+        backgroundcolor=${prefpp.bgcolor}
+        typeset -A areas=(
+            [0]=(
+                tool=stack
+                x=0 y=0 w=160 h=200
+                legend=(
+                    label='Alarm Summary\\\n(across all assets)'
+                    fontname=${prefpp.fontfamily}
+                    fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                    url=$url1 info='click to show all alarms'
+                )
+                outlinecolor=black color=black backgroundcolor=${prefpp.bgcolor}
+                typeset -A sections
+            )
+        )
+    )
+
+    typeset -A tmodename2id sevid2name bgcolors fgcolors
+    tmodename2id[ticketed]=$VG_ALARM_N_MODE_KEEP
+    tmodename2id[deferred]=$VG_ALARM_N_MODE_DEFER
+    tmodename2id[filtered]=$VG_ALARM_N_MODE_DROP
+
+    ifs="$IFS"
+    IFS='|'
+    for i in ${dq_main_data.alarmattr.severitylabel}; do
+        sev=${i%%:*}; name=${i#*:}
+        sevid2name[$sev]=$name
+    done
+    for i in ${dq_main_data.alarmattr.color}; do
+        sev=${i%%:*}; rest=${i#*:}
+        tmode=${rest%%:*}; rest=${rest#*:}
+        bg=${rest%%:*}; rest=${rest#*:}
+        fg=$rest
+        bgcolors[${tmodename2id[$tmode]}:$sev]=$bg
+        fgcolors[${tmodename2id[$tmode]}:$sev]=$fg
+    done
+    i=0
+    ddsextract -ee 'tmode severity' alarm.dds \
+    | ddsfilter -fe '{
+        if (tmode > 1)
+            DROP;
+        else
+            KEEP;
+    }' | ddscount -ke 'tmode severity' | ddsfilter -osm none -fe '{
+        DROP;
+        sfprintf (sfstdout, "%d|%d|%d\n", tmode, severity, count0);
+    }' \
+    | sort -t'|' -k1,2 \
+    | while read tmode sev num; do
+        args.areas[0].sections[$i]=(
+            v=$num backgroundcolor=${bgcolors[$tmode:$sev]} outlinecolor=black
+            fontname=${prefpp.fontfamily}
+            fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+            label=${sevid2name[$sev]}
+            url="$url2=${sevid2name[$sev]}"
+            info="$num ${sevid2name[$sev]} - click to show all ${sevid2name[$sev]} alarms"
+        )
+        (( i++ ))
+    done
+    IFS="$ifs"
+
+    if (( i > 0 )) then
+        vg_dq_vt_toolhelper args >> generic.list
+    fi
+
+#   alarms by site
+
+    url1="${dq_main_data.baseurl}"
+    url1+="&kind=node&qid=alarmtab&level_o=.*"
+    url2="${dq_main_data.baseurl}"
+    url2+="&kind=node&qid=alarmtab&level_s"
+
+    args=(
+        type=image name=dashboard index=3 width=160 height=200
+        backgroundcolor=${prefpp.bgcolor}
+        typeset -A areas=(
+            [0]=(
+                tool=pie
+                x=0 y=0 w=160 h=200
+                sortby=val unit=''
+                fontname=${prefpp.fontfamily}
+                fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                legend=(
+                    label='Alarm Counts\\\n(by Site)'
+                    fontname=${prefpp.fontfamily}
+                    fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                    url=$url1 info='click to show all alarms'
+                )
+                pie=(
+                    outlinecolor=black backgroundcolor=green
+                )
+                other=(
+                    minv=5
+                    label='Other'
+                    fontname=${prefpp.fontfamily}
+                    fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                    url= info=
+                )
+                typeset -A slices
+            )
+        )
+    )
+
+    ifs="$IFS"
+    IFS='|'
+    i=0
+    ddscount -ke 'iid1' alarm.dds | ddsfilter -osm none -fe '{
+        DROP;
+        sfprintf (sfstdout, "%d|%s\n", count0, iid1);
+    }' \
+    | while read num id; do
+        args.areas[0].slices[$i]=(
+            v=$num
+            label="${namemap[$id]}"
+            fontname=${prefpp.fontfamily}
+            fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+            url="$url2=$id"
+            info="$num alarms for site ${namemap[$id]} - click to show all alarms for this site"
+        )
+        (( i++ ))
+    done
+    IFS="$ifs"
+
+    if (( i > 0 )) then
+        vg_dq_vt_toolhelper args >> generic.list
+    fi
+
+#   assets counts
+
+    url1="${dq_main_data.baseurl}"
+    url1+="&kind=node&qid=element&level_o=.*"
+    url2="${dq_main_data.baseurl}"
+    url2+="&kind=node&qid=element&alarm_msgtxt"
+
+    args=(
+        type=table name=dashboard index=4 width=400 height=240
+        backgroundcolor=${prefpp.bgcolor}
+        typeset -A areas=(
+            [0]=(
+                tool=table
+                typeset -A tables=(
+                    [0]=(
+                        fontname=${prefpp.fontfamily}
+                        fontsize=${prefpp.fontsize} fontcolor=${prefpp.fgcolor}
+                        backgroundcolor=${prefpp.bgcolor}
+                        caption=(
+                            contents="Asset Counts"
+                            fontname=${prefpp.fontfamily}
+                            fontsize=${prefpp.fontsize}
+                            fontcolor='#FFFFFF'
+                            backgroundcolor=black
+                            url=$url1 info='click to show all assets'
+                        )
+                        typeset -A rows
+                    )
+                )
+            )
+        )
+    )
+
+    ifs="$IFS"
+    IFS='|'
+    vg_dq_invhelper o '.*' | read t lv i an
+    un=0 tn=0 pn=0
+    ddsfilter -fe '{
+        DROP;
+        if (strstr (text, "VG ALARM Threshold Alarm")) {
+            if (strstr (text, "Ping Packet Loss") && strstr (text, "100% for"))
+                state = 1;
+            else
+                state = 2;
+            KEEP;
+        }
+        if (strstr (text, "VG ALARM Profile Alarm")) {
+            state = 3;
+            KEEP;
+        }
+    }' alarm.dds | ddssort -u -ke 'id1 state' | ddscount -ke 'state' \
+    | ddsfilter -osm none -fe '{
+        sfprintf (sfstdout, "%d|%d\n", state, count0);
+    }' | while read i n; do
+        case $i in
+        1) un=$n ;;
+        2) tn=$n ;;
+        3) pn=$n ;;
+        esac
+    done
+    args.areas[0].tables[0].rows[0]=(
+        fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+        fontcolor=${prefpp.fgcolor} backgroundcolor=${prefpp.bgcolor}
+        typeset -A cells=(
+            [0]=(
+                contents="Count"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='#FFFFFF' backgroundcolor='#333333'
+                justify=1 columns=1 url='' info=''
+            )
+            [1]=(
+                contents="Description"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='#FFFFFF' backgroundcolor='#333333'
+                justify=-1 columns=1 url='' info=''
+            )
+        )
+    )
+    args.areas[0].tables[0].rows[1]=(
+        fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+        fontcolor=${prefpp.fgcolor} backgroundcolor=${prefpp.bgcolor}
+        typeset -A cells=(
+            [0]=(
+                contents="$an"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#CCCCCC'
+                justify=1 columns=1 url='' info=''
+            )
+            [1]=(
+                contents="number of assets"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#CCCCCC'
+                justify=-1 columns=1 url=$url1 info='click to show all assets'
+            )
+        )
+    )
+    args.areas[0].tables[0].rows[2]=(
+        fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+        fontcolor=${prefpp.fgcolor} backgroundcolor=${prefpp.bgcolor}
+        typeset -A cells=(
+            [0]=(
+                contents="$un"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#EEEEEE'
+                justify=1 columns=1 url='' info=''
+            )
+            [1]=(
+                contents="unresponsive assets"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#EEEEEE'
+                justify=-1 columns=1 url="$url2=Ping.Packet"
+                info='click to show all connectivity alarms'
+            )
+        )
+    )
+    args.areas[0].tables[0].rows[3]=(
+        fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+        fontcolor=${prefpp.fgcolor} backgroundcolor=${prefpp.bgcolor}
+        typeset -A cells=(
+            [0]=(
+                contents="$tn"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#CCCCCC'
+                justify=1 columns=1 url='' info=''
+            )
+            [1]=(
+                contents="assets with threshold alarms"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#CCCCCC'
+                justify=-1 columns=1 url="$url2=Threshold.Alarm"
+                info='click to show all threshold alarms'
+            )
+        )
+    )
+    args.areas[0].tables[0].rows[4]=(
+        fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+        fontcolor=${prefpp.fgcolor} backgroundcolor=${prefpp.bgcolor}
+        typeset -A cells=(
+            [0]=(
+                contents="$pn"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#EEEEEE'
+                justify=1 columns=1 url='' info=''
+            )
+            [1]=(
+                contents="assets with profile alarms"
+                fontname=${prefpp.fontfamily} fontsize=${prefpp.fontsize}
+                fontcolor='black' backgroundcolor='#EEEEEE'
+                justify=-1 columns=1 url="$url2=Profile.Alarm"
+                info='click to show all profile alarms'
+            )
+        )
+    )
+    IFS="$ifs"
+
+    vg_dq_vt_toolhelper args >> generic.list
+
+    sed -E 's/^(table.* {)/\1 margin:auto; /' dashboard.4.css > dashboard.4.tmp
+    mv dashboard.4.tmp dashboard.4.css
+
+    return 0
+}
+
+querydata=(
+    args=(
+        dtools='inv alarm stat alarmstat'
+        vtools='generic alarmstatchart'
+    )
+    dt_inv=(
+        poutlevel=s
+        soutlevel=
+        runinparallel=y
+    )
+    dt_alarm=(
+        inlevels=o
+    )
+    dt_stat=(
+        inlevels=o
+    )
+    dt_alarmstat=(
+        inlevels=o
+    )
+
+    vt_generic=(
+        funcs=(
+            run=runfunc
+        )
+    )
+    vt_alarmstatchart=(
+        statchartnextqid='_str_alarmstattab'
+    )
+)

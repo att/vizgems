@@ -1,0 +1,66 @@
+# this shell script specifies the list of locations to upload
+# data to. it must set the variables ALARMSYS CLEARSYS STATSYS EMAILSYS
+# to either 'NONE' for no propagation or to a QUOTED, SPACE-SEPARATED
+# line of the form:
+#     "user1@server1:dir1 user2@server2:dir2 ..."
+# where:
+#     'user' is the user name on the remote system
+#     'server' is the name or ip address of the remote system
+#     'dir' is the directory name to upload to
+# example:
+#     ALARMSYS="alpweb1:/export/home/swift/vizgems/data/system/incoming"
+#     CLEARSYS="swift@alpweb2:/export/home/swift/vizgems/data/system/incoming"
+# NOTE: this mechanism uses SSH to copy data, so SSH to these remote
+# systems must be enabled
+
+# systems to send alarm records to
+ALARMSYS=NONE
+
+# systems to send alarm clear records to
+CLEARSYS=NONE
+
+# systems to send stat records to
+STATSYS=NONE
+
+# systems to send configuration manager updates to
+CMSYS=NONE
+
+# control the sending emails of alarms
+# enable by setting it to:
+# EMAILSYS=localhost:smtp
+EMAILSYS=NONE
+
+# propagation parameters
+# NOTE: setting any parameters increases the load on the system
+# use only when absolutely necessary
+#
+# when a remote server must receive only a subset of all the data on this
+# server, the following variables can be set to specify the constraints of
+# the feed.
+# the subscripts in these arrays must match the user and server strings
+# for this feed:
+#
+# STATPARAMS["user1@server1"]=(
+#   level_c="acme|att"
+#   level_o="abc123"
+# )
+# there should be only one entry per asset level (c, o, etc)
+#
+# the configuration manager parameters support an exclude field
+# set that field to a space separated list of file types to prevent
+# files of that type from being propagated:
+#
+# CMPARAMS["user1@server1"]=(
+#   exclude='business customer passwd group account'
+# )
+# currently the supported file types are:
+# filter alarmemail profile threshold favorites passwd group account
+# preferences customer business location type
+
+typeset -A ALARMPARAMS STATPARAMS CMPARAMS
+
+# network speed in bits per second of this system
+TRANSRATE=1000000
+
+# max number of parallel transfer jobs
+TRANSJOBS=8
