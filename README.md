@@ -1,4 +1,4 @@
-AST
+VizGEMS
 ===
 
 This is the AT&amp;T VizGEMS system from AT&amp;T Research.
