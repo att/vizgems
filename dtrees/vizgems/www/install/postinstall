@@ -2,6 +2,10 @@
 
 touch accounts/current
 
+rm -f .dbm*
+find . -name .htaccess_sample | while read i; do
+    rm $i ${i%_sample}
+done
 rm -f proj/vg/cgi-bin-members/vg_dateselect.cgi*
 rm -f proj/vg/cgi-bin-members/vg_launch.cgi*
 rm -f proj/vg/cgi-bin-members/vg_lss.cgi*

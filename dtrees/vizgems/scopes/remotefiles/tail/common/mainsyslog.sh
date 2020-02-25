@@ -14,10 +14,12 @@ for p in syslog messages; do
     typeset -n rr=rules[$f]
     [[ $rr == '' ]] && continue
 
+    mint=${ printf '%(%#)T'; }
+    (( mint -= 12 * 60 * 60 ))
     maxt=${ printf '%(%#)T'; }
-    (( maxt += 30 * 60 ))
+    (( maxt += 10 * 60 ))
     typeset -A counts txts
-    ./vgtail /var/log/$p "" ./$f.$n | while read -r line; do
+    ./vgtail /var/log/$p "" ./$f.$n.$p | while read -r line; do
         [[ $line != @($datere1|$datere2)*:* ]] && continue
 
         line=${line// +( )/ }
@@ -33,6 +35,7 @@ for p in syslog messages; do
         fi
 
         id=${line%%' '*}
+        [[ $id == localhost ]] && id=${TAILHOST:-$id}
         line=${line#*' '}
         tool=${line%%' '*}
         txt=${line#*' '}
@@ -47,6 +50,7 @@ for p in syslog messages; do
         counted=${rr.counted}
 
         exclude=n
+        [[ $txt == '' ]] && exclude=y
         for (( i = 0; ; i++ )) do
             typeset -n rrx=rules[$f].exclude[$i]
             [[ $rrx == '' ]] && break
@@ -79,20 +83,27 @@ for p in syslog messages; do
             t=${ printf '%(%#)T' "$time"; }
             if (( t > maxt )) then
                 t=$maxt
+            elif (( t < mint )) then
+                t=$mint
             fi
             enc=${ printf '%#H' "$txt"; }
 
             if [[ $counted == y ]] then
-                txts["$id:$tool:ALARM:$sev:$tmode:SYSLOG:$enc"]="ID=$id:AID=$tool:TYPE=ALARM:SEV=$sev:TMODE=$tmode:TECH=SYSLOG:TI=$t:TXT=$enc"
-                (( counts["$id:$tool:ALARM:$sev:$tmode:SYSLOG:$enc"]++ ))
+                k="$id:$tool:ALARM:$sev:$tmode:SYSLOG:$enc"
+                txts[$k]="ID=$id:AID=$tool:TYPE=ALARM:SEV=$sev:TMODE=$tmode:TECH=SYSLOG:TI=$t:TXT=$enc"
+                (( counts[$k]++ ))
             else
+                set -f
                 print -r "ID=$id:AID=$tool:TYPE=ALARM:SEV=$sev:TMODE=$tmode:TECH=SYSLOG:TI=$t:TXT=$enc"
+                set +f
             fi
         fi
     done
 
+    set -f
     for k in "${!counts[@]}"; do
         print -r "${txts[$k]} [VG:${counts[$k]}]"
     done
+    set +f
     unset counts txts
 done

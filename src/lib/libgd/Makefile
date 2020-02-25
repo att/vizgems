@@ -6,11 +6,6 @@ if CC.HOSTTYPE == "darwin.i386*"
 	.SOURCE.h: /usr/X11/include/freetype2
 end
 
-if CC.HOSTTYPE == "win*.*"
-	BGDWIN32 == 1
-	WIN32_DLL == 1
-end
-
 CCFLAGS += $$(CC.DLL)
 
 gd 1.0 :LIBRARY: gd.c gd_gd.c gd_gd2.c gd_gif_in.c gd_gif_out.c gd_io.c \

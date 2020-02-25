@@ -1,9 +1,9 @@
 #
 # This is the main Apache HTTP server configuration file.  It contains the
 # configuration directives that give the server its instructions.
-# See <URL:http://httpd.apache.org/docs/2.2> for detailed information.
+# See <URL:http://httpd.apache.org/docs/2.4/> for detailed information.
 # In particular, see 
-# <URL:http://httpd.apache.org/docs/2.2/mod/directives.html>
+# <URL:http://httpd.apache.org/docs/2.4/mod/directives.html>
 # for a discussion of each configuration directive.
 #
 # Do NOT simply read the instructions in here without understanding
@@ -23,12 +23,13 @@
 # configuration, error, and log files are kept.
 #
 # Do not add a slash at the end of the directory path.  If you point
-# ServerRoot at a non-local disk, be sure to point the LockFile directive
-# at a local disk.  If you wish to share the same ServerRoot for multiple
-# httpd daemons, you will need to change at least LockFile and PidFile.
+# ServerRoot at a non-local disk, be sure to specify a local disk on the
+# Mutex directive, if file-based mutexes are used.  If you wish to share the
+# same ServerRoot for multiple httpd daemons, you will need to change at
+# least PidFile.
 #
 ServerRoot "SWIFT_CFG_DWWWDIR"
-PidFile SWIFT_CFG_DWWWDIR/logs/httpd.pid
+PidFile "SWIFT_CFG_DWWWDIR/logs/httpd.pid"
 
 #
 # Listen: Allows you to bind Apache to specific IP addresses and/or
@@ -40,6 +41,9 @@ PidFile SWIFT_CFG_DWWWDIR/logs/httpd.pid
 #
 #Listen 12.34.56.78:80
 Listen SWIFT_CFG_WPORT
+
+# add a limit to how long queries can run
+Timeout 600
 
 #
 # Dynamic Shared Object (DSO) Support
@@ -53,47 +57,79 @@ Listen SWIFT_CFG_WPORT
 # Example:
 # LoadModule foo_module modules/mod_foo.so
 #
-LoadModule version_module modules/mod_version.so
 LoadModule actions_module modules/mod_actions.so
 LoadModule alias_module modules/mod_alias.so
-LoadModule asis_module modules/mod_asis.so
+LoadModule allowmethods_module modules/mod_allowmethods.so
 LoadModule auth_basic_module modules/mod_auth_basic.so
-LoadModule authn_dbm_module modules/mod_authn_dbm.so
-<IfVersion == /2.2.*/>
-LoadModule authn_default_module modules/mod_authn_default.so
-</IfVersion>
-<IfVersion == /2.4.*/>
+LoadModule auth_digest_module modules/mod_auth_digest.so
+LoadModule authn_anon_module modules/mod_authn_anon.so
 LoadModule authn_core_module modules/mod_authn_core.so
-</IfVersion>
+LoadModule authn_dbd_module modules/mod_authn_dbd.so
+LoadModule authn_dbm_module modules/mod_authn_dbm.so
 LoadModule authn_file_module modules/mod_authn_file.so
-LoadModule authz_dbm_module modules/mod_authz_dbm.so
-<IfVersion == /2.2.*/>
-LoadModule authz_default_module modules/mod_authz_default.so
-</IfVersion>
-<IfVersion == /2.4.*/>
+LoadModule authn_socache_module modules/mod_authn_socache.so
 LoadModule authz_core_module modules/mod_authz_core.so
-</IfVersion>
+LoadModule authz_dbd_module modules/mod_authz_dbd.so
+LoadModule authz_dbm_module modules/mod_authz_dbm.so
 LoadModule authz_groupfile_module modules/mod_authz_groupfile.so
 LoadModule authz_host_module modules/mod_authz_host.so
+LoadModule authz_owner_module modules/mod_authz_owner.so
 LoadModule authz_user_module modules/mod_authz_user.so
 LoadModule autoindex_module modules/mod_autoindex.so
-LoadModule cgi_module modules/mod_cgi.so
+LoadModule cache_module modules/mod_cache.so
+LoadModule cache_disk_module modules/mod_cache_disk.so
+LoadModule data_module modules/mod_data.so
+LoadModule dbd_module modules/mod_dbd.so
 LoadModule deflate_module modules/mod_deflate.so
 LoadModule dir_module modules/mod_dir.so
+LoadModule dumpio_module modules/mod_dumpio.so
+LoadModule echo_module modules/mod_echo.so
 LoadModule env_module modules/mod_env.so
+LoadModule expires_module modules/mod_expires.so
+LoadModule ext_filter_module modules/mod_ext_filter.so
 LoadModule filter_module modules/mod_filter.so
 LoadModule headers_module modules/mod_headers.so
 LoadModule include_module modules/mod_include.so
+LoadModule info_module modules/mod_info.so
 LoadModule log_config_module modules/mod_log_config.so
+LoadModule logio_module modules/mod_logio.so
+LoadModule mime_magic_module modules/mod_mime_magic.so
 LoadModule mime_module modules/mod_mime.so
+<IfModule !mpm_prefork_module>
+LoadModule mpm_prefork_module modules/mod_mpm_prefork.so
+</IfModule>
 LoadModule negotiation_module modules/mod_negotiation.so
+LoadModule remoteip_module modules/mod_remoteip.so
+LoadModule reqtimeout_module modules/mod_reqtimeout.so
 LoadModule rewrite_module modules/mod_rewrite.so
 LoadModule setenvif_module modules/mod_setenvif.so
+LoadModule slotmem_plain_module modules/mod_slotmem_plain.so
+LoadModule slotmem_shm_module modules/mod_slotmem_shm.so
+LoadModule socache_dbm_module modules/mod_socache_dbm.so
+LoadModule socache_memcache_module modules/mod_socache_memcache.so
+LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
 SWIFT_CFG_WUSESSL LoadModule ssl_module modules/mod_ssl.so
 LoadModule status_module modules/mod_status.so
+LoadModule substitute_module modules/mod_substitute.so
+LoadModule suexec_module modules/mod_suexec.so
+LoadModule unique_id_module modules/mod_unique_id.so
+<IfModule !unixd_module>
+LoadModule unixd_module modules/mod_unixd.so
+</IfModule>
+LoadModule userdir_module modules/mod_userdir.so
+LoadModule version_module modules/mod_version.so
+LoadModule vhost_alias_module modules/mod_vhost_alias.so
 
-<IfModule !mpm_netware_module>
-<IfModule !mpm_winnt_module>
+<IfModule mpm_worker_module>
+   LoadModule cgid_module modules/mod_cgid.so
+</IfModule>
+<IfModule mpm_event_module>
+   LoadModule cgid_module modules/mod_cgid.so
+</IfModule>
+<IfModule mpm_prefork_module>
+   LoadModule cgi_module modules/mod_cgi.so
+</IfModule>
+
 #
 # If you wish httpd to run as a different user or group, you must run
 # httpd as root initially and it will switch.  
@@ -104,9 +140,6 @@ LoadModule status_module modules/mod_status.so
 #
 User SWIFT_CFG_USR
 Group SWIFT_CFG_GRP
-
-</IfModule>
-</IfModule>
 
 # 'Main' server configuration
 #
@@ -134,7 +167,25 @@ ServerAdmin SWIFT_CFG_WEMAIL
 #
 # If your host doesn't have a registered DNS name, enter its IP address here.
 #
+#ServerName www.example.com:80
 ServerName SWIFT_CFG_WHOST:SWIFT_CFG_WPORT
+
+#
+# Deny access to the entirety of your server's filesystem. You must
+# explicitly permit access to web content directories in other 
+# <Directory> blocks below.
+#
+<Directory />
+    AllowOverride none
+    Require all denied
+</Directory>
+
+#
+# Note that from this point forward you must specifically allow
+# particular features to be enabled - so if something's not working as
+# you might expect, make sure that you have specifically enabled it
+# below.
+#
 
 #
 # DocumentRoot: The directory out of which you will serve your
@@ -144,65 +195,14 @@ ServerName SWIFT_CFG_WHOST:SWIFT_CFG_WPORT
 DocumentRoot "SWIFT_CFG_DWWWDIR/htdocs"
 
 #
-# Each directory to which Apache has access can be configured with respect
-# to which services and features are allowed and/or disabled in that
-# directory (and its subdirectories). 
+# Relax access to content within /var/www.
 #
-# First, we configure the "default" to be a very restrictive set of 
-# features.  
-#
-<Directory />
-    Options FollowSymLinks
-    AllowOverride None
-    Order deny,allow
-    Deny from all
-</Directory>
-
-<Location />
-    # Insert filter
-    SetOutputFilter DEFLATE
-
-    # Netscape 4.x has some problems...
-    BrowserMatch ^Mozilla/4 gzip-only-text/html
-
-    # Netscape 4.06-4.08 have some more problems
-    BrowserMatch ^Mozilla/4\.0[678] no-gzip
-
-    # MSIE masquerades as Netscape, but it is fine
-    BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
-    # Don't compress images
-    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png)$ no-gzip dont-vary
-
-    # Make sure proxies don't deliver the wrong content
-    Header append Vary User-Agent env=!dont-vary
-</Location> 
-
-#
-# Note that from this point forward you must specifically allow
-# particular features to be enabled - so if something's not working as
-# you might expect, make sure that you have specifically enabled it
-# below.
-#
-
 <Directory "SWIFT_CFG_DWWWDIR">
-
-    Options Indexes FollowSymLinks
-    AllowOverride All
-    Order allow,deny
-    Allow from all
-#    AuthUserFile SWIFT_CFG_DWWWDIR/.passwd
-#    AuthGroupFile SWIFT_CFG_DWWWDIR/.group
-    AuthBasicProvider dbm
-    AuthDBMType DB
-    AuthzDBMType DB
-    AuthDBMGroupFile SWIFT_CFG_DWWWDIR/.dbm
-    AuthDBMUserFile SWIFT_CFG_DWWWDIR/.dbm
-
+    AllowOverride none
+    Require all denied
 </Directory>
 
-#
-# This should be changed to whatever you set DocumentRoot to.
-#
+# Further relax access to the default document root:
 <Directory "SWIFT_CFG_DWWWDIR/htdocs">
     #
     # Possible values for the Options directive are "None", "All",
@@ -213,7 +213,7 @@ DocumentRoot "SWIFT_CFG_DWWWDIR/htdocs"
     # doesn't give it to you.
     #
     # The Options directive is both complicated and important.  Please see
-    # http://httpd.apache.org/docs/2.2/mod/core.html#options
+    # http://httpd.apache.org/docs/2.4/mod/core.html#options
     # for more information.
     #
     Options Indexes FollowSymLinks
@@ -223,15 +223,43 @@ DocumentRoot "SWIFT_CFG_DWWWDIR/htdocs"
     # It can be "All", "None", or any combination of the keywords:
     #   Options FileInfo AuthConfig Limit
     #
-    AllowOverride All
+    AllowOverride all
 
     #
     # Controls who can get stuff from this server.
     #
-    Order allow,deny
-    Allow from all
-
+    Require all granted
 </Directory>
+<Directory "SWIFT_CFG_DWWWDIR/htdocs/proj">
+    AllowOverride all
+SWIFT_CFG_WUSESWM    SetEnvIf Cookie "attSWMAUTH=" SWMACCESS=1
+SWIFT_CFG_WUSEATTE    SetEnvIf Cookie "attESHr=" ATTEACCESS=1
+SWIFT_CFG_WUSECLOUD    SetEnvIf Cookie "iPlanetDirectoryPro=" CLOUDACCESS=1
+SWIFT_CFG_WUSEEBIG    SetEnvIf Cookie "ECCUser=" EBIGACCESS=1
+SWIFT_CFG_WUSESWM    Require env SWMACCESS
+SWIFT_CFG_WUSEATTE    Require env ATTEACCESS
+SWIFT_CFG_WUSECLOUD    Require env CLOUDACCESS
+SWIFT_CFG_WUSEEBIG    Require env ATTEACCESS
+    Require ip SWIFT_CFG_WCOOKIEIP
+</Directory>
+<Directory "SWIFT_CFG_DWWWDIR/htdocs/members">
+    AllowOverride all
+SWIFT_CFG_WUSESWM    SetEnvIf Cookie "attSWMAUTH=" SWMACCESS=1
+SWIFT_CFG_WUSEATTE    SetEnvIf Cookie "attESHr=" ATTEACCESS=1
+SWIFT_CFG_WUSECLOUD    SetEnvIf Cookie "iPlanetDirectoryPro=" CLOUDACCESS=1
+SWIFT_CFG_WUSEEBIG    SetEnvIf Cookie "ECCUser=" EBIGACCESS=1
+SWIFT_CFG_WUSESWM    Require env SWMACCESS
+SWIFT_CFG_WUSEATTE    Require env ATTEACCESS
+SWIFT_CFG_WUSECLOUD    Require env CLOUDACCESS
+SWIFT_CFG_WUSEEBIG    Require env ATTEACCESS
+    Require ip SWIFT_CFG_WCOOKIEIP
+</Directory>
+
+DefaultRuntimeDir "SWIFT_CFG_DWWWDIR/run"
+Header set Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+Header set X-Content-Type-Options "nosniff"
+Header set X-XSS-Protection "1; mode=block"
+Header set X-Frame-Options "sameorigin"
 
 #
 # DirectoryIndex: sets the file that Apache will serve if a directory
@@ -245,11 +273,9 @@ DocumentRoot "SWIFT_CFG_DWWWDIR/htdocs"
 # The following lines prevent .htaccess and .htpasswd files from being 
 # viewed by Web clients. 
 #
-<FilesMatch "^\.ht">
-    Order allow,deny
-    Deny from all
-    Satisfy All
-</FilesMatch>
+<Files ".ht*">
+    Require all denied
+</Files>
 
 #
 # ErrorLog: The location of the error log file.
@@ -287,13 +313,13 @@ LogLevel warn
     # define per-<VirtualHost> access logfiles, transactions will be
     # logged therein and *not* in this file.
     #
-    CustomLog "logs/access_log" common
+    #CustomLog "logs/access_log" common
 
     #
     # If you prefer a logfile with access, agent, and referer information
     # (Combined Logfile Format) you can use the following directive.
     #
-    #CustomLog "logs/access_log" combined
+    CustomLog "logs/access_log" combined
 </IfModule>
 
 <IfModule alias_module>
@@ -328,48 +354,35 @@ LogLevel warn
 
 </IfModule>
 
-<IfModule cgid_module>
-    #
-    # ScriptSock: On threaded servers, designate the path to the UNIX
-    # socket used to communicate with the CGI daemon of mod_cgid.
-    #
-    #Scriptsock logs/cgisock
-</IfModule>
-
 #
-# "SWIFT_CFG_DWWWDIR/cgi-bin" should be changed to whatever your ScriptAliased
+# "/var/www/cgi-bin" should be changed to whatever your ScriptAliased
 # CGI directory exists, if you have that configured.
 #
 <Directory "SWIFT_CFG_DWWWDIR/cgi-bin">
-    AllowOverride All
-    Options None
-    Order allow,deny
-    Allow from all
+    AllowOverride all
+    Options ExecCGI
+    Require all granted
 </Directory>
 <Directory "SWIFT_CFG_DWWWDIR/cgi-bin-members">
-    AllowOverride All
-    Options None
-    Order allow,deny
-    Allow from all
+    AllowOverride all
+    Options ExecCGI
+SWIFT_CFG_WUSESWM    SetEnvIf Cookie "attSWMAUTH=" SWMACCESS=1
+SWIFT_CFG_WUSEATTE    SetEnvIf Cookie "attESHr=" ATTEACCESS=1
+SWIFT_CFG_WUSECLOUD    SetEnvIf Cookie "iPlanetDirectoryPro=" CLOUDACCESS=1
+SWIFT_CFG_WUSEEBIG    SetEnvIf Cookie "ECCUser=" EBIGACCESS=1
+SWIFT_CFG_WUSESWM    Require env SWMACCESS
+SWIFT_CFG_WUSEATTE    Require env ATTEACCESS
+SWIFT_CFG_WUSECLOUD    Require env CLOUDACCESS
+SWIFT_CFG_WUSEEBIG    Require env ATTEACCESS
+    Require ip SWIFT_CFG_WCOOKIEIP
 </Directory>
-
-#
-# DefaultType: the default MIME type the server will use for a document
-# if it cannot otherwise determine one, such as from filename extensions.
-# If your server contains mostly text or HTML documents, "text/plain" is
-# a good value.  If most of your content is binary, such as applications
-# or images, you may want to use "application/octet-stream" instead to
-# keep browsers from trying to display binary files as though they are
-# text.
-#
-DefaultType text/plain
 
 <IfModule mime_module>
     #
     # TypesConfig points to the file containing the list of mappings from
     # filename extension to MIME-type.
     #
-    TypesConfig conf/mime.types
+    TypesConfig SWIFT_CFG_DWWWDIR/conf/mime.types
 
     #
     # AddType allows you to add to or override the MIME configuration
@@ -408,16 +421,27 @@ DefaultType text/plain
     # To parse .shtml files for server-side includes (SSI):
     # (You will also need to add "Includes" to the "Options" directive.)
     #
-    #AddType text/html .shtml
-    #AddOutputFilter INCLUDES .shtml
+    AddType text/html .shtml
+    AddOutputFilter INCLUDES .shtml
 </IfModule>
 
 #
-# The mod_mime_magic module allows the server to use various hints from the
-# contents of the file itself to determine its type.  The MIMEMagicFile
-# directive tells the module where the hint definitions are located.
+# Specify a default charset for all content served; this enables
+# interpretation of all content as UTF-8 by default.  To use the 
+# default browser choice (ISO-8859-1), or to allow the META tags
+# in HTML content to override this choice, comment out this
+# directive:
 #
-#MIMEMagicFile conf/magic
+AddDefaultCharset UTF-8
+
+<IfModule mime_magic_module>
+    #
+    # The mod_mime_magic module allows the server to use various hints from the
+    # contents of the file itself to determine its type.  The MIMEMagicFile
+    # directive tells the module where the hint definitions are located.
+    #
+    MIMEMagicFile SWIFT_CFG_DWWWDIR/conf/magic
+</IfModule>
 
 #
 # Customizable error responses come in three flavors:
@@ -429,74 +453,35 @@ DefaultType text/plain
 #ErrorDocument 404 "/cgi-bin/missing_handler.pl"
 #ErrorDocument 402 http://www.example.com/subscription_info.html
 #
-SWIFT_CFG_WUSESWM ErrorDocument 401 "/cgi-bin/vg_swmaccess.cgi"
-SWIFT_CFG_WUSESWM ErrorDocument 403 "/cgi-bin/vg_swmaccess.cgi"
-
-#
-# MaxRanges: Maximum number of Ranges in a request before
-# returning the entire resource, or one of the special
-# values 'default', 'none' or 'unlimited'.
-# Default setting is to accept 200 Ranges.
-#MaxRanges unlimited
+ErrorDocument 401 /cgi-bin/vg_swmaccess.cgi
+ErrorDocument 403 /cgi-bin/vg_swmaccess.cgi
+ErrorDocument 404 /cgi-bin/vg_swmaccess.cgi
 
 #
 # EnableMMAP and EnableSendfile: On systems that support it, 
-# memory-mapping or the sendfile syscall is used to deliver
+# memory-mapping or the sendfile syscall may be used to deliver
 # files.  This usually improves server performance, but must
 # be turned off when serving from networked-mounted 
 # filesystems or if support for these functions is otherwise
 # broken on your system.
+# Defaults if commented: EnableMMAP On, EnableSendfile Off
 #
 #EnableMMAP off
-#EnableSendfile off
+EnableSendfile on
 
 # Supplemental configuration
 #
-# The configuration files in the conf/extra/ directory can be 
-# included to add extra features or to modify the default configuration of 
-# the server, or you may simply copy their contents here and change as 
-# necessary.
-
-# Server-pool management (MPM specific)
-#Include conf/extra/httpd-mpm.conf
-
-# Multi-language error messages
-#Include conf/extra/httpd-multilang-errordoc.conf
-
-# Fancy directory listings
-#Include conf/extra/httpd-autoindex.conf
-
-# Language settings
-#Include conf/extra/httpd-languages.conf
-
-# User home directories
-#Include conf/extra/httpd-userdir.conf
-
-# Real-time info on requests and configuration
-#Include conf/extra/httpd-info.conf
-
-# Virtual hosts
-#Include conf/extra/httpd-vhosts.conf
-
-# Local access to the Apache HTTP Server Manual
-#Include conf/extra/httpd-manual.conf
-
-# Distributed authoring and versioning (WebDAV)
-#Include conf/extra/httpd-dav.conf
-
-# Various default settings
-#Include conf/extra/httpd-default.conf
-
-# Secure (SSL/TLS) connections
-SWIFT_CFG_WUSESSL Include conf/extra/httpd-ssl.conf
-#
-# Note: The following must must be present to support
-#       starting without SSL on platforms with no /dev/random equivalent
-#       but a statically compiled-in mod_ssl.
-#
-<IfModule ssl_module>
-SSLRandomSeed startup builtin
-SSLRandomSeed connect builtin
-</IfModule>
+# Load config files in the "/etc/httpd/conf.d" directory, if any.
+#IncludeOptional conf.d/*.conf
 
 Include SWIFT_CFG_DWWWDIR/conf/swift/*.conf
+
+<IfModule ssl_module>
+Header set Cache-Control "no-store"
+SSLEngine on
+SSLProtocol TLSv1.2
+SSLCipherSuite aRSA:kRSA:AES128-CBC:SHA
+SSLSessionCache "shmcb:SWIFT_CFG_DWWWDIR/logs/ssl_scache(512000)"
+SSLCertificateFile "SWIFT_CFG_DWWWDIR/conf/server.crt"
+SSLCertificateKeyFile "SWIFT_CFG_DWWWDIR/conf/server.key"
+</IfModule>

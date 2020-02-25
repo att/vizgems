@@ -8,25 +8,27 @@ function vg_inv_inc_fileinfo {
     case $inname in
     *-LEVELS*.txt)
         tim=${inname%.txt}
-        tim=${tim#*-LEVELS}
-        tim=${tim#.}
+        tim=${tim%*-LEVELS}
+        tim=${tim#.*}
+        ov.outname=${inname%%.*}.txt
         if [[ $tim == '' ]] then
             ov.date=$(printf '%(%Y.%m.%d)T')
         else
             ov.date=${tim:0:4}.${tim:5:2}.${tim:8:2}
+            ov.outname=KEEP${inname:11}
         fi
-        ov.outname=${inname%%.*}.txt
         ;;
     *-inv*.txt)
         tim=${inname%.txt}
-        tim=${tim#*-inv}
-        tim=${tim#.}
+        tim=${tim%*-inv}
+        tim=${tim%.*}
+        ov.outname=KEEP$inname
         if [[ $tim == '' ]] then
             ov.date=$(printf '%(%Y.%m.%d)T')
         else
             ov.date=${tim:0:4}.${tim:5:2}.${tim:8:2}
+            ov.outname=KEEP${inname:11}
         fi
-        ov.outname=KEEP${inname%%.*}.txt
         ;;
     esac
 

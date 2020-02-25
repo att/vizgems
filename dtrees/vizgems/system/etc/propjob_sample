@@ -38,8 +38,9 @@ export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
 export VGPERMDIR=SWIFT_CFG_DPSYSTEMDIR
 
 export LC_ALL=C LANG=C
-
 PATH=$PATH:/usr/sbin:/sbin
+[[ -x SWIFT_CFG_DSYSTEMDIR/etc/local_env ]] && \
+. SWIFT_CFG_DSYSTEMDIR/etc/local_env
 
 args=all
 if [[ $1 == group* || $1 == all ]] then

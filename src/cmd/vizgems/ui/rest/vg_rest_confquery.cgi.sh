@@ -44,7 +44,13 @@ if ! sdpmpjobcntl rest ${SWIFTRESTJOBMAX:-16} || ! sdpmpstartjob; then
 fi
 
 typeset -l lfmt
+
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
 rest=$QUERY_STRING
+if [[ $rest == *$ill* ]] then
+    print -r -u2 "SWIFT ERROR rest: illegal characters in QUERY_STRING"
+    exit 1
+fi
 kind=${rest%%'/'*}
 rest=${rest#"$kind"'/'}
 fmt=${rest%%'/'*}

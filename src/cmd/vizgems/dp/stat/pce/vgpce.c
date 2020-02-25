@@ -220,16 +220,29 @@ int main (int argc, char **argv) {
                 if (!(rp = ruleinsert (parp->sl_spec)))
                     goto write;
         }
-        if (!rp && (s = strchr (sdata.s_key, '.'))) {
-            memset (skey, 0, SZ_key);
-            memcpy (skey, sdata.s_key, s - sdata.s_key);
-            if (!(parp = sl_profilefind (
-                sdata.s_level, sdata.s_id, skey
-            )))
-                goto write;
-            if (!(rp = ruleinsert (parp->sl_spec)))
-                goto write;
+        if (!rp) {
+            if ((s = strchr (sdata.s_key, '.'))) {
+                memset (skey, 0, SZ_key);
+                memcpy (skey, sdata.s_key, s - sdata.s_key);
+                if (!(parp = sl_profilefind (
+                    sdata.s_level, sdata.s_id, skey
+                )))
+                    goto write;
+                if (!(rp = ruleinsert (parp->sl_spec)))
+                    goto write;
+            } else {
+                memset (skey, 0, SZ_key);
+                memccpy (skey, sdata.s_key, 0, SZ_key);
+                if (!(parp = sl_profilefind (
+                    sdata.s_level, sdata.s_id, skey
+                )))
+                    goto write;
+                if (!(rp = ruleinsert (parp->sl_spec)))
+                    goto write;
+            }
         }
+        if (!rp)
+            goto write;
         if (!np) {
             if (!(np = nodeinsert (
                 sdata.s_level, sdata.s_id, sdata.s_key, sdata.s_label

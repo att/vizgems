@@ -30,7 +30,13 @@ if ! sdpmpjobcntl rest ${SWIFTRESTJOBMAX:-16} || ! sdpmpstartjob; then
 fi
 
 typeset -l lfmt
+
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
 rest=$QUERY_STRING
+if [[ $rest == *$ill* ]] then
+    print -r -u2 "SWIFT ERROR rest: illegal characters in QUERY_STRING"
+    exit 1
+fi
 kind=${rest%%'/'*}
 rest=${rest#"$kind"'/'}
 fmt=${rest%%'/'*}
@@ -54,16 +60,23 @@ if swmuseringroups 'vg_att_admin'; then
     canshowsecretattrs=y
 fi
 
+qid=
 case $kind in
-level) qid=         ;;
-inv)   qid=invtab   ;;
-stat)  qid=stattab  ;;
-alarm) qid=alarmtab ;;
+level*(lite)) qid=rest_level ;; # unused
+inv*(lite))   qid=rest_inv   ;;
+stat*(lite))  qid=rest_stat  ;;
+alarm*(lite)) qid=rest_alarm ;;
+data*(lite))  qid=rest_data  ;;
 *)
     errors[${#errors[@]}]="unknown data kind $kind"
     qid=
     ;;
 esac
+restmode=1
+if [[ $qid != '' && $kind == *lite ]] then
+    restmode=2
+fi
+export RESTMODE=$restmode
 
 typeset -A args
 mode=default
@@ -199,11 +212,11 @@ fi
 
 export DQVTOOLS=n DQSRC=rest DQMODE=$mode DQLOD=$dqlod
 case $kind in
-level)
+level*)
     file=$SWIFTDATADIR/data/main/latest/processed/total/LEVELS-nodes.dds
     MODE=$style ddsprint -pso vg_rest_data_level.printer.so $file
     ;;
-inv)
+inv*)
     export SHOWATTRS=${showattrs:-0} SHOWMAPS=${showmaps:-0}
     export POUTLEVEL=${poutlevel:-o} SOUTLEVEL=${soutlevel}
     SAVEDATA=y $SHELL vg_dq_run < vars.lst > out
@@ -225,7 +238,7 @@ inv)
     fi
     MODE=$style ddsprint -pso vg_rest_data_inv.printer.so $file
     ;;
-stat)
+stat*)
     $SHELL vg_dq_run < vars.lst > out
     for file in stat.dds stat_[0-9]*.dds; do
         [[ ! -f $file ]] && continue
@@ -233,8 +246,51 @@ stat)
         MODE=$style ddsprint -pso vg_rest_data_stat.printer.so $file
     done
     ;;
-alarm)
+alarm*)
     $SHELL vg_dq_run < vars.lst > out
+    for file in alarm.dds; do
+        [[ ! -f $file ]] && continue
+        print "$tsep"
+        MODE=$style ddsprint -pso vg_rest_data_alarm.printer.so $file
+    done
+    ;;
+data*)
+    export SHOWATTRS=${showattrs:-0} SHOWMAPS=${showmaps:-0}
+    export POUTLEVEL=${poutlevel:-o} SOUTLEVEL=${soutlevel}
+    SAVEDATA=y $SHELL vg_dq_run < vars.lst > out
+    if [[ -f iedge.dds ]] then
+        file=iedge.dds
+    else
+        file=inode.dds
+    fi
+    print "$tsep"
+    . ./dq_main_data.sh
+    rdir=${dq_main_data.rdir}
+    export INVEDGEATTRFILE=$rdir/inv-edges.dds
+    export INVNODEATTRFILE=$rdir/inv-nodes.dds
+    export INVMAPFILE=$rdir/inv-maps-uniq.dds
+    if [[ $showsecretattrs != y ]] then
+        export HIDEATTRRE='(scope_user|scope_pass|scope_snmpcommunity)'
+    else
+        unset HIDEATTRRE
+    fi
+
+    MODE=$style ddsprint -pso vg_rest_data_inv.printer.so $file
+
+    case $lfmt in
+    json) print "," ;;
+    esac
+
+    for file in stat.dds stat_[0-9]*.dds; do
+        [[ ! -f $file ]] && continue
+        print "$tsep"
+        MODE=$style ddsprint -pso vg_rest_data_stat.printer.so $file
+    done
+
+    case $lfmt in
+    json) print "," ;;
+    esac
+
     for file in alarm.dds; do
         [[ ! -f $file ]] && continue
         print "$tsep"

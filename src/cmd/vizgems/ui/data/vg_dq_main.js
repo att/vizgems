@@ -71,12 +71,12 @@ function dq_settimer (newtimerrate) {
     return  // NOT REACHED
   }
 
-  dq_timer = setTimeout ('dq_alarm ()', dq_timerrate * 60000)
+  dq_timer = setTimeout (function () { dq_alarm (); }, dq_timerrate * 60000)
 }
 function dq_alarm () {
   if ((dq_mdivisup == true || vg_bdivisup == true) && dq_timer != null) {
     // popup or dropdown menu is up - postpone timer
-    dq_timer = setTimeout ('dq_alarm ()', dq_timerrate * 60000)
+    dq_timer = setTimeout (function () { dq_alarm (); }, dq_timerrate * 60000)
     return
   }
 
@@ -321,7 +321,7 @@ function dq_mdivshow (u, e, aflag) {
     dq_mdivplace (0.1)
     if (typeof dq_mdivtid != "undefined")
       clearTimeout (dq_mdivtid)
-    dq_mdivtid = setTimeout ('dq_mdivanim ()', 20)
+    dq_mdivtid = setTimeout (function () { dq_mdivanim (); }, 20)
   } else
     dq_mdivplace (1.0)
 
@@ -346,7 +346,7 @@ function dq_mdivanim () {
   dq_mdivel.style.height = 'auto'
   } else {
     dq_mdivplace (dq_mdivanimarray[dq_mdivanimstepi])
-    dq_mdivtid = setTimeout ('dq_mdivanim ()', 20)
+    dq_mdivtid = setTimeout (function () { dq_mdivanim (); }, 20)
   }
 }
 

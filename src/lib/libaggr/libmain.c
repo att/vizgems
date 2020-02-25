@@ -1567,6 +1567,9 @@ AGGRserver_t *AGGRserverget (char *namep) {
     struct sockaddr_in sin;
     int cfd;
 
+    if (strlen (namep + 7) >= PATH_MAX)
+        return NULL;
+
     strcpy (host, namep + 7);
     *(strchr (host, '/')) = 0;
     if ((asp = dtmatch (asdict, host))) {

@@ -62,7 +62,8 @@ int main (int argc, char **argv) {
             splicemode = opt_info.num;
             continue;
         case -300:
-            kp = strdup (opt_info.arg);
+            if (!(kp = strdup (opt_info.arg)))
+                SUerror ("tigerextract", "cannot copy argument value for -a");
             if (!(vp = strchr (kp, '=')))
                 SUerror ("tigerextract", "bad argument for -a option");
             *vp++ = 0;

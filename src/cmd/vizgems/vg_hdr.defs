@@ -3,7 +3,7 @@
 #
 # DO NOT CHANGE THE NUMERIC IDS IN ANY OF THESE FIELDS
 #
-VAR|S_VERSION|all|"8.12"
+VAR|S_VERSION|all|"10.02"
 
 VAR|EDGESEP|all|"_swsep_"
 
@@ -130,6 +130,10 @@ FUN|simpleenc|C|int (char *istr, char *ostr, int size, char *sstr) {
     for (is = istr, os = ostr; *is; is++) {
         if (os - ostr + 2 > size)
             return -1;
+        if (*is == '	') {
+            *os++ = '\\\\', *os++ = 't';
+            continue;
+        }
         for (s1 = sstr; *s1; s1++)
             if (*is == *s1)
                 break;
@@ -149,6 +153,10 @@ FUN|simpledec|C|int (char *istr, char *ostr, int size, char *sstr) {
         if (os - ostr > size)
             return -1;
         if (*is == '\\\\') {
+            if (*(is + 1) == 't') {
+                *os++ = '	', is++;
+                continue;
+            }
             for (s1 = sstr; *s1; s1++)
                 if (*(is + 1) == *s1)
                     break;
@@ -290,7 +298,6 @@ FUN|urlenc|KSH|{
         s=${s//$'\\r'/' '}
         s=${s//__P__/%25}
     fi
-
 
     print -r -- "$s"
 }

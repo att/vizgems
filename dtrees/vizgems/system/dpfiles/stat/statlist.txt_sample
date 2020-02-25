@@ -1,18 +1,37 @@
 collection|Collection|Collection|avg|100.0|
+apps_completed|Applications Completed|Applications Completed|avg|n|
+apps_failed|Applications Failed|Applications Failed|avg|n|
+apps_killed|Applications Killed|Applications Killed|avg|n|
+apps_pending|Applications Pending|Applications Pending|avg|n|
+apps_running|Applications Running|Applications Running|avg|n|
+apps_submitted|Applications Submitted|Applications Submitted|avg|n|
+containers_allocated|Containers Allocated|Containers Allocated|avg|n|
+containers_pending|Containers Pending|Containers Pending|avg|n|
+containers_reserved|Containers Reserved|Containers Reserved|avg|n|
+cpu_delta|Cpu Delta (All)|Cpu Delta (%s)|avg|n|
 cpu_sys|CPU System (All)|CPU System (%s)|avg|100.0|
 cpu_used|CPU Used (All)|CPU Used (%s)|avg|100.0|si_cpudescr
 cpu_usr|CPU User (All)|CPU User (%s)|avg|100.0|
 cpu_util|Cpu_util (All)|Cpu_util (%s)|avg|100.0|
 cpu_wait|CPU I/O Wait (All)|CPU I/O Wait (%s)|avg|100.0|
+disk_allocation|Dsk Allocation (All)|Dsk Allocation (%s)|avg|n|
+disk_capacity|Dsk Capacity (All)|Dsk Capacity (%s)|avg|n|
+disk_device_allocation|Dsk Dev Allocation (All)|Dsk Dev Allocation (%s)|avg|n|
+disk_device_capacity|Dsk Dev Capacity (All)|Dsk Dev Capacity (%s)|avg|n|
+disk_device_read_bytes_rate|Dsk Dev Read Bytes Rate (All)|Dsk Dev Read Bytes Rate (%s)|avg|n|
 disk_device_read_bytes|Dsk Dev Read Bytes (All)|Dsk Dev Read Bytes (%s)|avg|n|
+disk_device_read_requests_rate|Dsk Dev Read Reqs Rate (All)|Dsk Dev Read Reqs Rate (%s)|avg|n|
 disk_device_read_requests|Dsk Dev Read Reqs (All)|Dsk Dev Read Reqs (%s)|avg|n|
+disk_device_usage|Dsk Dev Usage (All)|Dsk Dev Usage (%s)|avg|n|
+disk_device_write_bytes_rate|Dsk Dev Write Bytes Rate (All)|Dsk Dev Write Bytes Rate (%s)|avg|n|
 disk_device_write_bytes|Dsk Dev Write Bytes (All)|Dsk Dev Write Bytes (%s)|avg|n|
+disk_device_write_requests_rate|Dsk Dev Write Reqs Rate (All)|Dsk Dev Write Reqs Rate (%s)|avg|n|
 disk_device_write_requests|Dsk Dev Write Reqs (All)|Dsk Dev Write Reqs (%s)|avg|n|
 disk_read_bytes_rate|Dsk Read Bytes Rate (All)|Dsk Read Bytes Rate (%s)|avg|n|
 disk_read_bytes|Dsk Read Bytes (All)|Dsk Read Bytes (%s)|avg|n|
 disk_read_requests_rate|Dsk Read Reqs Rate (All)|Dsk Read Reqs Rate (%s)|avg|n|
 disk_read_requests|Dsk Read Reqs (All)|Dsk Read Reqs (%s)|avg|n|
-disk_status|Disk Status|Disk Status|avg|n|
+disk_usage|Dsk Usage (All)|Dsk Usage (%s)|avg|n|
 disk_write_bytes_rate|Dsk Write Bytes Rate (All)|Dsk Write Bytes Rate (%s)|avg|n|
 disk_write_bytes|Dsk Write Bytes (All)|Dsk Write Bytes (%s)|avg|n|
 disk_write_requests_rate|Dsk Write Reqs Rate (All)|Dsk Write Reqs Rate (%s)|avg|n|
@@ -22,9 +41,24 @@ fc_inwords|In FC Words (All)|In FC Words (%s)|sum|n|si_idescr
 fc_outfr|Out Frames (All)|Out Frames (%s)|avg|n|si_idescr
 fc_outwords|Out FC Words (All)|Out FC Words (%s)|sum|n|si_idescr
 fs_used|FS Used (SUM)|FS Used (%s)|avg|y|si_fs
+io_bw|I/O Throughput (All)|I/O Throughput (%s)|avg|n|
+io_input|Input / sec (All)|Input / sec (%s)|avg|n|
+io_latency|I/O Latency (All)|I/O Latency (%s)|avg|n|
+io_output|Output / sec (All)|Output / sec (%s)|avg|n|
+io_queuedepth|Queue Depth (All)|Queue Depth (%s)|avg|n|
+io_readop|usec / Read Op (All)|usec / Read Op (%s)|avg|n|
+io_read|Reads / sec (All)|Reads / sec (%s)|avg|n|
+io_writeop|usec / Write Op (All)|usec / Write Op (%s)|avg|n|
+io_write|Writes / sec (All)|Writes / sec (%s)|avg|n|
+load|Load Average|Load Average|avg|n|
 log.application|Application Log|Application Log|sum|n|
 log.system|System Log|System Log|sum|n|
+memory_allused|All Used Memory|All Used Memory|avg|y|si_memorydescr
+memory_buffersused|Buffers Used|Buffers Used|avg|y|si_memorydescr
+memory_cacheused|Cache Used|Cache Used|avg|y|si_memorydescr
 memory_free|Free Memory|Free Memory|avg|n|si_memorydescr
+memory_resident|Memory Resident (All)|Memory Resident (%s)|avg|n|
+memory_usage|Memory Usage (All)|Memory Usage (%s)|avg|n|
 memory_used|Used Memory|Used Memory|avg|y|si_memorydescr
 memory|Memory (All)|Memory (%s)|avg|n|
 network_incoming_bytes_rate|Net Inc. Bytes Rate (All)|Net Inc. Bytes Rate (%s)|avg|n|
@@ -35,6 +69,16 @@ network_outgoing_bytes_rate|Net Out. Bytes Rate (All)|Net Out. Bytes Rate (%s)|a
 network_outgoing_bytes|Net Out. Bytes (All)|Net Out. Bytes (%s)|avg|n|
 network_outgoing_packets_rate|Net Out. Pkts Rate (All)|Net Out. Pkts Rate (%s)|avg|n|
 network_outgoing_packets|Net Out. Pkts (All)|Net Out. Pkts (%s)|avg|n|
+nodes_active|Nodes Active|Nodes Active|avg|n|
+nodes_lost|Nodes Lost|Nodes Lost|avg|n|
+nodes_unhealthy|Nodes Unhealthy|Nodes Unhealthy|avg|n|
+ntp_offset|NTP Offset|NTP Offset|avg|n|
+nvfan_util|NV Fan Speed (All)|NV Fan Speed (%s)|avg|100.0|
+nvgpu_util|NV GPU Util (All)|NV GPU Util (%s)|avg|100.0|
+nvmem_util|NV Mem Util (All)|NV Mem Util (%s)|avg|100.0|
+nvmemory_used|NV Mem Used (All)|NV Mem Used (%s)|avg|y|
+nvsensor_power|NV Power (All)|NV Power (%s)|avg|n|
+nvsensor_temp|NV Temp (All)|NV Temp (%s)|avg|n|
 os_loadavg|Load Average|Load Average|avg|n|
 os_nproc|Number of Procs|Number of Procs|avg|n|
 os_nthread|Number of Threads|Number of Threads|avg|n|
@@ -49,6 +93,9 @@ ping_time|Ping Latency|Ping Latency (%s)|avg|n|si_ip
 port_avail|Port Availability|Port Availability (%s)|avg|100.0|si_port
 port_time|Port Latency|Port Latency (%s)|avg|n|si_port
 proc_topcpu|Top Process|Top Process|max|n|
+procs|Processes|Processes|avg|n|
+queueapps_used|Queue Applications Used (All)|Queue Applications Used (%s)|avg|n|
+queuecapacity_used|Queue Capacity Used (All)|Queue Capacity Used (%s)|avg|n|
 sensor_air|Air Sensor|Air Sensor (%s)|avg|n|si_airlabel
 sensor_apower|Apparent Power|Apparent Power (%s)|sum|n|
 sensor_audio|Audio Sensor|Audio Sensor (%s)|avg|n|si_audiolabel
@@ -57,6 +104,7 @@ sensor_current|Current|Current (%s)|sum|n|
 sensor_dew|Dew Point Sensor|Dew Point Sensor (%s)|avg|n|si_dewlabel
 sensor_door|Door Sensor|Door Sensor (%s)|avg|n|si_doorlabel
 sensor_energy|Energy|Energy (%s)|sum|n|
+sensor_fan|Fan Sensor|Fan Sensor (%s)|avg|n|
 sensor_freq|Frequency|Frequency (%s)|avg|n|
 sensor_humi|Humidity Sensor|Humidity Sensor (%s)|avg|n|si_humilabel
 sensor_pf|Power Factor|Power Factor (%s)|avg|n|
@@ -65,7 +113,9 @@ sensor_pres|Pressure Sensor|Pressure Sensor (%s)|avg|n|si_preslabel
 sensor_temp|Temp Sensor|Temp Sensor (%s)|avg|n|si_templabel
 sensor_ucurrent|Unbalanced Current|Unbalanced Current (%s)|sum|n|
 sensor_volts|Voltage|Voltage (%s)|avg|n|
+sensor_wind|Wind Sensor|Wind Sensor (%s)|avg|n|
 smartdisk_attr|SMART Disk (All)|Smart Disk (%s)|avg|100.0|
+space_used|Space Used (All)|Space Used (%s)|avg|n|
 swap_used|Used Swap|Used Swap|avg|y|
 tcpip_disc|Discards|Discards (%s)|sum|n|si_idescr
 tcpip_err|Errors|Errors (%s)|sum|n|si_idescr
@@ -78,4 +128,5 @@ tcpip_outpkt|Out Packets|Out Packets (%s)|sum|n|
 url_avail|URL Availability|URL Availability|avg|100.0|
 url_diff|URL Latency Diff|URL Latency Diff|avg|n|
 url_time|URL Latency|URL Latency|avg|n|
+users|Users|Users|avg|n|
 vcpus|VCPUs (All)|VCPUs (%s)|avg|n|

@@ -1,6 +1,6 @@
 #include <ast.h>
 #include <swift.h>
-#include <json/json.h>
+#include <json.h>
 #include <stdio.h>
 
 static Sfio_t *strfp;
@@ -36,7 +36,7 @@ static void json_parse (json_object *jobj, char *path, char *key) {
     json_object *jobj2, *jarray, *jval;
     int jarrayn, jarrayi;
     Sfio_t *strfp;
-    char *npath, ibuf[100];
+    char *npath, ibuf[100], *s;
 
     if (path) {
         if (key)
@@ -60,7 +60,14 @@ static void json_parse (json_object *jobj, char *path, char *key) {
         sfprintf (sfstdout, "%ld\n", json_object_get_int64 (jobj));
         break;
     case json_type_string:
-        sfprintf (sfstdout, "'%s'\n", json_object_get_string (jobj));
+        strfp = sfstropen ();
+        for (s = (char *) json_object_get_string (jobj); *s; s++) {
+            if (*s == '$')
+                sfputc (strfp, '\\');
+            sfputc (strfp, *s);
+        }
+        sfprintf (sfstdout, "\"%s\"\n", sfstruse (strfp));
+        sfstrclose (strfp);
         break;
     case json_type_object:
         strfp = sfstropen ();
@@ -74,17 +81,10 @@ static void json_parse (json_object *jobj, char *path, char *key) {
         npath = sfstruse (strfp);
 
         sfprintf (sfstdout, "()\n");
-        for (
-            iter.entry = json_object_get_object (jobj)->head;
-            (iter.entry ? (
-                iter.key = (char *) iter.entry->k,
-                iter.val = (struct json_object *) iter.entry->v, iter.entry
-            ) : 0);
-            iter.entry = iter.entry->next
-        ) {
-            json_object_object_get_ex (jobj, iter.key, &jobj2);
-            json_parse (jobj2, npath, iter.key);
+        json_object_object_foreach (jobj, key, val) {
+            json_parse (val, npath, key);
         }
+        sfstrclose (strfp);
         break;
     case json_type_array:
         strfp = sfstropen ();

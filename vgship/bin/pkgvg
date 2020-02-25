@@ -2,27 +2,26 @@
 
 #v=$(date -f %Y-%m-%d)
 #v=$(< version)
-v=0811.2016.03.10.open
+v=1002.2020.02.25
 [[ $v == '' ]] && exit
 
 print $v
 
 rm -rf vg.*.*.v$v.* # swift.v$v.*.full.tar
 
-./bin/mksystem vg.system linux.i386-64 v$v INIT ast swift-base swift-vg
-cp -r ../terminfo vg.system.linux.i386-64.v$v.sw/lib
-
-./bin/mksnmp vg.snmp linux.i386-64 v$v
-
-./bin/mkwww vg.www linux.i386-64 v$v
-
-./bin/mkscope vg.scopes linux.i386-64 v$v
-
-rm -r vg.system.linux.i386-64.v$v.sw/www
-rm -r vg.system.linux.i386-64.v$v.sw/scopes
-rm vg.www.linux.i386-64.v$v.data/cgi-bin/jsui*
-rm vg.www.linux.i386-64.v$v.data/cgi-bin-members/sui*
-rm vg.www.linux.i386-64.v$v.data/cgi-bin-members/swm*
+for a in linux.i386-64; do
+    ./bin/mksystem vg.system $a v$v INIT ast swift-base swift-vg
+    cp -r ../terminfo vg.system.$a.v$v.sw/lib
+    ./bin/mksnmp vg.snmp $a v$v
+    ./bin/mkwww vg.www $a v$v
+    ./bin/mkscope vg.scopes $a v$v
+    rm -r vg.system.$a.v$v.sw/www
+    rm -r vg.system.$a.v$v.sw/scopes
+    rm vg.www.$a.v$v.data/cgi-bin-members/sui*
+    rm vg.www.$a.v$v.data/cgi-bin-members/swm*
+    mkdir -p vg.system.$a.v$v.sw/src/cmd
+    cp -rp ../src/cmd/vizgems vg.system.$a.v$v.sw/src/cmd
+done
 
 for i in vg.*.data vg.*.sw; do
     ./bin/mkfilelist $i
@@ -30,17 +29,19 @@ done
 
 ./bin/mktgz vg.*.*.v$v.*
 
-(
-    for i in vg.*.linux.i386-64.v$v.*.tgz; do
-        print ";;;$i;$i"
-    done
-    print ";;;vg.system.linux.i386-64.v$v.sw/bin/ksh;ksh"
-    print ";;;../vginstall/vgkshinstall;vgkshinstall"
-    print ";;;../vginstall/vginstalladdons;vginstalladdons"
-    print ";;;../vginstall/vgfileconfig;vgfileconfig"
-    print ";;;../vginstall/vginstall;vginstall"
-    print ";;;../rpms/rpms.linux.i386-64;rpms"
-) | pax -wvf vg.full.linux.i386-64.v$v.tar -x tar --filter=-
+for a in linux.i386-64; do
+    (
+        for i in vg.*.$a.v$v.*.tgz; do
+            print ";;;$i;$i"
+        done
+        print ";;;vg.system.$a.v$v.sw/bin/ksh;ksh"
+        print ";;;../vginstall/vgkshinstall;vgkshinstall"
+        print ";;;../vginstall/vginstalladdons;vginstalladdons"
+        print ";;;../vginstall/vgfileconfig;vgfileconfig"
+        print ";;;../vginstall/vginstall;vginstall"
+        print ";;;../rpms/rpms.$a;rpms"
+    ) | pax -wvf vg.full.$a.v$v.tar -x tar --filter=-
+done
 
 for i in vg.*.tgz; do
     print removing ${i%.tgz}

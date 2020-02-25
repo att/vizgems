@@ -2,7 +2,7 @@
 
 LICENSE = since=1996,author=ek
 
-if CC.HOSTTYPE == "darwin.i386*"
+if CC.HOSTTYPE == "darwin.i386*" || CC.HOSTTYPE == "freebsd12.amd64*"
 	FEATURE_NO64FS == 1
 end
 

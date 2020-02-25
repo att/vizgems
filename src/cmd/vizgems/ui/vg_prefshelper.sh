@@ -1,6 +1,6 @@
 
 ph_data=(
-    title="AT&amp;T Visualizer 8.12"
+    title="AT&amp;T Visualizer 10.02"
     host=$(uname -n)
     styles=()
     browser=FF pid='' bannermenu='' htmldir='' cgidir='' opencgidir=''
@@ -68,6 +68,7 @@ function ph_init { # $1=pid $2=bannermenu
     [[ ${pgp.replacebanner} == */* ]] && pgp.replacebanner=''
     [[ ${pgp.replacebannerimage} == */* ]] && pgp.replacebannerimage=''
     [[ ${pgp.replacesdivtab} == */* ]] && pgp.replacesdivtab=''
+    [[ ${pgp.replacetitle} != '' ]] && ph_data.title=${pgp.replacetitle}
     typeset -n ppp=vg.style.page
     typeset -n pbp=vg.style.banner
     typeset -n psp=vg.style.sdiv
@@ -1140,11 +1141,14 @@ function ph_emitbodyfooter { # $1=class $2=width
         print "</a>"
         print "<br>"
     fi
-    print "&copy; 2006-$(printf '%(%Y)T') AT&amp;T. All rights reserved."
     print "</div>"
     print "</div>"
     if [[ ${pgp.appendbodyfooter} != '' ]] then
         $SHELL $SWIFTDATADIR/uifiles/pref_${pgp.appendbodyfooter} abf
+    else
+        print "<div class=page $st>"
+        print "&copy; 2006-$(printf '%(%Y)T') AT&amp;T. All rights reserved."
+        print "</div>"
     fi
 }
 

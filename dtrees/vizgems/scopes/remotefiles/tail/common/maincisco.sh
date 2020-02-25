@@ -61,6 +61,9 @@ set -o noglob
         aid=net.link type=ALARM sev=4 tmode=keep
         [[ $txt == *' to up'* ]] && type=CLEAR
         ;;
+    *purity.audit:*pureuser*)
+        continue
+        ;;
     *)
         aid= type=ALARM sev=1 tmode=keep
         ;;

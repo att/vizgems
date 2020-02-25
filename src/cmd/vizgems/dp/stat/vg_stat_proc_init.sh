@@ -15,4 +15,14 @@ function vg_stat_proc_init {
     gv.raw2ddsjobs=16
 
     typeset +n gv
+
+    if [[ $ACCEPTOLDINCOMING == '' ]] then
+        if [[ -f $VGMAINDIR/dpfiles/config.sh ]] then
+            . $VGMAINDIR/dpfiles/config.sh
+        fi
+        export ACCEPTOLDINCOMING=${ACCEPTOLDINCOMING:-n}
+        if [[ $ACCEPTOLDINCOMING == +([0-9]) ]] then
+            ACCEPTOLDINCOMING=${ACCEPTOLDINCOMING}d
+        fi
+    fi
 }

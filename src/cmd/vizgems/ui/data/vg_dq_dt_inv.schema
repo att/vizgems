@@ -1,9 +1,0 @@
-name dq_dt_inv
-field cat short
-field type short
-field level1 char 4
-field id1 char 64
-field level2 char 4
-field id2 char 64
-field class1 short
-field class2 short

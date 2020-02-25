@@ -1,4 +1,10 @@
 
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+if [[ $REQUEST_URI == *$ill* ]] then
+    print -r -u2 "SWIFT ERROR swmgetinfo: illegal characters in REQUEST_URI"
+    exit 1
+fi
+
 export SWMROOT=${SWMROOT:-${DOCUMENT_ROOT%/htdocs}}
 
 id=${REMOTE_USER:-$SWMIDOVERRIDE}
@@ -8,6 +14,12 @@ if [[ $id == '' && $SWMWSWMACCESS == y && $HTTP_COOKIE == *attSWMAUTH* ]] then
     code=${code%%\;*}
     suffix=${code//[!A-Za-z0-9_]/''}
     cachefile=$SWMROOT/tmp/$REMOTE_ADDR.${suffix:0:32}
+    if [[ $HTTP_X_FORWARDED_FOR != '' ]] then
+        cachefile=$SWMROOT/tmp/$HTTP_X_FORWARDED_FOR.${suffix:0:32}
+    fi
+    if [[ ! -f $cachefile && -f $SWMROOT/tmp/0.0.0.0.${suffix:0:32} ]] then
+        cachefile=$SWMROOT/tmp/0.0.0.0.${suffix:0:32}
+    fi
     now_ts=$(printf '%(%#)T')
     if [[ $code != '' && -f $cachefile ]] then
         command . $cachefile 2> /dev/null
@@ -25,15 +37,13 @@ if [[ $id == '' && $SWMWSWMACCESS == y && $HTTP_COOKIE == *attSWMAUTH* ]] then
     fi
     if [[ $id == '' ]] then
         authurl="/cgi-bin/vg_swmaccess.cgi?url=$(printf '%#H' "$REQUEST_URI")"
-        print "Content-type: text/html\n"
+        print "Content-type: text/html"
+        print "Status: 401 Unauthorized\n"
         print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
         print "<html>"
-        print "<head></head>"
-        print "<body>"
-        print "<script>"
-        print "location.href = '$authurl'"
-        print "</script>"
-        print "</body>"
+        print "<head>"
+        print "<meta http-equiv='refresh' content='0; URL=$authurl' />"
+        print "</head>"
         print "</html>"
         exit 0
     else
@@ -71,7 +81,10 @@ if [[ $id == '' && $SWMWBDACCESS == y && $HTTP_COOKIE == *SWIFT_CODE* ]] then
     fi
 fi
 
-if [[ $id == '' && $SWMWCLOUDACCESS == y && $HTTP_COOKIE == *iPlanetDirectoryPro* ]] then
+if [[
+    $id == '' && $SWMWCLOUDACCESS == y &&
+    $HTTP_COOKIE == *iPlanetDirectoryPro*
+]] then
     code=${HTTP_COOKIE##*iPlanetDirectoryPro=}
     code=${code%%\;*}
     code=${code//'"'/}
@@ -142,17 +155,14 @@ if [[ $id == '' && $SWMWATTEACCESS == y && $HTTP_COOKIE == *attESHr* ]] then
         else
             desturl=http://$HTTP_HOST
         fi
-        desturl+="/$REQUEST_URI"
-        print "Content-type: text/html\n"
+        desturl+="/$(printf '%#H' "$REQUEST_URI")"
+        print "Content-type: text/html"
+        print "Status: 401 Unauthorized\n"
         print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
         print "<html>"
-        print "<head></head>"
-        print "<body>"
-        print "<script>"
-        print "s = '$authurl?retURL=' + escape('$desturl') + '&sysName=VizGEMS'"
-        print "location.href = s"
-        print "</script>"
-        print "</body>"
+        print "<head>"
+        print "<meta http-equiv='refresh' content='0; URL=$authurl?retURL=$desturl&sysName=VizGEM' />"
+        print "</head>"
         print "</html>"
         exit 0
     else

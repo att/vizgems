@@ -249,7 +249,6 @@ files=(
         description="list of URLs to probe"
     )
 
-
 #    hosts=(
 #        name=hosts
 #        location=$VGFILES_HOSTSFILE

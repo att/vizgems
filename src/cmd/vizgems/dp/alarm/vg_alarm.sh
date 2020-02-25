@@ -83,6 +83,7 @@ xml)
         if (( $(wc -c < $1) > ALARMSPLITFILESIZE )) then
             print -u2 SWIFT WARNING splitting large alarm file $1 $(ls -lh $1)
             d=${1%/*}
+            [[ $1 != */* ]] && d=.
             split -C $(( $ALARMSPLITFILESIZE / 2 )) -a 4 $1 $1.
             if [[ $? == 0 ]] then
                 n=0
@@ -109,7 +110,10 @@ xml)
     d1="$date-00:00:00"
     d2="$date-23:59:59"
     export MINTIME=$(( $(printf '%(%#)T' "$d1") - 6 * 30 * 24 * 60 * 60 ))
-    export MAXTIME=$(( $(printf '%(%#)T' "$d2") + 1 * 24 * 60 * 60 ))
+    export MAXTIME=$(( $(printf '%(%#)T' "$d2") + 10 * 60 ))
+    if (( MAXTIME > $(printf '%(%#)T') + 15 * 60 )) then
+        (( MAXTIME = $(printf '%(%#)T') + 15 * 60 ))
+    fi
 
     export LEVELMAPFILE=LEVELS-maps.dds
     export INVMAPFILE=inv-maps.dds

@@ -46,6 +46,10 @@ static int mode, first = TRUE;
 #define MODE_CSV 1
 #define MODE_XML 2
 #define MODE_JSN 3
+
+#define RESTMODE_FULL 1
+#define RESTMODE_LITE 2
+static int restmode;
 }
 BEGIN{
     char *modestr;
@@ -57,18 +61,31 @@ BEGIN{
         mode = MODE_JSN;
     else
         mode = MODE_CSV, sep = "|";
+    restmode = atoi (getenv ("RESTMODE"));
 
     switch (mode) {
     case MODE_CSV:
-        sfprintf (
-            sfstdout,
-            "scope%salarmid%sccid%sstate%ssmode%svariables%sdateissued%s"
-            "hourissued%stimecleared%stimeissued%stype%ssortorder%spmode%s"
-            "level1%sid1%slevel2%sid2%stmode%sseverity%stext%scomment%sorigmsg"
-            "\n",
-            sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep,
-            sep, sep, sep, sep, sep, sep, sep, sep
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "scope%salarmid%sccid%sstate%ssmode%svariables%sdateissued%s"
+                "hourissued%stimecleared%stimeissued%stype%ssortorder%spmode%s"
+                "level1%sid1%slevel2%sid2%stmode%sseverity%stext%scomment%s"
+                "origmsg\n",
+                sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep,
+                sep, sep, sep, sep, sep, sep, sep, sep
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "alarmid%sccid%sstate%ssmode%stimecleared%stimeissued%stype%s"
+                "level1%sid1%slevel2%sid2%stmode%sseverity%s"
+                "text%scomment"
+                "\n",
+                sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep, sep,
+                sep, sep
+            );
+        }
         break;
     case MODE_JSN:
         sfprintf (sfstdout, "\"alarms\":[\n");
@@ -78,16 +95,26 @@ BEGIN{
 {
     switch (mode) {
     case MODE_CSV:
-        sfprintf (
-            sfstdout,
-            "%s%s%s%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%d%s%s%s%s%s"
-            "%s%s%s%s%d%s%d%s%s%s%s%s%s\n",
-            scope, sep, alarmid, sep, ccid, sep, state, sep, smode, sep,
-            variables, sep, dateissued, sep, hourissued, sep, timecleared, sep,
-            timeissued, sep, type, sep, sortorder, sep, pmode, sep, level1, sep,
-            id1, sep, level2, sep, id2, sep, tmode, sep, severity, sep, text,
-            sep, comment, sep, origmsg
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "%s%s%s%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%d%s%s%s%s%s"
+                "%s%s%s%s%d%s%d%s%s%s%s%s%s\n",
+                scope, sep, alarmid, sep, ccid, sep, state, sep, smode, sep,
+                variables, sep, dateissued, sep, hourissued, sep, timecleared,
+                sep, timeissued, sep, type, sep, sortorder, sep, pmode, sep,
+                level1, sep, id1, sep, level2, sep, id2, sep, tmode, sep,
+                severity, sep, text, sep, comment, sep, origmsg
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "%s%s%s%s%d%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s\n",
+                alarmid, sep, ccid, sep, state, sep, smode, sep, timecleared,
+                sep, timeissued, sep, type, sep, level1, sep, id1, sep, level2,
+                sep, id2, sep, tmode, sep, severity, sep, text, sep, comment
+            );
+        }
         break;
     case MODE_XML:
         VG_urlenc (scope, buf_scope, sizeof (buf_scope));
@@ -101,29 +128,52 @@ BEGIN{
         VG_urlenc (text, buf_text, sizeof (buf_text));
         VG_urlenc (comment, buf_comment, sizeof (buf_comment));
         VG_urlenc (origmsg, buf_origmsg, sizeof (buf_origmsg));
-        sfprintf (
-            sfstdout,
-            "<alarm>"
-            "<sid>%s</sid><aid>%s</aid>"
-            "<ccid>%s</ccid><st>%s</st><sm>%s</sm>"
-            "<vars>%s</vars>"
-            "<di>%s</di><hi>%s</hi>"
-            "<tc>%d</tc><ti>%d</ti>"
-            "<tp>%s</tp><so>%s</so><pm>%s</pm>"
-            "<lv1>%s</lv1><id1>%s</id1><lv2>%s</lv2><id2>%s</id2>"
-            "<tm>%s</tm><sev>%d</sev>"
-            "<txt>%s</txt><com>%s</com><origmsg>%s</origmsg>"
-            "</alarm>\n",
-            buf_scope, buf_alarmid,
-            buf_ccid, statemap[state], modemap[smode],
-            buf_variables,
-            dateissued, hourissued,
-            timecleared, timeissued,
-            typemap[type], sordermap[sortorder], VG_ALARM_S_PMODE_PASSTHROUGH,
-            buf_level1, buf_id1, buf_level2, buf_id2,
-            modemap[tmode], severity,
-            buf_text, buf_comment, buf_origmsg
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "<alarm>"
+                "<sid>%s</sid><aid>%s</aid>"
+                "<ccid>%s</ccid><st>%s</st><sm>%s</sm>"
+                "<vars>%s</vars>"
+                "<di>%s</di><hi>%s</hi>"
+                "<tc>%d</tc><ti>%d</ti>"
+                "<tp>%s</tp><so>%s</so><pm>%s</pm>"
+                "<lv1>%s</lv1><id1>%s</id1><lv2>%s</lv2><id2>%s</id2>"
+                "<tm>%s</tm><sev>%d</sev>"
+                "<txt>%s</txt><com>%s</com><origmsg>%s</origmsg>"
+                "</alarm>\n",
+                buf_scope, buf_alarmid,
+                buf_ccid, statemap[state], modemap[smode],
+                buf_variables,
+                dateissued, hourissued,
+                timecleared, timeissued,
+                typemap[type], sordermap[sortorder],
+                VG_ALARM_S_PMODE_PASSTHROUGH,
+                buf_level1, buf_id1, buf_level2, buf_id2,
+                modemap[tmode], severity,
+                buf_text, buf_comment, buf_origmsg
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "<alarm>"
+                "<aid>%s</aid>"
+                "<ccid>%s</ccid><st>%s</st><sm>%s</sm>"
+                "<tc>%d</tc><ti>%d</ti>"
+                "<tp>%s</tp>"
+                "<lv1>%s</lv1><id1>%s</id1><lv2>%s</lv2><id2>%s</id2>"
+                "<tm>%s</tm><sev>%d</sev>"
+                "<txt>%s</txt><com>%s</com>"
+                "</alarm>\n",
+                buf_alarmid,
+                buf_ccid, statemap[state], modemap[smode],
+                timecleared, timeissued,
+                typemap[type],
+                buf_level1, buf_id1, buf_level2, buf_id2,
+                modemap[tmode], severity,
+                buf_text, buf_comment
+            );
+        }
         break;
     case MODE_JSN:
         VG_simpleenc (scope, buf_scope, sizeof (buf_scope), "\"\\");
@@ -137,29 +187,52 @@ BEGIN{
         VG_simpleenc (text, buf_text, sizeof (buf_text), "\"\\");
         VG_simpleenc (comment, buf_comment, sizeof (buf_comment), "\"\\");
         VG_simpleenc (origmsg, buf_origmsg, sizeof (buf_origmsg), "\"\\");
-        sfprintf (
-            sfstdout,
-            "%s{"
-            "\"sid\":\"%s\",\"aid\":\"%s\","
-            "\"ccid\":\"%s\",\"st\":\"%s\",\"sm\":\"%s\","
-            "\"vars\":\"%s\","
-            "\"di\":\"%s\",\"hi\":\"%s\","
-            "\"tc\":%d,\"ti\":%d,"
-            "\"tp\":\"%s\",\"so\":\"%s\",\"pm\":\"%s\","
-            "\"lv1\":\"%s\",\"id1\":\"%s\",\"lv2\":\"%s\",\"id2\":\"%s\","
-            "\"tm\":\"%s\",\"sev\":%d,"
-            "\"txt\":\"%s\",\"com\":\"%s\",\"origmsg\":\"%s\""
-            "}\n",
-            first ? "" : ",", buf_scope, buf_alarmid,
-            buf_ccid, statemap[state], modemap[smode],
-            buf_variables,
-            dateissued, hourissued,
-            timecleared, timeissued,
-            typemap[type], sordermap[sortorder], VG_ALARM_S_PMODE_PASSTHROUGH,
-            buf_level1, buf_id1, buf_level2, buf_id2,
-            modemap[tmode], severity,
-            buf_text, buf_comment, buf_origmsg
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "%s{"
+                "\"sid\":\"%s\",\"aid\":\"%s\","
+                "\"ccid\":\"%s\",\"st\":\"%s\",\"sm\":\"%s\","
+                "\"vars\":\"%s\","
+                "\"di\":\"%s\",\"hi\":\"%s\","
+                "\"tc\":%d,\"ti\":%d,"
+                "\"tp\":\"%s\",\"so\":\"%s\",\"pm\":\"%s\","
+                "\"lv1\":\"%s\",\"id1\":\"%s\",\"lv2\":\"%s\",\"id2\":\"%s\","
+                "\"tm\":\"%s\",\"sev\":%d,"
+                "\"txt\":\"%s\",\"com\":\"%s\",\"origmsg\":\"%s\""
+                "}\n",
+                first ? "" : ",", buf_scope, buf_alarmid,
+                buf_ccid, statemap[state], modemap[smode],
+                buf_variables,
+                dateissued, hourissued,
+                timecleared, timeissued,
+                typemap[type], sordermap[sortorder],
+                VG_ALARM_S_PMODE_PASSTHROUGH,
+                buf_level1, buf_id1, buf_level2, buf_id2,
+                modemap[tmode], severity,
+                buf_text, buf_comment, buf_origmsg
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "%s{"
+                "\"aid\":\"%s\","
+                "\"ccid\":\"%s\",\"st\":\"%s\",\"sm\":\"%s\","
+                "\"tc\":%d,\"ti\":%d,"
+                "\"tp\":\"%s\","
+                "\"lv1\":\"%s\",\"id1\":\"%s\",\"lv2\":\"%s\",\"id2\":\"%s\","
+                "\"tm\":\"%s\",\"sev\":%d,"
+                "\"txt\":\"%s\",\"com\":\"%s\""
+                "}\n",
+                first ? "" : ",", buf_alarmid,
+                buf_ccid, statemap[state], modemap[smode],
+                timecleared, timeissued,
+                typemap[type],
+                buf_level1, buf_id1, buf_level2, buf_id2,
+                modemap[tmode], severity,
+                buf_text, buf_comment
+            );
+        }
         break;
     }
     first = FALSE;

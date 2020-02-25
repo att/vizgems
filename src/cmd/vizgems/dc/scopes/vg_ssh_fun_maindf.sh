@@ -1,5 +1,5 @@
 df=()
-typeset -A dfvs
+typeset -A dfvs dfseen
 
 function vg_ssh_fun_maindf_init {
     df.varn=0
@@ -29,7 +29,7 @@ function vg_ssh_fun_maindf_send {
 
     case $targettype in
     *linux*)
-        cmd="df -l -k | egrep -v '^Filesystem|^[a-zA-Z]' | egrep '%'"
+        cmd="df -P -l -k | egrep -v '^Filesystem|^[a-zA-Z]|^/dev/loop' | egrep '%'"
         ;;
     *solaris*)
         cmd="df -l -k | egrep -v '^Filesystem|^[a-rt-zA-Z]|^/proc|^/devices|^/platform/sun' | egrep '%'"
@@ -65,6 +65,10 @@ function vg_ssh_fun_maindf_receive {
         fi
         ;;
     esac
+    if [[ ${dfseen[${vs[0]}]} != '' ]] then
+        return 0
+    fi
+    dfseen[${vs[0]}]=y
     fs=${vs[$(( vn - 1 ))]}
     dfvs[fs_total.$fs]=${vs[$(( vn - 5 ))]}
     dfvs[fs_used.$fs]=${vs[$(( vn - 4 ))]}
@@ -102,7 +106,7 @@ function vg_ssh_fun_maindf_invsend {
 
     case $targettype in
     *linux*)
-        cmd="df -l -k | egrep -v '^Filesystem|^[a-zA-Z]' | egrep '%'"
+        cmd="df -P -l -k | egrep -v '^Filesystem|^[a-zA-Z]|^/dev/loop' | egrep '%'"
         ;;
     *solaris*)
         cmd="df -l -k | egrep -v '^Filesystem|^[a-rt-zA-Z]|^/proc|^/devices|^/platform/sun' | egrep '%'"
@@ -138,6 +142,10 @@ function vg_ssh_fun_maindf_invreceive {
         fi
         ;;
     esac
+    if [[ ${dfseen[${vs[0]}]} != '' ]] then
+        return 0
+    fi
+    dfseen[${vs[0]}]=y
     fs=${vs[$(( vn - 1 ))]}
     val=${vs[$(( vn - 5 ))]}
     if [[ ${df.total} == '' ]] then

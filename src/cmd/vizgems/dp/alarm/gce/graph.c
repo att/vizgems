@@ -100,7 +100,8 @@ cc_t *insertcc (char *level, char *id, int fullflag) {
             SUwarning (0, "insertcc", "insertnd failed");
             return NULL;
         }
-        ccp->ndps[ccp->ndpm]->index = ccp->ndpm++;
+        ccp->ndps[ccp->ndpm]->index = ccp->ndpm;
+        ccp->ndpm++;
     }
     ccp->ndsti = 0;
     if (!(ccp->ndsts = vmalloc (Vmheap, ccp->ndpm * sizeof (nd_t *)))) {

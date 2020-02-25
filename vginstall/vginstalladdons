@@ -224,7 +224,7 @@ for addon in $alladdons; do
         if [[ $src == @(parameter.txt|statlist.txt) ]] then
             filterfile ___tmp___/addons/$addon/files/$src $dir/$src
         else
-            if [[ $src != @(tools.txt) ]] then
+            if [[ $src != @(tools.txt|queries.txt) ]] then
                 if [[ ${files[$sdir/$src]} == y ]] then
                     msg ERROR: cannot overwrite base file $src
                     continue

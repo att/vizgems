@@ -1,6 +1,0 @@
-name inv_cc
-field ndlevel char 4
-field ndid char 64
-field cclevel char 4
-field ccid char 64
-field ndn int

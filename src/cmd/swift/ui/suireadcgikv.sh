@@ -1,6 +1,8 @@
 
 function suireadcgikv {
     typeset qs ifs k v vi i j list tmpdir
+    typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+    typeset -l vl
 
     set -f
     qslist=
@@ -53,13 +55,14 @@ function suireadcgikv {
                     qsn[${#qsn[@]}]=$vi
                 done
                 qsarrays="$qsarrays $k"
+                qslist="$qslist $k"
             else
                 v=${v//'+'/' '}
                 v=${v//@([\'\\])/'\'\1}
                 eval "v=\$'${v//'%'@(??)/'\x'\1"'\$'"}'"
                 qsn="$v"
+                qslist="$qslist $k"
             fi
-            qslist="$qslist $k"
             typeset +n qsn
         done
         IFS="$ifs"
@@ -77,6 +80,10 @@ function suireadcgikv {
             [[ ! -f $i ]] && continue
             k=${i##*/}
             k=${k#_}
+            if [[ ${k//+([!a-zA-Z0-9_])/} != $k ]] then
+                print -u2 ERROR: bad key "$k"
+                continue
+            fi
             typeset -n qsn=qs_$k
             j=0
             IFS=''
@@ -96,4 +103,49 @@ function suireadcgikv {
         ;;
     esac
     set +f
+
+    if [[ $SWIFTNOFILTER != y ]] then
+        qslist=" $qslist "
+        qsarrays=" $qsarrays "
+        for i in $qslist; do
+            k=qs_$i
+            if [[ $k == *+([!a-zA-Z0-9_])* ]] then
+                print -r -u2 "SWIFT ERROR illegal key in parameters"
+                unset $k
+                qslist=${qslist//' '$i' '/' '}
+                qsarrays=${qsarrays//' '$i' '/' '}
+                continue
+            fi
+            typeset -n v=$k
+            if [[ " "$qsarrays" " == *' '$i' '* ]] then
+                for (( j = 0; j < ${#v[@]}; j++ )) do
+                    vl=${v[$j]}
+                    vl=${vl//+([[:space:]])/}
+                    if [[ $vl == *$ill* ]] then
+                        print -r -u2 "SWIFT ERROR illegal value for key $i"
+                        unset $k
+                        qslist=${qslist//' '$i' '/' '}
+                        qsarrays=${qsarrays//' '$i' '/' '}
+                        continue
+                    fi
+                done
+            else
+                vl=$v
+                vl=${vl//+([[:space:]])/}
+                if [[ $vl == *$ill* ]] then
+                    print -r -u2 "SWIFT ERROR illegal value for key $i"
+                    unset $k
+                    qslist=${qslist//' '$i' '/' '}
+                    qsarrays=${qsarrays//' '$i' '/' '}
+                    continue
+                fi
+            fi
+        done
+        qslist=${qslist//' '+(' ')/' '}
+        qslist=${qslist#' '}
+        qslist=${qslist%' '}
+        qsarrays=${qsarrays//' '+(' ')/' '}
+        qsarrays=${qsarrays#' '}
+        qsarrays=${qsarrays%' '}
+    fi
 }

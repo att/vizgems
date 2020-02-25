@@ -8,7 +8,7 @@ $(INCLUDEDIR) :INSTALLDIR: aggr.h aggr_int.h
 
 authkey = "maggie, spin to me maggie!!!"
 key.h :
-	print "#define SWIFTAUTHKEY \"$$(swiftkeygen $(authkey))\"" > $(<)
+	echo "#define SWIFTAUTHKEY \"$$(swiftkeygen $(authkey))\"" > $(<)
 
 lib%.inst.c : gen%hdr.sh
 	$(SHELL) $(>) > $(<)

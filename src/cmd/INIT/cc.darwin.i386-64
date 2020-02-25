@@ -6,7 +6,7 @@ case " $* " in
 *" -dumpmachine "*) echo $HOSTTYPE; exit ;;
 esac
 
-CC=/usr/bin/gcc
+CC=/usr/bin/cc
 op=init
 for arg
 do	case $op in
@@ -45,7 +45,7 @@ init)	echo "cc: arguments expected" >&2
 	;;
 cpp)	$CC -E "$@"
 	;;
-cc)	$CC -g -DCLK_TCK=100 "$@"
+cc)	$CC -DCLK_TCK=100 "$@"
 	;;
 dll)	# what a compatibility mess -- surely they can get the apis to play nice
 	tmp=/tmp/cc.${USER:-$LOGNAME}.$$.err

@@ -200,6 +200,9 @@ function dq_vt_autoinvtab_run {
         typeset -n ip=dq_vt_autoinvtab_data.is.name
         dq_vt_autoinvtab_data.name=$ip
         typeset -n ip=dq_vt_autoinvtab_data.is.scope_systype
+        if [[ $ip == '' ]] then
+            typeset -n ip=dq_vt_autoinvtab_data.is.noscope_systype
+        fi
         st=$ip
         dq_vt_autoinvtab_data.st=$st
         typeset -n ip=dq_vt_autoinvtab_data.is.scope_servicelevel

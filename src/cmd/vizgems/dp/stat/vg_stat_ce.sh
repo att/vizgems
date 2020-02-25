@@ -51,7 +51,7 @@ check)
                     inv-nodes-uniq.dds \
                 | ddsload -os vg_profile.schema -le '|' -type ascii \
                     -lnts -lso vg_profile.load.so \
-                | ddssort -ke 'level id key' > $dir1/pce.rules.tmp && \
+                | ddssort -fast -ke 'level id key' > $dir1/pce.rules.tmp && \
                 mv $dir1/pce.rules.tmp $dir1/pce.rules
             elif [[ ! -f $dir1/pce.rules ]] then
                 print -u2 MESSAGE waiting for inventory files

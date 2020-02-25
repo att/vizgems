@@ -6,10 +6,17 @@ ScriptAlias /cgi-bin/ SWIFT_CFG_DWWWDIR/cgi-bin/
 ScriptAlias SWIFT_CFG_WPREFIX/cgi-bin/ SWIFT_CFG_DWWWDIR/cgi-bin/
 
 <Directory "SWIFT_CFG_DWWWDIR/proj/vg/cgi-bin-members">
-    Options +ExecCGI
-    AllowOverride All
-    Order allow,deny
-    Allow from all
+    AllowOverride all
+    Options ExecCGI
+SWIFT_CFG_WUSESWM    SetEnvIf Cookie "attSWMAUTH=" SWMACCESS=1
+SWIFT_CFG_WUSEATTE    SetEnvIf Cookie "attESHr=" ATTEACCESS=1
+SWIFT_CFG_WUSECLOUD    SetEnvIf Cookie "iPlanetDirectoryPro=" CLOUDACCESS=1
+SWIFT_CFG_WUSEEBIG    SetEnvIf Cookie "ECCUser=" EBIGACCESS=1
+SWIFT_CFG_WUSESWM    Require env SWMACCESS
+SWIFT_CFG_WUSEATTE    Require env ATTEACCESS
+SWIFT_CFG_WUSECLOUD    Require env CLOUDACCESS
+SWIFT_CFG_WUSEEBIG    Require env ATTEACCESS
+    Require ip SWIFT_CFG_WCOOKIEIP
 </Directory>
 
 TraceEnable off

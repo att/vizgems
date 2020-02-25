@@ -62,7 +62,6 @@ alarmdata_t *alarmnew (void) {
     return adp;
 }
 
-
 alarmdata_t *alarmmatchrange (alarmdata_t *fadp, rulerange_t *rrp) {
     alarmdata_t *adp, *padp;
     int n, m;

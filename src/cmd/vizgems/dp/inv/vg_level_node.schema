@@ -1,4 +1,0 @@
-name level_node
-field id char 4
-field name char 128
-field class int

@@ -1,11 +1,6 @@
 :PACKAGE: graphviz ast
 .SOURCE.a: /usr/X11/lib64
 
-if CC.HOSTTYPE == "win*.*"
-	GVDLL == 1
-	WIN32_DLL == 1
-end
-
 CCFLAGS += $$(CC.DLL)
 
 dot :: dot.c dot_builtins.c -lgv -lgraph -lgd -last

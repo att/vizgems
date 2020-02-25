@@ -2,20 +2,6 @@
 .SOURCE.h: ../libgraph
 .SOURCE.a: /usr/X11/lib64
 
-if CC.HOSTTYPE == "win*.*"
-	inline == __inline
-	GVC_EXPORTS == 1
-	GVPLUGIN_CORE_EXPORTS == 1
-	GVPLUGIN_GD_EXPORTS == 1
-	GVPLUGIN_DOT_LAYOUT_EXPORTS == 1
-	GVPLUGIN_NEATO_LAYOUT_EXPORTS == 1
-	PATHPLAN_EXPORTS == 1
-	WIN32_DLL == 1
-end
-if CC.HOSTTYPE == "sgi*.*"
-	inline == __inline
-end
-
 CCFLAGS += $$(CC.DLL)
 
 gv 1.0 :LIBRARY: gvc.c gvconfig.c gvcontext.c gvdevice.c gvevent.c gvjobs.c \

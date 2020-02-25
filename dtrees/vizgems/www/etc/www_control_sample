@@ -8,11 +8,24 @@ function add2path {
 
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH
 add2path SWIFT_CFG_SWWWDIR/current
+add2path SWIFT_CFG_DWWWDIR
+
+export WWW_HTTPDFILELOCS='/usr/sbin/httpd-prefork /usr/sbin/httpd /usr/sbin/httpd2'
+export WWW_HTPASSWDFILELOCS='/usr/bin/htpasswd /usr/bin/htpasswd2'
+if [[ $(uname -a) == *x86_64* ]] then
+    export WWW_MODULEDIRLOCS='/usr/lib64/apache2-prefork /usr/lib64/httpd/modules /usr/lib64/apache2'
+else
+    export WWW_MODULEDIRLOCS='/usr/lib/httpd/modules /usr/lib/apache2-prefork /usr/lib/apache2'
+fi
+
+if [[ -x SWIFT_CFG_DWWWDIR/etc/www_control_override ]] then
+    . SWIFT_CFG_DWWWDIR/etc/www_control_override
+fi
 
 case $1 in
 setup)
     rm -f SWIFT_CFG_DWWWDIR/bin/httpd
-    for i in /usr/sbin/httpd /usr/sbin/httpd2; do
+    for i in $WWW_HTTPDFILELOCS; do
         if [[ -x $i ]] then
             ln -s $i SWIFT_CFG_DWWWDIR/bin/httpd
             break
@@ -23,7 +36,7 @@ setup)
         exit 1
     fi
     rm -f SWIFT_CFG_DWWWDIR/bin/htpasswd
-    for i in /usr/bin/htpasswd /usr/bin/htpasswd2; do
+    for i in $WWW_HTPASSWDFILELOCS; do
         if [[ -x $i ]] then
             ln -s $i SWIFT_CFG_DWWWDIR/bin/htpasswd
             break
@@ -34,13 +47,8 @@ setup)
         exit 1
     fi
     rm -f SWIFT_CFG_DWWWDIR/modules/*
-    if [[ $(uname -a) == *x86_64* ]] then
-        dirs="/usr/lib64/httpd/modules /usr/lib64/apache2-prefork /usr/lib64/apache2"
-    else
-        dirs="/usr/lib/httpd/modules /usr/lib/apache2-prefork /usr/lib/apache2"
-    fi
     rm -f SWIFT_CFG_DWWWDIR/modules/mod_*.so
-    for dir in $dirs; do
+    for dir in $WWW_MODULEDIRLOCS; do
         for i in $dir/mod_*.so; do
             [[ ! -f $i ]] && continue
             [[ -f SWIFT_CFG_DWWWDIR/modules/${i##*/} ]] && continue
@@ -55,16 +63,8 @@ start)
     if [[ $2 == check && -f SWIFT_CFG_DWWWDIR/exit.www ]] then
         exit 0
     fi
-    if [[
-        SWIFT_CFG_DWWWDIR/accounts/current -nt \
-        SWIFT_CFG_DSYSTEMDIR/dpfiles/account.filter
-    ]] then
-        SWIFT_CFG_DWWWDIR/etc/accountdump
-    fi
-    if [[ ! -f SWIFT_CFG_DWWWDIR/.dbm ]] then
-        SWIFT_CFG_DWWWDIR/etc/loaddbm > /dev/null 2>&1
-    fi
     rm -f SWIFT_CFG_DWWWDIR/exit.www
+    rm -f SWIFT_CFG_DWWWDIR/run/*
     if [[ -x SWIFT_CFG_DWWWDIR/bin/apachectl ]] then
         SWIFT_CFG_DWWWDIR/bin/apachectl start > /dev/null 2>&1
     fi

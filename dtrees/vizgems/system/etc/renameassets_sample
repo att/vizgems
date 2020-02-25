@@ -736,7 +736,7 @@ if [[ $mode == @(all|new) ]] then
             [[ $d < ${mindate%/??} || $d > ${maxdate%/??} ]] && continue
         elif [[ $d == ???? ]] then
             [[ $d < ${mindate%/??/??} || $d > ${maxdate%/??/??} ]] && continue
-        fi 
+        fi
         print $i
     done | sort -r | while read i; do
         print date=${i#data/main/}

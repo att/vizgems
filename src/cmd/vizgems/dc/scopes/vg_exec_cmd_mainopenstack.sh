@@ -55,7 +55,17 @@ if [[ ${args[projid]} == '' ]] then
 fi
 projid=${args[projid]}
 
-authurl=$urlbase:5000/v2.0
+authversion=3
+if [[ ${args[authversion]} != '' ]] then
+    authversion=${args[authversion]}
+fi
+
+domain=default
+if [[ ${args[domain]} != '' ]] then
+    domain=${args[domain]}
+fi
+
+authurl=$urlbase:5000/v$authversion
 invurl=$urlbase:5000/v3
 computeurl=$urlbase:8774/v2
 volumeurl=$urlbase:8776/v2
@@ -84,13 +94,98 @@ typeset -A drops=(
 
 # authentication
 
+if [[ $authversion == 3 ]] then
+
+function gettokenbyname { # $1 = user $2 = pass $3 = tenant name
+    typeset user=$1 pass=$2 tenant=$3
+
+    typeset tk
+
+    touch hdr.txt
+    eval $(
+        curl -D hdr.txt -k -s -X POST \
+            -H "Content-type: application/json" -H "Accept: application/json" \
+        $authurl/auth/tokens?nocatalog -d "{
+          \"auth\": {
+            \"identity\": {
+              \"methods\": [
+                \"password\"
+              ],
+              \"password\": {
+                \"user\": {
+                  \"name\": \"$user\",
+                  \"domain\": {
+                    \"id\": \"default\"
+                  },
+                  \"password\": \"$pass\"
+                }
+              }
+            },
+            \"scope\": {
+              \"domain\": { \"id\": \"$domain\" }
+            }
+          }
+        }" | vgjson2ksh tk
+    )
+
+    uid=${tk.token.user.id}
+    aid=$( egrep X-Subject-Token: hdr.txt )
+    aid=${aid#*' '}
+    aid=${aid%$'\r'}
+    rm -f hdr.txt
+}
+
+function gettokenbyid { # $1 = user $2 = pass $3 = tenant id
+    typeset user=$1 pass=$2 tenant=$3
+
+    typeset tk
+
+    touch hdr.txt
+    eval $(
+        curl -D hdr.txt -k -s -X POST \
+            -H "Content-type: application/json" -H "Accept: application/json" \
+        $authurl/auth/tokens?nocatalog -d "{
+          \"auth\": {
+            \"identity\": {
+              \"methods\": [
+                \"password\"
+              ],
+              \"password\": {
+                \"user\": {
+                  \"name\": \"$user\",
+                  \"domain\": {
+                    \"id\": \"default\"
+                  },
+                  \"password\": \"$pass\"
+                }
+              }
+            },
+            \"scope\": {
+              \"project\": {
+                \"domain\": { \"id\": \"$domain\" },
+                \"id\": \"$tenant\"
+              }
+            }
+          }
+        }" | vgjson2ksh tk
+    )
+
+    uid=${tk.access.user.id}
+    aid=$( egrep X-Subject-Token: hdr.txt )
+    aid=${aid#*' '}
+    aid=${aid%$'\r'}
+    rm -f hdr.txt
+}
+
+else # version = 2.0
+
 function gettokenbyname { # $1 = user $2 = pass $3 = tenant name
     typeset user=$1 pass=$2 tenant=$3
 
     typeset tk
 
     eval $(
-        curl -s -X POST \
+        curl -k -s -X POST \
             -H "Content-type: application/json" -H "Accept: application/json" \
         $authurl/tokens -d "{
           \"auth\": {
@@ -113,7 +208,7 @@ function gettokenbyid { # $1 = user $2 = pass $3 = tenant id
     typeset tk
 
     eval $(
-        curl -s -X POST \
+        curl -k -s -X POST \
             -H "Content-type: application/json" -H "Accept: application/json" \
         $authurl/tokens -d "{
           \"auth\": {
@@ -130,13 +225,15 @@ function gettokenbyid { # $1 = user $2 = pass $3 = tenant id
     aid=${tk.access.token.id}
 }
 
+fi
+
 # users and groups
 
 function getgroups { # no args
     typeset gr i id name did descr
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $invurl/groups | vgjson2ksh gr
     )
@@ -159,7 +256,7 @@ function getusers { # no args
     typeset ur i id name enabled email did dpid
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $invurl/users | vgjson2ksh ur
     )
@@ -192,7 +289,7 @@ function getuserprojects { # $1 = uid
     typeset upr i pid name
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $invurl/users/$uid/projects | vgjson2ksh upr
     )
@@ -215,7 +312,7 @@ function getusergroups { # $1 = uid
     typeset ugr i gid name
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $invurl/users/$1/groups | vgjson2ksh ugr
     )
@@ -237,7 +334,7 @@ function getprojects { # no args
     typeset pr i id name enabled did descr
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $invurl/projects | vgjson2ksh pr
     )
@@ -267,7 +364,7 @@ function getnetworks { # no args
     typeset nt i j pid id name status shared state type segid external phys bid
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $networkurl/networks | vgjson2ksh nt
     )
@@ -316,7 +413,7 @@ function getsubnets { # no args
     typeset pi sip eip
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $networkurl/subnets | vgjson2ksh snt
     )
@@ -366,7 +463,7 @@ function getrouters { # no args
     typeset rt i pid id name state
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $networkurl/routers | vgjson2ksh rt
     )
@@ -395,7 +492,7 @@ function getports { # no args
     typeset ownname ownid type
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $networkurl/ports | vgjson2ksh prt
     )
@@ -458,7 +555,7 @@ function getlimits { # $1 = pid
     typeset lmt i name value
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $computeurl/$pid/limits | vgjson2ksh lmt
     )
@@ -481,7 +578,7 @@ function getimages { # $1 = pid
     typeset img i id name
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $computeurl/$pid/images | vgjson2ksh img
     )
@@ -505,7 +602,7 @@ function getimagedetails { # $1 = pid, $2 = iid
     typeset iinfo
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $computeurl/$pid/images/$iid | vgjson2ksh iinfo
     )
@@ -534,7 +631,7 @@ function getservers { # $1 = pid
     typeset srv i id name
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $computeurl/$pid/servers | vgjson2ksh srv
     )
@@ -559,7 +656,7 @@ function getserverdetails { # $1 = pid, $2 = sid
     typeset sinfo i j k nname nid stid rid vid ipv addr type mac ai
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $computeurl/$pid/servers/$sid | vgjson2ksh sinfo
     )
@@ -650,6 +747,34 @@ function getserverdetails { # $1 = pid, $2 = sid
         vid=${rr.id}
         sr.volumes[$vid]=( id=$vid )
     done
+
+    if [[ ${r.flavor.id} != '' ]] then
+        sr.fid=${r.flavor.id}
+        getflavordetails $pid $sid ${sr.fid}
+    fi
+}
+
+function getflavordetails { # $1 = pid, $2 = sid, $3 = fid
+    typeset pid=$1 sid=$2 fid=$3
+    typeset -n pr=projects[$pid]
+    typeset -n sr=projects[$pid].servers[$sid]
+
+    typeset finfo
+
+    eval $(
+        curl -k -s \
+            -H "X-Auth-Token: $aid" -H "Accept: application/json" \
+        $computeurl/$pid/flavors/$fid | vgjson2ksh finfo
+    )
+
+    typeset -n r=finfo.flavor
+    [[ $r == '' ]] && break
+
+    sr.flavor_name=${r.name}
+    sr.flavor_ram=${r.ram}
+    sr.flavor_disk=${r.disk}
+    sr.flavor_vcpus=${r.vcpus}
+    [[ ${r.swap} != '' ]] && sr.flavor_swap=${r.swap}
 }
 
 function getvolumes { # $1 = pid
@@ -659,7 +784,7 @@ function getvolumes { # $1 = pid
     typeset vol i id name
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $volumeurl/$pid/volumes | vgjson2ksh vol
     )
@@ -683,7 +808,7 @@ function getvolumedetails { # $1 = pid, $2 = vid
     typeset j
 
     eval $(
-        curl -s \
+        curl -k -s \
             -H "X-Auth-Token: $aid" -H "Accept: application/json" \
         $volumeurl/$pid/volumes/$vid | vgjson2ksh vinfo
     )
@@ -787,6 +912,7 @@ function genserver { # $1 = sid, $2 = pid, $3 = var
     [[ ${seenservers[$sid]} != '' ]] && return
     seenservers[$sid]=y
 
+    print "node|o|$sid|noscope_systype|mainvm"
     print "node|o|$sid|name|VM:${sr.name}"
     print "node|o|$sid|nodename|VM:${sr.name}"
     print "node|o|$sid|instancename|${sr.instancename}"
@@ -800,6 +926,7 @@ function genserver { # $1 = sid, $2 = pid, $3 = var
     print "node|o|$sid|hypervisor|${sr.hypervisor}"
     print "node|o|$sid|status|${sr.status}"
     print "node|o|$sid|iid|${sr.iid}"
+    print "node|o|$sid|image|${projects[$pid].images[${sr.iid}].name}"
     print "node|o|$sid|uid|${sr.uid}"
     if [[ ${sr.hypervisor} == +([0-9.]) ]] then
         print "edge|o|$sid|o|${sr.hypervisor}|ostype|vm2host"
@@ -843,6 +970,17 @@ function genserver { # $1 = sid, $2 = pid, $3 = var
         print "edge|o|$sid|o|$vid|ostype|vm2fs"
         print "edge|o|$sid|o|$vid|t|vm2fs"
     done
+
+    if [[ ${sr.fid} != '' ]] then
+        print "node|o|$sid|flavorid|${sr.fid}"
+        print "node|o|$sid|flavorname|${sr.flavor_name}"
+        print "node|o|$sid|flavorram|${sr.flavor_ram}"
+        print "node|o|$sid|flavordisk|${sr.flavor_disk}"
+        print "node|o|$sid|flavorvcpus|${sr.flavor_vcpus}"
+        if [[ ${sr.flavor_swap} != '' ]] then
+            print "node|o|$sid|flavorswap|${sr.flavor_swap}"
+        fi
+    fi
 }
 
 function genvolume { # $1 = vid $2 = var
@@ -1275,7 +1413,8 @@ function genstats { # $1 = pid
     eval $(
         url="$statsurl?q.field=timestamp&q.op=ge&q.value=$t"
         url+="&q.field=project_id&q.op=eq&q.value=$pid"
-        curl -s -H "X-Auth-Token: $aid" -H "Accept: application/json" "$url" \
+        curl -k -s -H "X-Auth-Token: $aid" \
+            -H "Accept: application/json" "$url" \
         | vgjson2ksh stats
     )
 

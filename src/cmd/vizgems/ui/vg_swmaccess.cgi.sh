@@ -77,25 +77,36 @@ fi
 
 suireadcgikv
 
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+
 if [[ $qs_mode == logout ]] then
+    url=${REQUEST_URI%%[?&]*}
+    if [[ $url == *$ill* ]] then
+        print -r -u2 "SWIFT ERROR swmaccess: illegal characters in REQUEST_URI"
+        exit 1
+    fi
     print "Content-type: text/html"
+    print "Cache-Control: no-cache, no-store, must-revalidate"
+    print "Pragma: no-cache"
+    print "Expires: 0"
     print "Set-Cookie: attSWMAUTH=; path=/\n"
     print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
     print "<html>"
-    print "<head></head>"
-    print "<body>"
-    print "<script>"
-    url=${REQUEST_URI%%[?&]*}
-    print "location.href = '$url'"
-    print "</script>"
-    print "</body>"
+    print "<head>"
+    print "<meta http-equiv='refresh' content='0; URL=$url' />"
+    print "</head>"
     print "</html>"
     exit 0
 fi
 
+remoteid=$REMOTE_ADDR
+if [[ $HTTP_X_FORWARDED_FOR != '' ]] then
+    remoteid=$HTTP_X_FORWARDED_FOR
+fi
+
 authfailed=n
 if [[ $qs_mode == @(auth|showcookie) ]] then
-    if [[ $qs_user == '' || $qs_pass == '' ]] then
+    if [[ $qs_user != +([a-zA-Z0-9_-]) || $qs_pass == '' ]] then
         exit 1
     fi
     line=$(egrep "^$qs_user:" $SWMROOT/.passwd)
@@ -121,34 +132,59 @@ if [[ $qs_mode == @(auth|showcookie) ]] then
             code=$(uuidgen)
             suffix=${code//[!A-Za-z0-9_]/''}
             cachefile=$SWMROOT/tmp/$REMOTE_ADDR.${suffix:0:32}
+            if [[ $HTTP_X_FORWARDED_FOR != '' ]] then
+                cachefile=$SWMROOT/tmp/$HTTP_X_FORWARDED_FOR.${suffix:0:32}
+            fi
+            if [[ $qs_globalcookie == y && -f $SWMROOT/globalcookieok ]] then
+                line=$(egrep "^vg_att_admin:" $SWMROOT/.group)
+                if [[ $line == *' '$user' '* || $line == *' '$user ]] then
+                    cachefile=$SWMROOT/tmp/0.0.0.0.${suffix:0:32}
+                fi
+            fi
             now_ts=$(printf '%(%#)T')
             printf 'cached_ts=%q\ncached_code=%q\ncached_id=%q\n' \
                 "$now_ts" "$code" "$user" \
             > $cachefile.$$ && mv $cachefile.$$ $cachefile
             if [[ $qs_mode == showcookie ]] then
                 print "Content-type: text/plain"
+                print "Cache-Control: no-cache, no-store, must-revalidate"
+                print "Pragma: no-cache"
+                print "Expires: 0"
                 print "Set-Cookie: attSWMAUTH=$code; path=/\n"
                 print "attSWMAUTH=$code"
                 exit 0
             fi
             print "Content-type: text/html"
+            print "Cache-Control: no-cache, no-store, must-revalidate"
+            print "Pragma: no-cache"
+            print "Expires: 0"
             print "Set-Cookie: attSWMAUTH=$code; path=/\n"
             print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
             print "<html>"
-            print "<head></head>"
-            print "<body>"
-            print "<script>"
-            if [[ $REDIRECT_URL != '' ]] then
+            if [[ $QUERY_STRING == *after_auth=* ]] then
+                url=${QUERY_STRING##*after_auth=}
+                url=${url%%'&'*}
+            elif [[ $REDIRECT_URL != '' ]] then
                 url=$REDIRECT_URL
             elif [[ $qs_url != '' ]] then
                 url=$qs_url
             else
                 url=/cgi-bin-vg-members/vg_home.cgi
             fi
-            print "location.href = '$url'"
-            print "</script>"
-            print "</body>"
+            if [[ $url == *$ill* ]] then
+                print -r -u2 "SWIFT ERROR swmaccess: illegal characters in url"
+                exit 1
+            fi
+            if [[ $url != /cgi-* || $url == *$'\n'* ]] then
+                print -u2 ERROR illegal url $url
+                exit 1
+            fi
+            print "<head>"
+            print "<meta http-equiv='refresh' content='0; URL=$url' />"
+            print "</head>"
             print "</html>"
+            rm -f $SWMROOT/tmp/badauth.$user.*
+            rm -f $SWMROOT/tmp/badauth.$remoteid.*
             exit 0
         else
             authfailed=y
@@ -156,9 +192,37 @@ if [[ $qs_mode == @(auth|showcookie) ]] then
     fi
 fi
 
+if [[ $authfailed == n ]] then
+    rm -f $SWMROOT/tmp/badauth.$user.*
+    rm -f $SWMROOT/tmp/badauth.$remoteid.*
+else
+    if [[ $user != '' ]] then
+        badie=$user
+    else
+        badie=$remoteid
+    fi
+    fail=toomany
+    for (( i = 0; i < 5; i++ )); do
+        if [[ ! -f $SWMROOT/tmp/badauth.$badie.$i ]] then
+            touch $SWMROOT/tmp/badauth.$badie.$i
+            fail=some
+            break
+        fi
+    done
+    if [[ $fail == toomany ]] then
+        print -u2 more than 5 login failures by ${user:-$remoteid}
+        sleep 60
+        rm $SWMROOT/tmp/badauth.$badie.*
+    fi
+fi
+
 tabind=1
 
-print "Content-type: text/html\n"
+print "Content-type: text/html"
+print "Status: 404 Not Found"
+print "Cache-Control: no-cache, no-store, must-revalidate"
+print "Pragma: no-cache"
+print "Expires: 0\n"
 
 export SWMID=__no_user__
 pid=default
@@ -167,28 +231,63 @@ ph_init $pid "${auth_data.bannermenu}"
 auth_init
 auth_emit_header_begin
 
-if [[ $REDIRECT_URL != '' ]] then
+if [[ $QUERY_STRING == *after_auth=* ]] then
+    url=${QUERY_STRING##*after_auth=}
+    url=${url%%'&'*}
+elif [[ $REDIRECT_URL != '' ]] then
     url="$REDIRECT_URL?$REDIRECT_QUERY_STRING"
 elif [[ $qs_url != '' ]] then
     url=$qs_url
 else
     url=/cgi-bin-vg-members/vg_home.cgi
 fi
+if [[ $url == *$ill* ]] then
+    print -r -u2 "SWIFT ERROR swmaccess: illegal characters in url"
+    exit 1
+fi
+
 helpercgi="/cgi-bin/vg_swmaccess.cgi"
+if [[ 1 == 1 ]] then
+    print "<form"
+    print "  id=doauth method=post enctype='multipart/form-data'"
+    print "  action='$helpercgi'"
+    print ">"
+    print "<input type=hidden name=mode value=auth>"
+    print "<input type=hidden id=auth_user name=user value=''>"
+    print "<input type=hidden id=auth_pass name=pass value=''>"
+    print "<input type=hidden name=url value='$url'>"
+    print "</form>"
+    print "<script>"
+    print "var auth_helper = '$helpercgi'"
+    print "function auth_login () {"
+    print "  var userel = document.getElementById ('auth_user')"
+    print "  var passel = document.getElementById ('auth_pass')"
+    print "  var formel = document.getElementById ('doauth')"
+    print "  userel.value = auth_userel.value"
+    print "  passel.value = auth_passel.value"
+    print "  formel.submit ()"
+    print "}"
+    print "</script>"
+else
+    print "<script>"
+    print "var auth_helper = '$helpercgi'"
+    print "function auth_login () {"
+    print "  var url"
+    print "  if ("
+    print "    auth_userel.value.length == 0 || auth_passel.value.length == 0"
+    print "  ) {"
+    print "    alert ('please fill out both fields first')"
+    print "    return"
+    print "  }"
+    print "  url = auth_helper + '?mode=auth'"
+    print "  url += '&user=' + auth_userel.value"
+    print "  url += '&pass=' + auth_passel.value"
+    print "  url += '&url=$url'"
+    print "  location = url"
+    print "}"
+    print "</script>"
+fi
 print "<script>"
-print "var auth_helper = '$helpercgi'"
-print "function auth_login () {"
-print "  var url"
-print "  if (auth_userel.value.length == 0 || auth_passel.value.length == 0) {"
-print "    alert ('please fill out both fields first')"
-print "    return"
-print "  }"
-print "  url = auth_helper + '?mode=auth'"
-print "  url += '&user=' + auth_userel.value"
-print "  url += '&pass=' + auth_passel.value"
-print "  url += '&url=$(printf '%#H' "$url")'"
-print "  location = url"
-print "}"
 print "function auth_checkandrun (e) {"
 print "  if (e.keyCode != 13)"
 print "    return false"
@@ -253,7 +352,7 @@ fi
 print "</td>"
 print "<td class=pageborder style='text-align:left'>"
 print "&nbsp;<input"
-print "  tabindex=$tabind class=page type=text id=user size=20"
+print "  tabindex=$tabind class=page type=text id=mainuser size=20"
 print "  title='user id, 3-12 characters' onKeyUp='auth_checkandrun(event)'"
 print ">"
 (( tabind++ ))
@@ -275,7 +374,7 @@ fi
 print "</td>"
 print "<td class=pageborder style='text-align:left'>"
 print "&nbsp;<input"
-print "  tabindex=$tabind class=page type=password id=pass size=20"
+print "  tabindex=$tabind class=page type=password id=mainpass size=20"
 print "  title='password, 4-20 characters' onKeyUp='auth_checkandrun(event)'"
 print ">"
 (( tabind++ ))
@@ -300,8 +399,8 @@ fi
 print "</table></div>"
 
 print "<script>"
-print "var auth_userel = document.getElementById ('user')"
-print "var auth_passel = document.getElementById ('pass')"
+print "var auth_userel = document.getElementById ('mainuser')"
+print "var auth_passel = document.getElementById ('mainpass')"
 print "auth_clearfields ()"
 print "auth_userel.focus ()"
 print "</script>"

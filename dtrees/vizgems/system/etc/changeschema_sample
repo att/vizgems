@@ -1,0 +1,426 @@
+#!/bin/ksh
+
+usage=$'
+[-1p1?
+@(#)$Id: changeschema (AT&T) 2017-04-10 $
+]
+[+NAME?changeschema - change the sizes of fields in the VizGEMS data schemas]
+[+DESCRIPTION?\bchangeschema\b takes (or prompts for) a new VizGEMS schema
+specification and rebuilds all the VizGEMS tools to use these new sizes.
+It can optionally convert any existing data files to the new schema sizes.]
+[200:new?points to the file containing the new schema field sizes.
+]:[new schema spec file]
+[201:old?points to the file containing the old schema field sizes.
+]:[old schema spec file]
+[202:keepdata?prevents the tool from scanning all existing data file to
+convert them to the new schema.
+]
+[203:maxjobs?specifies the number of file conversions to do in parallel.
+the default is 4.
+]#[maxjobs]
+[204:dates?specifies a range of dates to operate on.
+the default is to operate on all dates.
+]:[YYYY.MM.DD-YYYY.MM.DD]
+[999:v?increases the verbosity level. May be specified multiple times.]
+
+mapfile
+
+'
+
+function showusage {
+    OPTIND=0
+    getopts -a changeschema "$usage" opt '-?'
+}
+
+function add2path {
+    export PATH=$1/bin:$PATH
+    export FPATH=$1/fun:$FPATH
+    export SWIFT_CFG_LDLIBRARYPATH=$1/lib:$SWIFT_CFG_LDLIBRARYPATH
+}
+
+add2path SWIFT_CFG_SSYSTEMDIR/current
+[[ -x SWIFT_CFG_SSYSTEMDIR/current/bin/ksh ]] && \
+export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
+export SHELLVERSION=SWIFT_CFG_SHELLVERSION
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
+
+typeset samespecsflag=n
+
+function checkspecs { # $1 = oldspec, $2 = newspec
+    typeset oldspec=$1 newspec=$2
+    typeset -A sizes
+    typeset name size
+
+    samespecsflag=y
+
+    while read name size; do
+        sizes[$name]=$size
+    done < $oldspec
+
+    while read name size; do
+        if [[ ${sizes[$name]} == '' ]] then
+            print SWIFT MESSAGE new attribute $name $size
+            continue
+        fi
+        if (( ${sizes[$name]} > size )) then
+            print SWIFT WARNING attribute $name size smaller than before: \
+            ${sizes[$name]} / $size
+            samespecsflag=n
+        elif (( ${sizes[$name]} < size )) then
+            samespecsflag=n
+        fi
+        unset sizes["$name"]
+    done < $newspec
+
+    if (( ${#sizes[@]} != 0 )) then
+        print -u2 SWIFT ERROR attributes missing from new spec: "${!sizes[@]}"
+        samespecsflag=n
+        return 1
+    fi
+
+    return 0
+}
+
+function samespecs { # $1 = oldspec, $2 = newspec
+    typeset oldspec=$1 newspec=$2
+    typeset -A sizes
+    typeset name size
+
+    while read name size; do
+        sizes[$name]=$size
+    done < $oldspec
+
+    while read name size; do
+        if [[ ${sizes[$name]} == '' ]] then
+            return 1
+        fi
+        if [[ ${sizes[$name]} != $size ]] then
+            return 1
+        fi
+        unset sizes["$name"]
+    done < $newspec
+
+    if (( ${#sizes[@]} != 0 )) then
+        return 1
+    fi
+
+    return 0
+}
+
+function compile { # $* = nmake args
+    print -u2 SWIFT MESSAGE compiling with args: "$@"
+    if ! cd SWIFT_CFG_SSYSTEMDIR/current/src/cmd/vizgems; then
+        print -u2 \
+            SWIFT ERROR cannot cd to \
+        SWIFT_CFG_SSYSTEMDIR/current/src/cmd/vizgems
+        return 1
+    fi
+    INSTALLROOT=SWIFT_CFG_SSYSTEMDIR/current NOSWIFTTOOLS=y nmake "$@" \
+    >> $tmpdir/make.out 2>&1
+    return $?
+}
+
+typeset -A oldsigs newsigs
+
+function genconv {
+    typeset name oldschema newschema s lines field
+
+    for name in \
+        trans inv_node inv_edge inv_map inv_cc alarm stat \
+        level_node level_map profile; \
+    do
+        oldschema=$tmpdir/old/vg_${name}.schema
+        if [[ ! -f $oldschema ]] then
+            print -u2 SWIFT ERROR old schema $oldschema not found
+            return 1
+        fi
+        newschema=$tmpdir/new/vg_${name}.schema
+        if [[ ! -f $newschema ]] then
+            print -u2 SWIFT ERROR new schema $newschema not found
+            return 1
+        fi
+        typeset -A oldsizes newsizes
+        lines=
+        while read line; do
+            [[ $line != field*char* ]] && continue
+            lines+="$line"
+            field=${line#'field '}
+            field=${field%%' '*}
+            oldsizes[$field]=${line##*' '}
+        done < $oldschema
+        oldsigs[$name]=${lines//[: ]/}
+        s=
+        lines=
+        while read line; do
+            if [[ $line == field* && $line != field*char* ]] then
+                field=${line#'field '}
+                field=${field%%' '*}
+                s+="
+                    OUT->$field = IN->$field;
+                "
+            fi
+            [[ $line != field*char* ]] && continue
+            lines+="$line"
+            field=${line#'field '}
+            field=${field%%' '*}
+            newsizes[$field]=${line##*' '}
+            s+="
+                if (DDSSZ_outrec_${name}_$field == DDSSZ_inrec_${name}_$field)
+                    memcpy (
+                        OUT->$field, IN->$field, DDSSZ_inrec_${name}_$field
+                    );
+                else if (
+                    DDSSZ_outrec_${name}_$field >= DDSSZ_inrec_${name}_$field
+                ) {
+                    memset (OUT->$field, 0, DDSSZ_outrec_${name}_$field);
+                    memcpy (
+                        OUT->$field, IN->$field, DDSSZ_inrec_${name}_$field
+                    );
+                } else {
+                    memcpy (
+                        OUT->$field, IN->$field, DDSSZ_outrec_${name}_$field
+                    );
+                    OUT->$field[DDSSZ_outrec_${name}_$field - 1] = 0;
+                }
+            "
+        done < $newschema
+        newsigs[$name]=${lines//[: ]/}
+        print "{ $s EMIT; }" > $tmpdir/${name}.conv
+        ddscc \
+            -conv -so $tmpdir/${name}.conv.so \
+            -is $oldschema -os ${newschema##*/} -cf $tmpdir/${name}.conv \
+        < /dev/null
+        [[ $? != 0 || ! -f $tmpdir/${name}.conv.so ]] && return 1
+        unset oldsizes newsizes
+    done
+
+}
+
+function convfile { # $1 = file
+    typeset file=$1
+    typeset lines line name
+
+    ddsinfo -V $file | while read line; do
+        [[ $line == schema:* ]] && name=${line#'schema: '}
+        [[ $line != field:*char* ]] && continue
+        lines+="$line"
+    done
+    lines=${lines//[: ]/}
+    name=${name##*vg_}
+    name=${name%.schema}
+    if [[ ${newsigs[$name]} == $lines ]] then
+        print -u2 SWIFT MESSAGE file $file is up to date - skipping
+        return 0
+    fi
+
+    if [[ -f $tmpdir/${name}.noconv ]] then
+        print -u2 SWIFT MESSAGE file $file did not change schema - skipping
+        return 0
+    fi
+    if [[ ! -f $tmpdir/${name}.conv.so ]] then
+        print -u2 SWIFT ERROR cannot find converter for file $file - skipping
+        return 0
+    fi
+
+    if [[ ${oldsigs[$name]} != $lines ]] then
+        print -u2 SWIFT WARNING file $file is not in the old format
+        if ! ddsconv -os vg_${name}.schema \
+            -cf $tmpdir/${name}.conv \
+        < $file > $file.tmp; then
+            print -u2 SWIFT ERROR file $file conversion failed
+            return 1
+        fi
+    else
+        if ! ddsconv -os vg_${name}.schema \
+            -cso $tmpdir/${name}.conv.so \
+        < $file > $file.tmp; then
+            print -u2 SWIFT ERROR file $file conversion failed
+            return 1
+        fi
+    fi
+    mv $file.tmp $file
+    return $?
+}
+
+set -o pipefail
+
+export LC_ALL=C LANG=C
+
+newspec=
+oldspec=
+keepdata=n
+maxjobs=4
+while getopts -a changeschema "$usage" opt; do
+    case $opt in
+    200) newspec=$OPTARG ;;
+    201) oldspec=$OPTARG ;;
+    202) keepdata=y ;;
+    203) maxjobs=$OPTARG ;;
+    204) dates=$OPTARG ;;
+    999) (( SWIFTWARNLEVEL++ )) ;;
+    *) showusage; exit 1 ;;
+    esac
+done
+shift $OPTIND-1
+export JOBMAX=$maxjobs
+
+cd SWIFT_CFG_DSYSTEMDIR
+
+export TMPDIR=SWIFT_CFG_DSYSTEMDIR/tmp/changeschema
+tmpdir=$TMPDIR
+rm -rf $tmpdir
+mkdir -p $tmpdir/old $tmpdir/new
+[[ ! -d $tmpdir ]] && {
+    print -u2 ERROR cannot create directory $tmpdir
+    exit 1
+}
+
+typeset -l yn
+
+if [[ $newspec == '' && $oldspec == '' ]] then
+    read yn?"modify the schema spec and update all data files (y|n)? "
+    [[ $yn != y* ]] && exit 0
+    if ! cp SWIFT_CFG_SSYSTEMDIR/current/vgschema.info $tmpdir/new; then
+        print -u2 SWIFT ERROR cannot copy old schema spec
+        exit 1
+    fi
+    vi $tmpdir/new/vgschema.info
+    oldspec=SWIFT_CFG_SSYSTEMDIR/current/vgschema.info
+    newspec=$tmpdir/new/vgschema.info
+    if cmp $oldspec $newspec > /dev/null; then
+        print -u2 SWIFT MESSAGE schema spec not changed - exiting
+        exit 0
+    fi
+fi
+comspec=SWIFT_CFG_SSYSTEMDIR/current/lib/dds/vgschema.info
+
+if [[ $newspec == '' || $oldspec == '' ]] then
+    showusage
+    exit 1
+fi
+if [[ ! -f $newspec || ! -f $oldspec || ! -f $comspec ]] then
+    print -u2 SWIFT ERROR spec files do not exist
+    exit 1
+fi
+
+while read a b j; do
+    print "$a $b"
+done < $newspec | sort > $tmpdir/new/vgschema.info.tmp \
+&& mv $tmpdir/new/vgschema.info.tmp $tmpdir/new/vgschema.info
+newspec=$tmpdir/new/vgschema.info
+
+if ! checkspecs "$oldspec" "$newspec"; then
+    exit 1
+fi
+
+if samespecs $newspec $oldspec && samespecs $newspec $comspec; then
+    print -u2 schema spec files did not change - skipping
+    exit 0
+fi
+
+if ! cp $oldspec $tmpdir/old; then
+    print -u2 SWIFT ERROR cannot copy old spec file
+    exit 1
+fi
+if [[ $oldspec == */current.old/* ]] then
+    if ! cp SWIFT_CFG_SSYSTEMDIR/current.old/lib/dds/*.schema $tmpdir/old; then
+        print -u2 SWIFT ERROR cannot copy old spec and schema files
+        exit 1
+    fi
+elif [[ $oldspec == */current/* ]] then
+    if ! cp SWIFT_CFG_SSYSTEMDIR/current/lib/dds/*.schema $tmpdir/old; then
+        print -u2 SWIFT ERROR cannot copy old spec and schema files
+        exit 1
+    fi
+else
+    print -u2 SWIFT ERROR cannot find old schema files for $oldspec
+    exit 1
+fi
+oldspec=$tmpdir/old/${oldspec##*/}
+
+if [[ $VGINSTALLAUTO != y ]] then
+    read yn?"hit return to start schema change "
+fi
+
+if ! mv \
+    SWIFT_CFG_SSYSTEMDIR/current/src/cmd/vizgems/vgschema.info \
+    SWIFT_CFG_SSYSTEMDIR/current/src/cmd/vizgems/vgschema.info.bak \
+|| ! cp $newspec SWIFT_CFG_SSYSTEMDIR/current/src/cmd/vizgems; then
+    print -u2 SWIFT ERROR cannot copy new spec into build directory
+    exit 1
+fi
+
+if ! samespecs $newspec $comspec; then
+    ( compile all )
+    if [[ $? != 0 ]] then
+        print -u2 SWIFT ERROR cannot compile new schemas
+        exit 1
+    fi
+fi
+
+if [[ $VGINSTALLSTOPPED != y ]] then
+    SWIFT_CFG_DSYSTEMDIR/etc/system_control stop
+fi
+
+if ! samespecs $newspec $comspec; then
+    ( compile install )
+    if [[ $? != 0 ]] then
+        print -u2 SWIFT ERROR cannot install new schemas
+        exit 1
+    fi
+fi
+
+if ! cp $newspec SWIFT_CFG_SSYSTEMDIR/current/vgschema.info; then
+    print -u2 SWIFT ERROR cannot install new schema spec
+    exit 1
+fi
+
+if ! cp SWIFT_CFG_SSYSTEMDIR/current/lib/dds/*.schema $tmpdir/new/; then
+    print -u2 SWIFT ERROR cannot copy new schema files
+    exit 1
+fi
+
+if ! genconv; then
+    print -u2 SWIFT ERROR cannot generate conversion tools
+    exit 1
+fi
+
+if samespecs $newspec $oldspec; then
+    print -u2 SWIFT MESSAGE new spec same as old spec - no data conversion
+else
+    rm -f dpfiles/alarm/ce.state
+    print -u2 SWIFT MESSAGE begin processing state files
+    for i in dpfiles/stat/pce.rules dpfiles/alarm/empty.dds; do
+        [[ ! -f $i ]] && continue
+        print -u2 file=$i
+        convfile "$i"
+    done
+    print -u2 SWIFT MESSAGE end processing state files
+
+    print -u2 SWIFT MESSAGE begin processing files
+    for i in data/main/????/??/?? data/main/????/?? data/main/????; do
+        [[ ! -d $i ]] && continue
+        print date=${i#data/main/}
+        tw -d $tmpdir touch
+        for j in \
+            $i/processed/total/*LEVELS*.dds \
+            $i/processed/total/*inv-*.dds \
+            $i/processed/total/objecttrans*.dds \
+            $i/processed/total/*.alarms.dds \
+            $i/processed/total/*.stats.dds \
+        ; do
+            [[ ! -f $j ]] && continue
+            [[ -f exit.changeschema ]] && break
+            print -u2 file=$j
+            convfile $j &
+        done
+        [[ -f exit.changeschema ]] && break
+    done
+    wait
+    print  -u2 SWIFT MESSAGE end processing files
+fi
+
+if [[ $VGINSTALLSTOPPED != y ]] then
+    SWIFT_CFG_DSYSTEMDIR/etc/system_control start
+fi

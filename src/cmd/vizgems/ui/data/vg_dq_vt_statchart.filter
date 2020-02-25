@@ -363,4 +363,5 @@ END{
         mi = mj;
         findex++;
     }
+    sfstrclose (strfp);
 }

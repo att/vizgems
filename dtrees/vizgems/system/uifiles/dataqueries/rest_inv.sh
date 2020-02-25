@@ -1,0 +1,56 @@
+querydata=(
+    args=(
+        dtools='inv'
+        vtools='invtab'
+    )
+    dt_inv=(
+        poutlevel=${POUTLEVEL:-o}
+        soutlevel=${SOUTLEVEL}
+        runinparallel=y
+    )
+    vt_invtab=(
+        invtabattr=(
+        )
+        pnodedata=(
+            c0=(
+                hdr='L:Name'
+                row='LS:%(name/)%'
+                url=${dq_main_data.nodeurlfmt//___NEXTQID___/nextqid/_str_edetailed}
+            )
+            c1=(
+                hdr='L:IP'
+                row='LS:%(scope_ip/)%'
+                url=''
+            )
+            c2=(
+                hdr='L:Type'
+                row='LS:%(scope_systype/)%'
+                url=''
+            )
+            c3=(
+                hdr='L:System Name'
+                row='LS:%(scopeinv_sysname/)%'
+                url=''
+            )
+            c4=(
+                hdr='L:Vendor'
+                row='LS:%(scopeinv_vendor/)%'
+                url=''
+            )
+            c5=(
+                hdr='L:Model'
+                row='LS:%(scopeinv_model/)%'
+                url=''
+            )
+            c6=(
+                hdr='L:Unit ID'
+                row='LS:%(scopeinv_sysid/)%'
+                url=''
+            )
+        )
+        pnodeattr=(
+            label='FC Disk Array Info'
+        )
+        pnodenextqid='nextqid/_str_edetailed'
+    )
+)

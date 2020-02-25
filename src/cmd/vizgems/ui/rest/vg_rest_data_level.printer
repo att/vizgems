@@ -11,6 +11,10 @@ static int mode, first = TRUE;
 #define MODE_CSV 1
 #define MODE_XML 2
 #define MODE_JSN 3
+
+#define RESTMODE_FULL 1
+#define RESTMODE_LITE 2
+static int restmode;
 }
 BEGIN{
     char *modestr;
@@ -22,6 +26,7 @@ BEGIN{
         mode = MODE_JSN;
     else
         mode = MODE_CSV, sep = "|";
+    restmode = atoi (getenv ("RESTMODE"));
 
    switch (mode) {
     case MODE_CSV:

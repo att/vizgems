@@ -2,7 +2,8 @@
 
 export SWMROOT=${DOCUMENT_ROOT%/htdocs}
 . $SWMROOT/bin/swmenv
-[[ $SECONDS != *.* ]] && exec $SHELL $0 "$@"
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
 . $SWMROOT/bin/swmgetinfo
 
 argv0=${0##*/}

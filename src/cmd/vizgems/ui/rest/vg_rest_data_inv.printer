@@ -30,6 +30,10 @@ static regex_t hideattrre;
 )
 
 static int ptype;
+
+#define RESTMODE_FULL 1
+#define RESTMODE_LITE 2
+static int restmode;
 }
 BEGIN{
     char *modestr;
@@ -41,6 +45,7 @@ BEGIN{
         mode = MODE_JSN;
     else
         mode = MODE_CSV, sep = "|";
+    restmode = atoi (getenv ("RESTMODE"));
 
     showattrs = atoi (getenv ("SHOWATTRS"));
     showmaps = atoi (getenv ("SHOWMAPS"));

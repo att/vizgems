@@ -212,6 +212,7 @@ map|l|city_carmichael|l2|state_us_ca|
 map|l|city_carolina|l2|state_us_pr|
 map|l|city_carpinteria|l2|state_us_ca|
 map|l|city_carrigaline|l2|state_ie|
+map|l|city_carrollton|l2|state_us_tx|
 map|l|city_carsoncity|l2|state_us_nv|
 map|l|city_carson|l2|state_us_ca|
 map|l|city_cary|l2|state_us_nc|
@@ -1170,6 +1171,7 @@ map|l|city_sanpedro|l2|state_us_ca|
 map|l|city_sanramon|l2|state_us_ca|
 map|l|city_santaana|l2|state_us_ca|
 map|l|city_santabarbara|l2|state_us_ca|
+map|l|city_santaclara|l2|state_us_ca|
 map|l|city_santaclarita|l2|state_us_ca|
 map|l|city_santacruz|l2|state_us_ca|
 map|l|city_santafe|l2|state_us_nm|
@@ -1272,6 +1274,7 @@ map|l|city_sugarland|l2|state_us_tx|
 map|l|city_sunrise|l2|state_us_fl|
 map|l|city_suresnes|l2|state_fr|
 map|l|city_surprise|l2|state_us_az|
+map|l|city_suwanee|l2|state_us_ga|
 map|l|city_sydney|l2|state_as|
 map|l|city_syracuse|l2|state_us_ny|
 map|l|city_tacoma|l2|state_us_wa|
@@ -2476,6 +2479,9 @@ node|l|city_carpinteria|nodename|Carpinteria
 node|l|city_carrigaline|coord|-8.39 51.810001
 node|l|city_carrigaline|name|Carrigaline, IE
 node|l|city_carrigaline|nodename|Carrigaline
+node|l|city_carrollton|coord|-96.8900000 32.9536111
+node|l|city_carrollton|name|Carrollton, TX USA
+node|l|city_carrollton|nodename|Carrollton
 node|l|city_carsoncity|coord|-119.7663889 39.1638889
 node|l|city_carsoncity|name|Carson City, NV USA
 node|l|city_carsoncity|nodename|Carson City
@@ -5349,6 +5355,9 @@ node|l|city_santaana|nodename|Santa Ana
 node|l|city_santabarbara|coord|-119.6972222 34.4208333
 node|l|city_santabarbara|name|Santa Barbara, CA USA
 node|l|city_santabarbara|nodename|Santa Barbara
+node|l|city_santaclara|coord|-121.9541667 37.3541667
+node|l|city_santaclara|name|Santa Clara, CA USA
+node|l|city_santaclara|nodename|Santa Clara
 node|l|city_santaclarita|coord|-118.5416667 34.3916667
 node|l|city_santaclarita|name|Santa Clarita, CA USA
 node|l|city_santaclarita|nodename|Santa Clarita
@@ -5655,6 +5664,9 @@ node|l|city_suresnes|nodename|Suresnes
 node|l|city_surprise|coord|-112.3325000 33.6305556
 node|l|city_surprise|name|Surprise, AZ USA
 node|l|city_surprise|nodename|Surprise
+node|l|city_suwanee|coord|-84.0713889 34.0513889
+node|l|city_suwanee|name|Suwanee, GA USA
+node|l|city_suwanee|nodename|Suwanee
 node|l|city_sydney|coord|151.2166667 -33.8833333
 node|l|city_sydney|name|Sydney, AS
 node|l|city_sydney|nodename|Sydney

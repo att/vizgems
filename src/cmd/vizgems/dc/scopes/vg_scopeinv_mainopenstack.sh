@@ -26,8 +26,20 @@ if [[ $1 == *locid=?* ]] then
     locid=${locid%%'&'*}
 fi
 
+authversion=3
+if [[ $1 == *authversion=?* ]] then
+    authversion=${1#*authversion=}
+    authversion=${authversion%%'&'*}
+fi
+
+domain=default
+if [[ $1 == *domain=?* ]] then
+    domain=${1#*domain=}
+    domain=${domain%%'&'*}
+fi
+
 cat > inv.txt <<#EOF
-projectinv|number||EXEC:openstack?projid=$CID&bizid=$bizid&locid=$locid&urlbase=$urlbase
+projectinv|number||EXEC:openstack?projid=$CID&bizid=$bizid&locid=$locid&authversion=$authversion&domain=$domain&urlbase=$urlbase
 EOF
 
 for tool in $tools; do

@@ -19,4 +19,4 @@ case $icc in
 	esac
 	;;
 esac
-$icc -g "$@"
+$icc "$@"

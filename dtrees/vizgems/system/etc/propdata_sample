@@ -264,6 +264,7 @@ function synchost {
 
     typeset -A lcls rmts lfls
     typeset ifs md5 file rfile ofile ts pfile sn
+    typeset -l yn
 
     ifs="$IFS"
     IFS='|'
@@ -283,13 +284,19 @@ function synchost {
             ofile=${lfls[$file]}
             rfile=${file#*:}
             file=${file%%:*}
-            if [[ $mode != reallysync ]] then
+            if [[ $mode != reallysync* ]] then
                 if [[ $rfile != '' ]] then
                     print will update file $file/$rfile
                 else
                     print will update file $file
                 fi
                 continue
+            fi
+            if [[ $mode == reallysyncbutask ]] then
+                read yn?"update file $file (y|n)? "
+                if [[ $yn != y ]] then
+                    continue
+                fi
             fi
             pfile=cm.$ts.$file.${rfile//./_X_X_}.$sn.$sn.$RANDOM.full.xml
             pfile=SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec/$pfile
@@ -317,13 +324,19 @@ function synchost {
             sn=SWIFT_CFG_SYSNAME
             rfile=${file#*:}
             file=${file%%:*}
-            if [[ $mode != reallysync ]] then
+            if [[ $mode != reallysync* ]] then
                 if [[ $rfile != '' ]] then
                     print will delete file $file/$rfile
                 else
                     print will delete file $file
                 fi
                 continue
+            fi
+            if [[ $mode == reallysyncbutask ]] then
+                read yn?"delete file $file (y|n)? "
+                if [[ $yn != y ]] then
+                    continue
+                fi
             fi
             pfile=cm.$ts.$file.${rfile//./_X_X_}.$sn.$sn.$RANDOM.remove.xml
             pfile=SWIFT_CFG_DSYSTEMDIR/outgoing/cm/tmp/$hostspec/$pfile
@@ -348,7 +361,7 @@ function synchost {
 
 sfl='-C -o ConnectTimeout=60 -o ServerAliveInterval=15 -o ServerAliveCountMax=2'
 
-if [[ $1 == @(sync|reallysync) ]] then
+if [[ $1 == @(sync|reallysync*) ]] then
     dst=$2
     if [[ $dst == *:* ]] then
         dsthost=${dst%%:*}

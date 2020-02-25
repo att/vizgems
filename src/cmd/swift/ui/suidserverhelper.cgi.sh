@@ -2,7 +2,8 @@
 
 export SWMROOT=${DOCUMENT_ROOT%/htdocs}
 . $SWMROOT/bin/swmenv
-[[ $SECONDS != *.* ]] && exec $SHELL $0 "$@"
+[[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
+KSHREC=1 exec $SHELL $0 "$@"
 . $SWMROOT/bin/swmgetinfo
 
 argv0=${0##*/}
@@ -26,7 +27,7 @@ else
 fi
 
 print -r "$QUERY_STRING" \
-| suinewpgrp -log $pgrpfile ${instance}_dserverhelper \
+| suinewpgrp -log $pgrpfile $SHELL ${instance}_dserverhelper \
 | while true; do
     SECONDS=0; line=; read -t5 line; sec=$SECONDS
     if [[ $line == status:* ]] then

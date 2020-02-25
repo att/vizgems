@@ -63,7 +63,7 @@ function vg_ssh_fun_maintail_send {
     d=${d//[!a-zA-Z0-9.]/_}
     for file in "${!tail[@]}"; do
         typeset -n tailr=tail[$file]
-        print -r "if [[ -x /bin/ksh ]]; then /bin/ksh ./vg/tail/$d.$VG_SYSNAME/run $file; else ./vg/tail/$d.$VG_SYSNAME/ksh.$targettype ./vg/tail/$d.$VG_SYSNAME/run $file; fi"
+        print -r "export TAILHOST=$VG_TARGETNAME; if [[ -x /bin/ksh ]]; then /bin/ksh ./vg/tail/$d.$VG_SYSNAME/run $file; else ./vg/tail/$d.$VG_SYSNAME/ksh.$targettype ./vg/tail/$d.$VG_SYSNAME/run $file; fi"
     done
     return 0
 }

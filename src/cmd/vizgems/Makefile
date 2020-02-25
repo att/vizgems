@@ -2,11 +2,7 @@
 
 LICENSE = since=1996,author=ek
 
-if CC.HOSTTYPE != "win*.*"
-	CCFLAGS += $$(CC.DLL)
-else
-	WIN32_DLL == 1
-end
+CCFLAGS += $$(CC.DLL)
 
 .SOURCE.mk: .INSERT dp/inv dp/alarm dp/stat
 .SOURCE: dc dc/netdisc dc/port dc/sched dc/scopes dc/url dc/wmi dc/xml
@@ -16,27 +12,44 @@ end
 .SOURCE: ui ui/account ui/cm ui/data ui/export ui/filter ui/fm ui/fonts ui/help
 .SOURCE: ui/rest ui/wusage
 .SOURCE: ../swift/dp ../swift/ui
+.SOURCE.h: /usr/include/json-c /usr/include/json /usr/local/include/json-c
 
-.SOURCE.h: /usr/include/libxml2
+.SOURCE.h: /usr/include/libxml2 /usr/local/include/libxml2
+
+if CC.HOSTTYPE == "darwin.i386*" || CC.HOSTTYPE == "freebsd12.amd64*"
+        FEATURE_NO64FS == 1
+end
 
 /* Top Level SWIFT Tools */
 
-$(INSTALLROOT)/bin/vg_cm_incoming :INSTALL: sdpincoming
-$(INSTALLROOT)/bin/vg_cm_processing :INSTALL: sdpprocessing
-$(INSTALLROOT)/bin/vg_inv_incoming :INSTALL: sdpincoming
-$(INSTALLROOT)/bin/vg_inv_processing :INSTALL: sdpprocessing
-$(INSTALLROOT)/bin/vg_alarm_incoming :INSTALL: sdpincoming
-$(INSTALLROOT)/bin/vg_alarm_processing :INSTALL: sdpprocessing
-$(INSTALLROOT)/bin/vg_stat_incoming :INSTALL: sdpincoming
-$(INSTALLROOT)/bin/vg_stat_processing :INSTALL: sdpprocessing
-$(INSTALLROOT)/bin/vg_generic_incoming :INSTALL: sdpincoming
-$(INSTALLROOT)/bin/vg_generic_processing :INSTALL: sdpprocessing
+if NOSWIFTTOOLS != "y"
+	$(INSTALLROOT)/bin/vg_cm_incoming :INSTALL: sdpincoming
+	$(INSTALLROOT)/bin/vg_cm_processing :INSTALL: sdpprocessing
+	$(INSTALLROOT)/bin/vg_inv_incoming :INSTALL: sdpincoming
+	$(INSTALLROOT)/bin/vg_inv_processing :INSTALL: sdpprocessing
+	$(INSTALLROOT)/bin/vg_alarm_incoming :INSTALL: sdpincoming
+	$(INSTALLROOT)/bin/vg_alarm_processing :INSTALL: sdpprocessing
+	$(INSTALLROOT)/bin/vg_stat_incoming :INSTALL: sdpincoming
+	$(INSTALLROOT)/bin/vg_stat_processing :INSTALL: sdpprocessing
+	$(INSTALLROOT)/bin/vg_generic_incoming :INSTALL: sdpincoming
+	$(INSTALLROOT)/bin/vg_generic_processing :INSTALL: sdpprocessing
 
-$(INSTALLROOT)/bin/vg_main_complete :INSTALL: sdpcomplete
-$(INSTALLROOT)/bin/vg_main_cleanup :INSTALL: sdpcleanup
-$(INSTALLROOT)/bin/vg_control :INSTALL: sdpcontrol
+	$(INSTALLROOT)/bin/vg_main_complete :INSTALL: sdpcomplete
+	$(INSTALLROOT)/bin/vg_main_cleanup :INSTALL: sdpcleanup
+	$(INSTALLROOT)/bin/vg_control :INSTALL: sdpcontrol
 
-$(INSTALLROOT)/bin/vg_dserverhelper :INSTALL: suidserverhelper
+	$(INSTALLROOT)/bin/vg_dserverhelper :INSTALL: suidserverhelper
+
+	$(INSTALLROOT)/www/proj/vg/bin/vg_services :INSTALL: suiservices
+
+	$(INSTALLROOT)/www/proj/vg/etc/vg_servicehb :INSTALL: suiservicehb
+	$(INSTALLROOT)/www/proj/vg/etc/vg_prefhb :INSTALL: suiprefhb
+
+	$(INSTALLROOT)/www/proj/vg/cgi-bin-members/vg_mserverhelper.cgi \
+	:INSTALL: suimserverhelper.cgi
+	$(INSTALLROOT)/www/proj/vg/cgi-bin-members/vg_dserverhelper.cgi \
+	:INSTALL: suidserverhelper.cgi
+end
 
 
 /* Common Tools */
@@ -102,7 +115,7 @@ vg_dq_vt_util_ut.c \
 
 authkey = "da visualizer"
 key.h :
-	print "#define SWIFTAUTHKEY \"$$(swiftkeygen $(authkey))\"" > $(<)
+	echo "#define SWIFTAUTHKEY \"$$(swiftkeygen $(authkey))\"" > $(<)
 
 vg_genkey :: vg_genkey.c
 
@@ -198,15 +211,7 @@ vg_ralxpbtn_o.gif vg_ralxpbtn_p.gif
 $(INSTALLROOT)/www/htdocs/proj/vg/rest :INSTALLDIR: \
 services.html
 
-$(INSTALLROOT)/www/htdocs/proj/vg/.htaccess_sample :INSTALL: \
-htaccess_open_sample
-
 $(INSTALLROOT)/www/proj/vg/bin :INSTALLDIR: vg_env_sample
-
-$(INSTALLROOT)/www/proj/vg/bin/vg_services :INSTALL: suiservices
-
-$(INSTALLROOT)/www/proj/vg/etc/vg_servicehb :INSTALL: suiservicehb
-$(INSTALLROOT)/www/proj/vg/etc/vg_prefhb :INSTALL: suiprefhb
 
 $(INSTALLROOT)/www/proj/vg/cgi-bin-members :INSTALLDIR: \
 vg_accountadmin.cgi vg_accounthelper.cgi vg_accountuser.cgi \
@@ -216,13 +221,6 @@ vg_dq_invhelper.cgi vg_dq_stathelper.cgi vg_exporthelper.cgi \
 vg_filemanager.cgi vg_home.cgi vg_prefseditor.cgi vg_valuehelper.cgi \
 vg_rest_confquery.cgi vg_rest_confupdate.cgi \
 vg_rest_dataquery.cgi vg_rest_dataupload.cgi
-
-$(INSTALLROOT)/www/proj/vg/cgi-bin-members/vg_mserverhelper.cgi :INSTALL: \
-suimserverhelper.cgi
-$(INSTALLROOT)/www/proj/vg/cgi-bin-members/vg_dserverhelper.cgi :INSTALL: \
-suidserverhelper.cgi
-$(INSTALLROOT)/www/proj/vg/cgi-bin-members/.htaccess_sample :INSTALL: \
-htaccess_sample
 
 vg_cm_profilefilter :: vg_cm_profilefilter.c -ldds
 
@@ -248,7 +246,7 @@ vgport :: vgport.c
 
 vgnewsession :: vgnewsession.c
 
-vgjson2ksh :: vgjson2ksh.c -ljson
+vgjson2ksh :: vgjson2ksh.c -ljson-c
 vgxml2ksh :: vgxml2ksh.c -lxml2
 
 SNMPDIR = $(CC.STDINCLUDE:C!$!/net-snmp!:P=X)
@@ -264,21 +262,11 @@ if CC.HOSTTYPE == "*"
 	end
 end
 
-if CC.HOSTTYPE == "win*.*"
-	vgwmi :: \
-	wmimain.cpp wmiopn.cpp wmilog.cpp wmiinv.cpp wmimisc.cpp wmiv2s.cpp \
-	-lcomsuppw -lwbemuuid -ladvapi32 -lkernel32 -luser32
+vgwmi :: vgwmi.sh
 
-	vgsched :: \
-	schedmain.c schedload.c schedupdate.c \
-	schedexec.c schedreap.c schedlog.c schedtimediff.c schedts.c -lvgxml
-else
-	vgwmi :: vgwmi.sh
-
-	vgsched :: \
-	schedmain.c schedload.c schedupdate.c \
-	schedexec.c schedreap.c schedlog.c schedtimediff.c schedts.c -lvgxml
-end
+vgsched :: \
+schedmain.c schedload.c schedupdate.c \
+schedexec.c schedreap.c schedlog.c schedtimediff.c schedts.c -lvgxml
 
 $(INSTALLROOT)/scopes/scopeinv :INSTALLDIR: \
 vg_scopeinv_mainarista vg_scopeinv_mainavocentpm vg_scopeinv_mainbrocade \
@@ -287,7 +275,9 @@ vg_scopeinv_mainlinux vg_scopeinv_mainnetbotz vg_scopeinv_mainraritanpm \
 vg_scopeinv_mainraritanpx vg_scopeinv_mainsmee vg_scopeinv_mainsolaris \
 vg_scopeinv_mainsynapsense vg_scopeinv_mainveris vg_scopeinv_mainwin32 \
 vg_scopeinv_mainhadoop vg_scopeinv_mainopenstack vg_scopeinv_mainsmartctl \
-vg_scopeinv_maindellswitch vg_scopeinv_mainnrpe vg_scopeinv_maincollectd
+vg_scopeinv_maindellswitch vg_scopeinv_mainnrpe vg_scopeinv_maincollectd \
+vg_scopeinv_mainpurestorage vg_scopeinv_maindellswitch2 \
+vg_scopeinv_mainjetstor vg_scopeinv_mainidrac vg_scopeinv_mainlinux_rcloud
 
 $(INSTALLROOT)/scopes/scopeinv/vg_scopeinv_mainciscocat :INSTALL: \
 vg_scopeinv_maincisco
@@ -308,7 +298,8 @@ vg_ssh_fun_mainilastats vg_ssh_fun_mainmegacli vg_ssh_fun_mainmpstat \
 vg_ssh_fun_mainnetstat vg_ssh_fun_mainproc vg_ssh_fun_mainprstat \
 vg_ssh_fun_mainps vg_ssh_fun_mainsar vg_ssh_fun_mainsmee vg_ssh_fun_mainswap \
 vg_ssh_fun_maintail vg_ssh_fun_maintop vg_ssh_fun_mainuptime \
-vg_ssh_fun_mainvmstat vg_ssh_fun_mainsmartctl vg_ssh_fun_maincollectd
+vg_ssh_fun_mainvmstat vg_ssh_fun_mainsmartctl vg_ssh_fun_maincollectd \
+vg_ssh_fun_mainnvidia vg_ssh_fun_mainrcloud vg_ssh_fun_mainntp
 
 $(INSTALLROOT)/scopes/wmi :INSTALLDIR: vg_wmi_driver
 
@@ -319,42 +310,52 @@ $(INSTALLROOT)/scopes/port :INSTALLDIR: vg_port_driver
 $(INSTALLROOT)/scopes/exec :INSTALLDIR: \
 vg_exec_driver \
 vg_exec_cmd_mainsynapsense vg_exec_cmd_mainveris vg_exec_cmd_mainhadoop \
-vg_exec_cmd_mainopenstack vg_exec_cmd_mainweatherstation vg_exec_cmd_mainnrpe
+vg_exec_cmd_mainopenstack vg_exec_cmd_mainweatherstation vg_exec_cmd_mainnrpe \
+vg_exec_cmd_mainpurestorage vg_exec_cmd_mainjetstor vg_exec_cmd_mainidrac \
+vg_exec_cmd_mainstorview
 
 $(INSTALLROOT)/scopes/snmp :INSTALLDIR: \
 vg_snmp_driver \
 vg_snmp_cmd_mainaristaiface \
 vg_snmp_cmd_mainavocentpm vg_snmp_cmd_mainbrocadefciface \
 vg_snmp_cmd_mainciscocatiface vg_snmp_cmd_mainciscohw \
-vg_snmp_cmd_mainciscoiface vg_snmp_cmd_maininfortrend1hdd \
-vg_snmp_cmd_maininfortrend1lun vg_snmp_cmd_maininfortrend2hdd \
-vg_snmp_cmd_maininfortrend2lun vg_snmp_cmd_mainnetbotzairsensor \
-vg_snmp_cmd_mainnetbotzaudiosensor vg_snmp_cmd_mainnetbotzdewsensor \
-vg_snmp_cmd_mainnetbotzdoorsensor vg_snmp_cmd_mainnetbotzhumisensor \
-vg_snmp_cmd_mainnetbotztempsensor vg_snmp_cmd_mainraritanpm \
-vg_snmp_cmd_mainraritanpmsensor vg_snmp_cmd_mainraritanpx \
-vg_snmp_cmd_mainraritanpxsensor vg_snmp_cmd_maindellswitchcpu \
-vg_snmp_cmd_maindellswitchmem
+vg_snmp_cmd_mainciscoiface vg_snmp_cmd_mainciscotempsensor \
+vg_snmp_cmd_maininfortrend1hdd vg_snmp_cmd_maininfortrend1lun \
+vg_snmp_cmd_maininfortrend2hdd vg_snmp_cmd_maininfortrend2lun \
+vg_snmp_cmd_mainnetbotzairsensor vg_snmp_cmd_mainnetbotzaudiosensor \
+vg_snmp_cmd_mainnetbotzdewsensor vg_snmp_cmd_mainnetbotzdoorsensor \
+vg_snmp_cmd_mainnetbotzhumisensor vg_snmp_cmd_mainnetbotztempsensor \
+vg_snmp_cmd_mainraritanpm vg_snmp_cmd_mainraritanpmsensor \
+vg_snmp_cmd_mainraritanpx vg_snmp_cmd_mainraritanpxsensor \
+vg_snmp_cmd_maindellswitchcpu vg_snmp_cmd_maindellswitchmem \
+vg_snmp_cmd_maindellswitchcpu2 vg_snmp_cmd_maindellswitchmem2
 
 $(INSTALLROOT)/scopes/netdisc :INSTALLDIR: \
-vg_nd_snmp_cisco vg_nd_snmp_ciscocat \
+vg_nd_snmp_arista vg_nd_snmp_cisco vg_nd_snmp_ciscocat \
+vg_nd_snmp_dell vg_nd_snmp_dell2 vg_nd_snmp_foundry vg_nd_snmp_generic \
+vg_nd_snmp_cmd_arista_arp vg_nd_snmp_cmd_arista_dot \
+vg_nd_snmp_cmd_arista_iface \
 vg_nd_snmp_cmd_cisco_arp vg_nd_snmp_cmd_cisco_cdp vg_nd_snmp_cmd_cisco_dot \
 vg_nd_snmp_cmd_cisco_iface vg_nd_snmp_cmd_cisco_trunk vg_nd_snmp_cmd_cisco_vtp \
 vg_nd_snmp_cmd_ciscocat_arp vg_nd_snmp_cmd_ciscocat_cdp \
 vg_nd_snmp_cmd_ciscocat_dot vg_nd_snmp_cmd_ciscocat_iface \
 vg_nd_snmp_cmd_ciscocat_trunk vg_nd_snmp_cmd_ciscocat_vtp \
+vg_nd_snmp_cmd_dell_arp vg_nd_snmp_cmd_dell_dot vg_nd_snmp_cmd_dell_iface \
 vg_nd_snmp_cmd_foundry_arp vg_nd_snmp_cmd_foundry_dot \
 vg_nd_snmp_cmd_foundry_iface \
 vg_nd_snmp_cmd_generic_arp vg_nd_snmp_cmd_generic_dot \
-vg_nd_snmp_cmd_generic_iface \
-vg_nd_snmp_foundry \
-vg_nd_snmp_generic
+vg_nd_snmp_cmd_generic_iface
 
 %.sh : %.snmpspec vg_snmp_compile
 	$(SHELL) $(*:O=2) $(*:O=1) > $(<)
 
 
 /* DDS files */
+
+$(INSTALLROOT)/lib/dds :INSTALLDIR: vgschema.info
+
+%.schema : %.schema.tmpl vgschema.info vgmkschema
+	$(SHELL) $(*:O=3) $(*:O=2) < $(*:O=1) > $(<)
 
 vg_level_node :load: vg_level_node.schema
 vg_level_map :load: vg_level_map.schema

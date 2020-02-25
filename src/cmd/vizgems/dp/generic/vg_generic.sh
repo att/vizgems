@@ -56,7 +56,7 @@ one)
     export MINTIME=$(( $(printf '%(%#)T' "$d1") - 6 * 30 * 24 * 60 * 60 ))
     export MAXTIME=$(( $(printf '%(%#)T' "$d2") + 1 * 24 * 60 * 60 ))
 
-    ${spec.inc2raw} < $1 | tee main1 | ${spec.splitbyday} $2.fwd.%s
+    ${spec.inc2raw} < $1 | ${spec.splitbyday} $2.fwd.%s
     if [[ -f $2.fwd.$date ]] then
         mv $2.fwd.$date $2
     fi

@@ -31,6 +31,7 @@ function vg_cm_favorites_check {
 
     typeset -A ofs nfs ts
     typeset kvi str kv k v g err i ire ore rw x l
+    typeset -u u
 
     rw=n
     eval $(vgxml -topmark edit -ksh "$spec")
@@ -102,6 +103,10 @@ function vg_cm_favorites_check {
         ofs[$kvi]=$v
         if [[ $v == '' ]] then
             print "ERROR|all fields are mandatory"
+        fi
+        u=$v
+        if [[ $u == *+(HTTP:|HTTPS:)* ]] then
+            print "ERROR|not a local URL - cannot insert record"
         fi
         nfs[$kvi]=$v
     done

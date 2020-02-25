@@ -2,6 +2,10 @@
 
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH
 
+if [[ -x SWIFT_CFG_DSCOPESDIR/etc/scopes_control_override ]] then
+    . SWIFT_CFG_DSCOPESDIR/etc/scopes_control_override
+fi
+
 case $1 in
 setup)
     ;;

@@ -4,6 +4,9 @@ typeset -A freevs freeus freels
 function vg_ssh_fun_mainfree_init {
     free.varn=0
     freels[memory_used._total]='Used Memory'
+    freels[memory_allused._total]='All Used Memory'
+    freels[memory_buffersused._total]='Buffer Memory Used'
+    freels[memory_cacheused._total]='Cache Memory Used'
     freels[swap_used._total]='Used Swap'
     return 0
 }
@@ -39,7 +42,17 @@ function vg_ssh_fun_mainfree_send {
 function vg_ssh_fun_mainfree_receive {
     case $targettype in
     *linux*)
-        if [[ $1 == *cache* ]] then
+        if [[ $1 == Mem:* ]] then
+            set -f
+            set -A res -- $1
+            set +f
+            freevs[memory_allused._total]=${res[2]}
+            freeus[memory_allused._total]=MB
+            freevs[memory_buffersused._total]=${res[5]}
+            freeus[memory_buffersused._total]=MB
+            freevs[memory_cacheused._total]=${res[6]}
+            freeus[memory_cacheused._total]=MB
+        elif [[ $1 == *cache* ]] then
             set -f
             set -A res -- $1
             set +f
@@ -99,6 +112,9 @@ function vg_ssh_fun_mainfree_invreceive {
             val=${res[1]}
             if [[ $val != '' ]] then
                 print "node|o|$aid|si_sz_memory_used._total|$val"
+                print "node|o|$aid|si_sz_memory_allused._total|$val"
+                print "node|o|$aid|si_sz_memory_buffersused._total|$val"
+                print "node|o|$aid|si_sz_memory_cacheused._total|$val"
             fi
         elif [[ $1 == Swap:* ]] then
             set -f

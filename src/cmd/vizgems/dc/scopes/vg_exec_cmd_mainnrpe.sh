@@ -56,7 +56,7 @@ for namei in "${!names[@]}"; do
             print "rt=ALARM sev=1 alarmid=\"nrpe\" type=ALARM tech=NRPE txt=\"NRPE FAILURE\""
             continue
         fi
-    
+
         if [[ ${apart%%[-:]*} != *OK* ]] then
             if [[ ${apart%%[-:]*} == *CRITICAL* ]] then
                 sev=1

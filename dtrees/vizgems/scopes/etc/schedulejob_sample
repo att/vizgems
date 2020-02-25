@@ -20,7 +20,8 @@ export SHELLVERSION=SWIFT_CFG_SHELLVERSION
 [[ $KSHREC != 1 && ${KSH_VERSION##*' '} < $SHELLVERSION ]] && \
 KSHREC=1 exec $SHELL $0 "$@"
 
-export MIBDIRS=SWIFT_CFG_SSNMPDIR/current/mibs
+export MIBDIRS=+SWIFT_CFG_SSNMPDIR/current/mibs
+export MIBS='+'
 
 export VG_SYSNAME=SWIFT_CFG_SYSNAME
 export VG_SYSMODE=SWIFT_CFG_SYSMODE
@@ -35,8 +36,9 @@ export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
 export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
 
 export LC_ALL=C LANG=C
-
 PATH=$PATH:/usr/sbin:/sbin
+[[ -x SWIFT_CFG_DSCOPESDIR/etc/local_env ]] && \
+. SWIFT_CFG_DSCOPESDIR/etc/local_env
 
 if [[ $1 == update ]] then
     cat > SWIFT_CFG_DSCOPESDIR/schedule.new || exit 1

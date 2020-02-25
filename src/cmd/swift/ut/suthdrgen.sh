@@ -37,7 +37,6 @@ function termfiles { # $1 = context
     done
 }
 
-
 function output { # $1=state $2=mode $3=text
     typeset ci
 

@@ -33,7 +33,8 @@ export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
 export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
 
 export LC_ALL=C LANG=C
-
 PATH=$PATH:/usr/sbin:/sbin
+[[ -x SWIFT_CFG_DSNMPDIR/etc/local_env ]] && \
+. SWIFT_CFG_DSNMPDIR/etc/local_env
 
 $SHELL snmp_process

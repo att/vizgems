@@ -1,9 +1,0 @@
-: linux.i386-32-suse cc wrapper : 2006-02-14 :
-
-HOSTTYPE=linux.i386-32-suse
-
-case " $* " in
-*" -dumpmachine "*) echo $HOSTTYPE; exit ;;
-esac
-
-/usr/bin/cc -m32 -g "$@"

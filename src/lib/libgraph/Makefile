@@ -1,9 +1,5 @@
 :PACKAGE: graphviz ast
 
-if CC.HOSTTYPE == "win*.*"
-	WIN32_DLL == 1
-end
-
 CCFLAGS += $$(CC.DLL)
 
 graph 1.0 :LIBRARY: agxbuf.c attribs.c edge.c graph.c graphio.c lexer.c node.c \

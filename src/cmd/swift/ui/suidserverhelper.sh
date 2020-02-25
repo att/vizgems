@@ -115,6 +115,8 @@ gvars.infile=$infile
 gvars.outfile=ERROR
 
 params=()
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+typeset -l vl
 
 name=
 set -o noglob
@@ -126,6 +128,10 @@ if [[ ${gvars.infile} == *\&* ]] then
         [[ $i == '' ]] && continue
         k=${i%%=*}
         [[ $k == '' ]] && continue
+        if [[ $k == *+([!a-zA-Z0-9_])* ]] then
+            print -r -u2 "SWIFT ERROR illegal key in parameters"
+            continue
+        fi
         v=${i#"$k"=}
         typeset -n pn=params.$k
         if [[ $v == %5B*%5D ]] then
@@ -144,12 +150,24 @@ if [[ ${gvars.infile} == *\&* ]] then
                 vi=${vi//'+'/' '}
                 vi=${vi//@([\'\\])/'\'\1}
                 eval "vi=\$'${vi//'%'@(??)/'\x'\1"'\$'"}'"
+                vl=$vi
+                vl=${vl//+([[:space:]])/}
+                if [[ $vl == *$ill* ]] then
+                    print -r -u2 "SWIFT ERROR illegal value for key $k"
+                    continue
+                fi
                 pn[${#pn[@]}]=${vi#*=}
             done
         else
             v=${v//'+'/' '}
             v=${v//@([\'\\])/'\'\1}
             eval "v=\$'${v//'%'@(??)/'\x'\1"'\$'"}'"
+            vl=$v
+            vl=${vl//+([[:space:]])/}
+            if [[ $vl == *$ill* ]] then
+                print -r -u2 "SWIFT ERROR illegal value for key $k"
+                continue
+            fi
             pn[${#pn[@]}]="$v"
         fi
         typeset +n pn
@@ -163,16 +181,21 @@ set +o noglob
 if [[ $name == '' ]] then
     name=data.$$.$RANDOM.$RANDOM
 fi
+if [[ $name != +([a-z0-9.]) ]] then
+    print -r -u2 "SWIFT ERROR illegal directory name $name"
+    exit 1
+fi
 
 if ${instance}_dserverhelper_run gvars "$name" params; then
     :
 elif [[ ${gvars.outfile} == ERROR ]] then
     print -u2 ERROR cannot expand input file $infile
+    exit 1
 fi
 
 if [[ ${gvars.outfile} == ERROR ]] then
     print -u2 ERROR cannot expand input file $infile
-    exit
+    exit 1
 fi
 
 print ${gvars.outfile}

@@ -197,7 +197,6 @@ Tobj Ttable (long sizehint) {
     return tp;
 }
 
-
 void Tinsi (Tobj to, long ik, Tobj vo) {
     long tm;
 

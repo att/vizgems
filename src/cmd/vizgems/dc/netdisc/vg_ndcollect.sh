@@ -131,6 +131,15 @@ function runident { # $1 = acc var
         *foundry*)
             type=foundry
             ;;
+        *powerconnect*)
+            type=dell
+            ;;
+        *Dell*Operating*System*Version:*)
+            type=dell2
+            ;;
+        *arista*)
+            type=arista
+            ;;
         "")
             type=
             ;;

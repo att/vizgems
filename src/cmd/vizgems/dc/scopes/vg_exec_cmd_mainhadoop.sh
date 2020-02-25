@@ -38,6 +38,7 @@ fi
 urlbase=${args[urlbase]}
 
 curl[0]=curl
+curl[${#curl[@]}]=-L
 curl[${#curl[@]}]=-s
 curl[${#curl[@]}]=-H
 curl[${#curl[@]}]='Accept: application/xml'

@@ -91,6 +91,50 @@ fi
 
 suireadcgikv
 
+ill='*([#A-Za-z0-9_.-])'
+qslist=" $qslist "
+qsarrays=" $qsarrays "
+for i in $qslist; do
+    k=qs_$i
+    if [[ $k == *+([!a-zA-Z0-9_])* ]] then
+        print -r -u2 "SWIFT ERROR illegal key in parameters"
+        unset $k
+        qslist=${qslist//' '$i' '/' '}
+        qsarrays=${qsarrays//' '$i' '/' '}
+        continue
+    fi
+    typeset -n v=$k
+    if [[ " "$qsarrays" " == *' '$i' '* ]] then
+        for (( j = 0; j < ${#v[@]}; j++ )) do
+            vl=${v[$j]}
+            vl=${vl//+([[:space:]])/}
+            if [[ $vl != $ill ]] then
+                print -r -u2 "SWIFT ERROR illegal value for key $i"
+                unset $k
+                qslist=${qslist//' '$i' '/' '}
+                qsarrays=${qsarrays//' '$i' '/' '}
+                continue
+            fi
+        done
+    else
+        vl=$v
+        vl=${vl//+([[:space:]])/}
+        if [[ $vl != $ill ]] then
+            print -r -u2 "SWIFT ERROR illegal value for key $i"
+            unset $k
+            qslist=${qslist//' '$i' '/' '}
+            qsarrays=${qsarrays//' '$i' '/' '}
+            continue
+        fi
+    fi
+done
+qslist=${qslist//' '+(' ')/' '}
+qslist=${qslist#' '}
+qslist=${qslist%' '}
+qsarrays=${qsarrays//' '+(' ')/' '}
+qsarrays=${qsarrays#' '}
+qsarrays=${qsarrays%' '}
+
 pid=$qs_pid
 if [[ $pid == '' ]] then
     print -u2 SWIFT ERROR configuration not specified

@@ -1,0 +1,108 @@
+
+s=$(uname -s)
+info=(dev='' ino='' siz='')
+function getinfo {
+    typeset dev ino siz j
+
+    info.dev=''
+    info.ino=''
+    info.siz=''
+    if [[ ! -f $1 ]] then
+        return
+    fi
+
+    case $s in
+    IRIX*)
+        stat $1 | egrep size | read j
+        siz=${j##*' '}
+        stat $1 | egrep inode | read j ino j dev j
+        dev=${dev%%\;*}
+        ino=${ino%%\;*}
+        ;;
+    Darwin*)
+        stat $1 | read dev ino j j j j j siz j
+        ;;
+    *)
+        stat $1 | egrep Size: | read j siz j
+        stat $1 | egrep Device: | read j dev j ino j
+        dev=${dev%%/*}
+        ;;
+    esac
+
+    info.dev=$dev
+    info.ino=$ino
+    info.siz=$siz
+}
+
+main=$1
+back=$2
+stat=$3
+
+if [[ ! -f $main ]] then
+    exit 0
+fi
+getinfo $main
+mdev=${info.dev}
+mino=${info.ino}
+msiz=${info.siz}
+
+prev=()
+if [[ -f $stat ]] then
+    . $stat
+else
+    prev.dev=${info.dev}
+    prev.ino=${info.ino}
+    prev.off=0
+fi
+
+if [[ $mdev != ${prev.dev} || $mino != ${prev.ino} ]] then
+    exec 5< $main
+    ifs="$IFS"
+    IFS=''
+    read -u5 first
+    if [[ $? != 0 ]] then
+        exit
+    fi
+    IFS="$ifs"
+    moff=$(5<#)
+    if (( moff < 2 )) || [[ $first == '' ]] then
+        exit 0
+    fi
+    if [[ $back != '' ]] then
+        ls -1tr $back | {
+            while read i; do
+                getinfo $i
+                if [[
+                    ${info.dev} == ${prev.dev} && ${info.ino} == ${prev.ino}
+                ]] then
+                    exec 6< $i
+                    6<# ((${prev.off}))
+                    cat <&6
+                    exec 6<&-
+                    break
+                fi
+            done
+            while read i; do
+                cat $i
+            done
+            print -r -- "$first"
+        }
+    fi
+else
+    moff=${prev.off}
+    if (( msiz < moff )) then
+        moff=0
+    fi
+    exec 5< $main
+    5<# (($moff))
+fi
+
+ifs="$IFS"
+IFS=''
+while read -r -u5 line; do
+    print -r -- "$line"
+    moff=$(5<#)
+done
+IFS="$ifs"
+
+print "prev=(dev=$mdev ino=$mino off=$moff)" > $stat

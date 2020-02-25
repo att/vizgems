@@ -12,9 +12,9 @@ This server provides the following RESTful services.
 <ul><li>
 Data services
   <ul><li>
-    GET /rest/dataquery/(level|inv|stat|alarm)/(csv|xml|json)/&lt;param1&gt;=&lt;value1&gt;&amp;...
+    GET /rest/dataquery/(level|inv|stat|alarm)(lite)*/(csv|xml|json)/&lt;param1&gt;=&lt;value1&gt;&amp;...
     <br>
-    returns the levels of assets, inventory, statistics or alarms that satisfy the parameter settings
+    returns the levels of assets, inventory, statistics or alarms that satisfy the parameter settings - if lite is appended to the level, inv, etc. component, a reduced version of the full records is emitted (appropriate for UIs)
   </li></ul>
   <ul><li>
     POST /rest/dataupload/(stat|alarm)/(csv|xml)

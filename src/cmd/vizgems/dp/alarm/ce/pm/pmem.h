@@ -39,7 +39,6 @@ typedef struct PMhdr_s {
     unsigned int magic2;
 } PMhdr_t;
 
-
 #define PM_SLOT_N 1025
 #define PM_SLOT_FROMSIZE(s) ( \
     (((s) / PM_ALIGN_UNIT) < PM_SLOT_N) ? \

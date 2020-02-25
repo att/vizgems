@@ -52,7 +52,7 @@ function dq_vt_autoinvtab_tool_mainswitch_body {
         ifi=${ik#*_istatus}
         ifkeys[$ifi]=$ifi
         typeset -n ifp=dq_vt_autoinvtab_data._ifs.if$ifi
-        typeset -n ip=dq_vt_autoinvtab_data.is.scopeinv_istatus$ifi
+        typeset -n ip=dq_vt_autoinvtab_data.is.si_istatus$ifi
         [[ $ip == '' ]] && typeset -n ip=dq_vt_autoinvtab_data.is.scopeinv_istatus$ifi
         ifp.status=$ip
         typeset -n ip=dq_vt_autoinvtab_data.is.si_iface$ifi

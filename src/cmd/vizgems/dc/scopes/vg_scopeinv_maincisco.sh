@@ -47,7 +47,7 @@ mainciscocat)
     tools=vg_snmp_cmd_mainciscocatiface
     ;;
 *)
-    tools='vg_snmp_cmd_mainciscoiface vg_snmp_cmd_mainciscohw'
+    tools='vg_snmp_cmd_mainciscoiface vg_snmp_cmd_mainciscohw vg_snmp_cmd_mainciscotempsensor'
     ;;
 esac
 

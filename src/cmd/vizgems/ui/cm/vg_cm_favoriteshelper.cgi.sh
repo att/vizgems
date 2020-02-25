@@ -44,10 +44,11 @@ print "Content-type: text/xml\n"
 print "<response>"
 if [[ $qs_name == '' || $qs_url == '' ]] then
     print "<r>ERROR|the name and URL fields are mandatory</r>"
+elif [[ $qs_url != /cgi-bin-vg-members/vg_dserverhelper.cgi*query=* ]] then
+    print -u2 SWIFT URL is not in the correct form
+    print "<r>ERROR|the URL must be a local data query URL</r>"
 else
-    if [[ $qs_url == */vg_dserverhelper.cgi*query=dataquery* ]] then
-        qs_url=${qs_url//'&prev='*([!&])'&'/'&'}
-    fi
+    qs_url=${qs_url//'&prev='*([!&])'&'/'&'}
     {
         if [[ -f $VG_DSYSTEMDIR/uifiles/favorites/$SWMID.txt ]] then
             cat $VG_DSYSTEMDIR/uifiles/favorites/$SWMID.txt

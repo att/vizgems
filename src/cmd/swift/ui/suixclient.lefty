@@ -201,6 +201,4 @@ dops = function () {
     canvas=defcanvas;
 };
 
-
-
 init ();

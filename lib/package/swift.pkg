@@ -1,6 +1,6 @@
 swift :PACKAGE: ast \
 	INITgraphviz INITswift aggr dds dotty geom gv ndfs lefty lefty0d \
-	libXaw3d libaggr libdds libgd libgraph libgv libswift \
+	libaggr libdds libgd libgraph libgv libswift \
 	swift tiger vpm \
 	vizgems
 

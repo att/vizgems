@@ -149,7 +149,7 @@ function dq_vt_alarmstyle_setup {
     asr.alarmstyleattr_flags=""
     asr.alarmstyleattr_bgcolor=${prefpp.bgcolor}
     asr.alarmstyleattr_color=${prefpp.fgcolor}
-    asr.alarmstyleattr_tmodenames=""
+    asr.alarmstyleattr_tmodenames=${dq_main_data.alarmattr.ticketlabel20}
     asr.alarmstyleattr_sevnames=${dq_main_data.alarmattr.severitylabel}
     for k in "${!qdasr.alarmstyleattr.@}"; do
         typeset -n srcr=$k dstr=asr.alarmstyleattr_${k##*.}

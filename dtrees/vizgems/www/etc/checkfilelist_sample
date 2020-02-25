@@ -27,7 +27,7 @@ done < etc/file.list
 
 tw -e 'if (path=="./(logs|tmp|htdocs/members)/*") status=SKIP;' \
 | while read f; do
-    [[ $f == @(./active|./lock.*|./.passwd.????.??.??|./.group.????.??.??|./accounts/current.????.??.??|./.dbm|./modules/*|./bin/htpasswd|./bin/httpd) ]] && continue
+    [[ $f == @(./active|./lock.*|./.passwd.????.??.??|./.group.????.??.??|./accounts/current.????.??.??|./modules/*|./bin/htpasswd|./bin/httpd) ]] && continue
     [[ ${files[$f]} != '' ]] && continue
     [[ $f == *.old && -f ${f%.old} ]] && continue
     print $f

@@ -1,0 +1,51 @@
+rec=(
+    keys=SID
+    walk0=(
+        name='.1.3.6.1.4.1.9.9.13.1.3.1.2.${SID}' # ciscoEnvMonTemperatureStatusDescr
+        type=STRING
+        value='${SNAME}'
+    )
+    walk1=(
+        name='.1.3.6.1.4.1.9.9.13.1.3.1.3.${SID}' # ciscoEnvMonTemperatureStatusValue
+        type=INTEGER
+        value='${SVALUE}'
+    )
+    outkey=SID
+    output='${SID}|${SNAME}|${SVALUE}'
+    outfilter='{
+        IFS="|"
+        case $INVMODE in
+        y)
+            while read -r sid sname svalue; do
+                sname=${sname//\"/}
+                print "node|o|$INV_TARGET|si_tempid$sid|$sid"
+                print "node|o|$INV_TARGET|si_templabel$sid|$sname"
+                print -u3 "sids[$sid]=1"
+            done 3> ciscotempsensor.list.new
+            mv ciscotempsensor.list.new ciscotempsensor.list
+            ;;
+        *)
+            typeset -A pvs sids
+            [[ -f ./ciscotempsensor.list ]] && . ./ciscotempsensor.list
+            typeset -F3 v
+            sidn=0
+            while read -r sid sname svalue; do
+                sname=${sname//\"/}
+                (( v = svalue * 1.8 + 32.0 ))
+                if (( sids[$sid] < 1 )) then
+                    touch -d "14 day ago" inv.out
+                fi
+                sids[$sid]=3
+                (( sidn++ ))
+                print "rt=STAT name=\"sensor_temp.${sid}\" type=number num=$v unit=F label=\"Temp Sensor ($sname)\""
+            done
+            for sid in "${!sids[@]}"; do
+                if (( sidn > 0 && sids[$sid] != 3 )) then
+                    touch -d "14 day ago" inv.out
+                    break
+                fi
+            done
+            ;;
+        esac
+    }'
+)

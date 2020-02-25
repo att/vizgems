@@ -19,4 +19,4 @@ case $icc in
 	esac
 	;;
 esac
-$icc -g "${@//-O*([0-9])/}"
+$icc "$@"

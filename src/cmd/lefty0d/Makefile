@@ -5,7 +5,7 @@ LICENSE = since=1996,author=ek
 BINNAME = lefty0d
 LIBNAME = gfx0d
 
-if CC.HOSTTYPE == "sgi*.*" || "$(-mam)" == "static*"
+if "$(-mam)" == "static*"
 	CCFLAGS =
 end
 

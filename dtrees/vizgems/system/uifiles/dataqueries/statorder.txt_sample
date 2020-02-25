@@ -6,6 +6,9 @@ url_time|1010|2|1
 port_avail|1020|1|1
 port_time|1020|2|1
 memory_used|2000|1|1
+memory_buffersused|2000|2|1
+memory_cacheused|2000|3|1
+memory_allused|2000|4|1
 swap_used|2010|1|1
 proc_topcpu|2020|1|1
 cpu_used._total|2030|1|1

@@ -2,10 +2,7 @@
 
 LICENSE = since=1996,author=ek
 
-.SOURCE: ./dp ./tr ./ms ./pl ./wm ./ui ./gm ./ut ./jv
-.SOURCE: ./jv/att ./jv/att/jiffy ./jv/att/jiffy/tool ./jv/att/jiffy/util/gif
-.SOURCE: ./jv/att/jiffy/util ./jv/att/jiffy/msgsvc ./jv/att/jiffy/ndata
-
+.SOURCE: ./dp ./tr ./ms ./pl ./wm ./ui ./gm ./ut
 
 :ALL:
 
@@ -15,9 +12,6 @@ if CC.HOSTTYPE == "sol*.*"
 end
 if CC.HOSTTYPE != "darwin.*"
 	CRYPTLIB = -lcrypt
-end
-if CC.HOSTTYPE == "win32.*"
-	noxtst = 1
 end
 
 /* Data Processing */
@@ -63,17 +57,11 @@ swmcpasswd.cgi swmchangepasswd.cgi
 
 $(INSTALLROOT)/www/htdocs/members :INSTALLDIR: swmuploadfile.html
 
-$(INSTALLROOT)/www/htdocs/.htaccess_sample :INSTALL: htaccess_sample_open
-$(INSTALLROOT)/www/htdocs/swift/.htaccess_sample :INSTALL: htaccess_sample_open
-$(INSTALLROOT)/www/cgi-bin-members/.htaccess_sample :INSTALL: htaccess_sample
-
 swmmimesplit :: swmmimesplit.c
 
 swmchangepasswd.cgi :: swmchangepasswd.c swmutil.c $(CRYPTLIB) +lswift +last
 
-if CC.HOSTTYPE != "win32.*"
-	swmcheckpasswd :: swmcheckpasswd.c -lcrypt
-end
+swmcheckpasswd :: swmcheckpasswd.c -lcrypt
 
 /* User Interface */
 
@@ -104,7 +92,7 @@ $(INSTALLROOT)/www/htdocs/swift :INSTALLDIR: suipad.js suilss.js
 
 authkey = "maggie, spin to me maggie!!!"
 key.h :
-	print "#define SWIFTAUTHKEY \"$$(swiftkeygen $(authkey))\"" > $(<)
+	echo "#define SWIFTAUTHKEY \"$$(swiftkeygen $(authkey))\"" > $(<)
 
 suiencode :: suiencode.c
 
@@ -142,16 +130,6 @@ suidclient.1 :manual: suidclient
 suicoord2item.1 :manual: suicoord2item
 
 suinewpgrp.1 :manual: suinewpgrp
-
-/* Java */
-
-$(INSTALLROOT)/www/bin :INSTALLDIR: \
-jsui_starttools
-
-$(INSTALLROOT)/www/cgi-bin :INSTALLDIR: \
-jsui_js.cgi
-
-$(INSTALLROOT)/www/htdocs/swift :INSTALLDIR: jswift.jar
 
 /* Image Server */
 

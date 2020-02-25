@@ -1,6 +1,11 @@
 #include <ast.h>
 #include <swift.h>
+#include <FEATURE/crypt>
+#ifdef _hdr_crypt
 #include <crypt.h>
+#else
+#include <unistd.h>
+#endif
 
 int main (int argc, char **argv) {
     char *plain, *encrypted, *result, settings[4];

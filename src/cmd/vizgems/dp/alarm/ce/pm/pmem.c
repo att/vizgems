@@ -350,7 +350,6 @@ int PMcompact (void) {
     for (segnoffi = 0; segnoffi < segnoffl; segnoffi++)
         segnoffs2[segnoffi] = &segnoffs[segnoffi];
 
-
     newbasesegi = arenap->segmentn;
     for (osegi = 0; osegi < arenap->segmentn; osegi++)
         if (newsegmentsize < arenap->segments[osegi].size)

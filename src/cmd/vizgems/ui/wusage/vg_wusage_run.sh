@@ -112,9 +112,21 @@ dayi=0
     done
     cat $logfile
 } | rev -l | egrep '/vg_|/rest' \
-| sutawk '{ print $4,$3,$(NF-1),$7 }' | sed -E \
-    -e 's/^\[//' -e 's/^(...........):..:..:../\1/' \
-| while read -r date user res url; do
+| while read line; do
+    rest=${line#*' '}
+    rest=${rest#*' '}
+    user=${rest%%' '*}
+    rest=${rest#*' '}
+    date=${rest%%']'*}
+    date=${date#'['}
+    date=${date%%:*}
+    rest=${rest#*'] '}
+    rest=${rest#*'"'}
+    rest=${rest#*' '}
+    url=${rest%%'"'*}
+    url=${url%' HTTP'*}
+    rest=${rest#*'" '}
+    res=${rest%%' '*}
     if [[ $prevdate != $date ]] then
         if (( dayi++ >= dayn )) then
             cat > /dev/null

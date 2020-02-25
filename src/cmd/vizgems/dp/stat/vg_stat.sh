@@ -82,6 +82,7 @@ xml)
         if (( $(wc -c < $1) > STATSPLITFILESIZE )) then
             print -u2 SWIFT WARNING splitting large stat file $1 $(ls -lh $1)
             d=${1%/*}
+            [[ $1 != */* ]] && d=.
             split -C $(( $STATSPLITFILESIZE / 2 )) -a 4 $1 $1.
             if [[ $? == 0 ]] then
                 n=0

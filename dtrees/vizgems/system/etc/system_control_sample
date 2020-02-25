@@ -19,6 +19,10 @@ export SHELL=SWIFT_CFG_SSYSTEMDIR/current/bin/ksh
 export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
 export VGPERMDIR=""
 
+if [[ -x SWIFT_CFG_DSYSTEMDIR/etc/system_control_override ]] then
+    . SWIFT_CFG_DSYSTEMDIR/etc/system_control_override
+fi
+
 [[ $1 == stop ]] && touch $VGMAINDIR/exit.scopemgr
 
 $SHELL vg_control "$@" wait

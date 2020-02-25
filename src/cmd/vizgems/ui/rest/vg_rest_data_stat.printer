@@ -14,6 +14,10 @@ static int mode, first = TRUE;
 #define MODE_CSV 1
 #define MODE_XML 2
 #define MODE_JSN 3
+
+#define RESTMODE_FULL 1
+#define RESTMODE_LITE 2
+static int restmode;
 }
 BEGIN{
     char *modestr;
@@ -25,15 +29,24 @@ BEGIN{
         mode = MODE_JSN;
     else
         mode = MODE_CSV, sep = "|";
+    restmode = atoi (getenv ("RESTMODE"));
 
     switch (mode) {
     case MODE_CSV:
-        sfprintf (
-            sfstdout,
-            "scope%sdateissued%shourissued%stimeissued%s"
-            "level%sid%skey%sunit%sframe%sval%slabel\n",
-            sep, sep, sep, sep, sep, sep, sep, sep, sep, sep
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "scope%sdateissued%shourissued%stimeissued%s"
+                "level%sid%skey%sunit%sframe%sval%slabel\n",
+                sep, sep, sep, sep, sep, sep, sep, sep, sep, sep
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "timeissued%slevel%sid%skey%sunit%sframe%sval%slabel\n",
+                sep, sep, sep, sep, sep, sep, sep
+            );
+        }
         break;
     case MODE_JSN:
         sfprintf (sfstdout, "\"stats\":[\n");
@@ -43,12 +56,20 @@ BEGIN{
 {
     switch (mode) {
     case MODE_CSV:
-        sfprintf (
-            sfstdout, "%s%s%s%s%s%s%d%s%s%s%s%s%s%s%s%s%d%s%f%s%s\n",
-            scope, sep, dateissued, sep, hourissued, sep, timeissued, sep,
-            level, sep, id, sep, key, sep, unit, sep, frame, sep, val, sep,
-            label
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout, "%s%s%s%s%s%s%d%s%s%s%s%s%s%s%s%s%d%s%f%s%s\n",
+                scope, sep, dateissued, sep, hourissued, sep, timeissued, sep,
+                level, sep, id, sep, key, sep, unit, sep, frame, sep, val, sep,
+                label
+            );
+        } else {
+            sfprintf (
+                sfstdout, "%d%s%s%s%s%s%s%s%s%s%d%s%f%s%s\n",
+                timeissued, sep, level, sep, id, sep, key, sep, unit, sep,
+                frame, sep, val, sep, label
+            );
+        }
         break;
     case MODE_XML:
         VG_urlenc (scope, buf_scope, sizeof (buf_scope));
@@ -57,25 +78,41 @@ BEGIN{
         VG_urlenc (key, buf_key, sizeof (buf_key));
         VG_urlenc (unit, buf_unit, sizeof (buf_unit));
         VG_urlenc (label, buf_label, sizeof (buf_label));
-        sfprintf (
-            sfstdout,
-            "<stat>"
-            "<sid>%s</sid>"
-            "<di>%s</di><hi>%s</hi>"
-            "<ti>%d</ti>"
-            "<lv>%s</lv><id>%s</id>"
-            "<vars><var>"
-            "<k>%s</k><u>%s</u><fr>%d</fr>"
-            "<n>%f</n><l>%s</l>"
-            "</var></vars>"
-            "</stat>\n",
-            buf_scope,
-            dateissued, hourissued,
-            timeissued,
-            buf_level, buf_id,
-            buf_key, buf_unit, frame,
-            val, buf_label
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "<stat>"
+                "<sid>%s</sid>"
+                "<di>%s</di><hi>%s</hi>"
+                "<ti>%d</ti>"
+                "<lv>%s</lv><id>%s</id>"
+                "<vars><var>"
+                "<k>%s</k><u>%s</u><fr>%d</fr>"
+                "<n>%f</n><l>%s</l>"
+                "</var></vars>"
+                "</stat>\n",
+                buf_scope,
+                dateissued, hourissued,
+                timeissued,
+                buf_level, buf_id,
+                buf_key, buf_unit, frame,
+                val, buf_label
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "<stat>"
+                "<ti>%d</ti>"
+                "<lv>%s</lv><id>%s</id>"
+                "<k>%s</k><u>%s</u><fr>%d</fr>"
+                "<n>%f</n><l>%s</l>"
+                "</stat>\n",
+                timeissued,
+                buf_level, buf_id,
+                buf_key, buf_unit, frame,
+                val, buf_label
+            );
+        }
         break;
     case MODE_JSN:
         VG_simpleenc (scope, buf_scope, sizeof (buf_scope), "\"\\");
@@ -84,25 +121,42 @@ BEGIN{
         VG_simpleenc (key, buf_key, sizeof (buf_key), "\"\\");
         VG_simpleenc (unit, buf_unit, sizeof (buf_unit), "\"\\");
         VG_simpleenc (label, buf_label, sizeof (buf_label), "\"\\");
-        sfprintf (
-            sfstdout,
-            "%s{"
-            "\"sid\":\"%s\","
-            "\"di\":\"%s\",\"hi\":\"%s\","
-            "\"ti\":%d,"
-            "\"lv\":\"%s\",\"id\":\"%s\","
-            "\"vars\":[{"
-            "\"k\":\"%s\",\"u\":\"%s\",\"fr\":%d,"
-            "\"n\":%f,\"l\":\"%s\""
-            "}]"
-            "}\n",
-            first ? "" : ",", buf_scope,
-            dateissued, hourissued,
-            timeissued,
-            buf_level, buf_id,
-            buf_key, buf_unit, frame,
-            val, buf_label
-        );
+        if (restmode == RESTMODE_FULL) {
+            sfprintf (
+                sfstdout,
+                "%s{"
+                "\"sid\":\"%s\","
+                "\"di\":\"%s\",\"hi\":\"%s\","
+                "\"ti\":%d,"
+                "\"lv\":\"%s\",\"id\":\"%s\","
+                "\"vars\":[{"
+                "\"k\":\"%s\",\"u\":\"%s\",\"fr\":%d,"
+                "\"n\":%f,\"l\":\"%s\""
+                "}]"
+                "}\n",
+                first ? "" : ",", buf_scope,
+                dateissued, hourissued,
+                timeissued,
+                buf_level, buf_id,
+                buf_key, buf_unit, frame,
+                val, buf_label
+            );
+        } else {
+            sfprintf (
+                sfstdout,
+                "%s{"
+                "\"ti\":%d,"
+                "\"lv\":\"%s\",\"id\":\"%s\","
+                "\"k\":\"%s\",\"u\":\"%s\",\"fr\":%d,"
+                "\"n\":%f,\"l\":\"%s\""
+                "}\n",
+                first ? "" : ",",
+                timeissued,
+                buf_level, buf_id,
+                buf_key, buf_unit, frame,
+                val, buf_label
+            );
+        }
         break;
     }
     first = FALSE;

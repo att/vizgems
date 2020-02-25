@@ -49,6 +49,8 @@ set -o pipefail
 
 target=$targetaddr
 
+. vg_units
+
 vars=()
 varn=0
 typeset -A js

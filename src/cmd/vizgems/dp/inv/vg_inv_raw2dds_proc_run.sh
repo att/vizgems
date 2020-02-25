@@ -55,12 +55,6 @@ function vg_inv_raw2dds_proc_run {
         if ! sdpensuredirs -c $outdir/avg/total; then
             continue
         fi
-        if [[
-            -f $datadir/$date/notcomplete.stamp &&
-            -s $datadir/$date/processed/total/inv-cc-nd2cc.dds
-        ]] then
-            continue
-        fi
         (
             exec 3< ${gv.lockfile}
             (

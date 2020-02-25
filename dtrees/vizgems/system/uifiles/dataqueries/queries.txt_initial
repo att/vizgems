@@ -46,3 +46,11 @@ EMPTY||vg_cus_*|autoinvtab|Inventory Resources|Show inventory resources (eg. mem
 |||rdetailed|Virtual Resource Details|Show all the info on the virtual resources of an asset|no
 
 ||vg_att_admin|unknown|Unknown Asset Data|Show asset alarms and stats for unknown assets|no
+
+EMPTY|||clearalarm|Clear Alarm|Clear Alarm|no
+
+EMPTY|||rest_alarm|REST Alarm|Show alarms for REST query|no
+EMPTY|||rest_stat|REST Statistics|Show stats for REST query|no
+EMPTY|||rest_inv|REST Inventory|Show stats for REST query|no
+EMPTY|||rest_data|REST Full|Show stats for REST query|no
+

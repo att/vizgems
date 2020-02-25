@@ -5,7 +5,7 @@ LICENSE = since=1996,author=ek
 BINNAME = lefty$(VARIANTID)
 LIBNAME = gfx$(VARIANTID)
 
-if CC.HOSTTYPE == "sgi*.*" || "$(-mam)" == "static*"
+if "$(-mam)" == "static*"
 	CCFLAGS =
 end
 
@@ -59,6 +59,9 @@ if FEATURE_X11 == 1
 	.SOURCE: ./ws/x11 ./ws/x11/libfilereq
 	LIBSRC += $(src.lib.x11)
 	FEATURE_XAW3D == $(PACKAGES Xaw3d:N=1:?1??)
+	if CC.HOSTTYPE == "linux.i386-64-rh[78]" || CC.HOSTTYPE == "linux.i386-64-ubuntu19"
+		FEATURE_XAW3D ==
+	end
 	if FEATURE_XAW3D == 1
 		LIBLIBS += -lXaw3d
 	else

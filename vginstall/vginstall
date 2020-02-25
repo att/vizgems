@@ -159,18 +159,14 @@ function askquestions {
             ask wwwhost "web host name" $wwwhost
             ask wwwport "web host port" $wwwport
             ask wwwemail "web errors email" $wwwemail
-            if [[ $wwwtype != https ]] then
-                msg "\nIMPORTANT: since you did not select the https protocol,"
-                msg "allowing internal cookie access below is strongly discouraged\n"
-            fi
             ask wwwuseosm "use OSM geomaps" $wwwuseosm
             if [[ $wwwuseosm == y ]] then
                 ask wwwosmserver "full URL of OSM tile server" $wwwosmserver
             else
                 wwwosmserver=
             fi
-            ask yn "allow internal cookie access (y/n)" $wwwswmaccess
-            wwwswmaccess=$yn
+            msg "always allowing internal cookie access method\n"
+            wwwswmaccess=y
             if [[ $wwwswmaccess == y ]] then
                 ask wwwswmidle "internal cookie idle timeout in sec - use 0 for no timeout" "$wwwswmidle"
             else
@@ -302,9 +298,6 @@ function domkinit {
         for comp in ${!comps[@]}; do
             [[ ${comps[$comp]} == n ]] && continue
             case $machtype in
-            *UWIN*)
-                echo "$rootdir/data/$comp/etc/${comp}_control start"
-                ;;
             *)
                 echo "su - $usr -c '$rootdir/data/$comp/etc/${comp}_control start'"
                 ;;
@@ -316,9 +309,6 @@ function domkinit {
         for comp in ${!comps[@]}; do
             [[ ${comps[$comp]} == n ]] && continue
             case $machtype in
-            *UWIN*)
-                echo "$rootdir/data/$comp/etc/${comp}_control stop"
-                ;;
             *)
                 echo "su - $usr -c '$rootdir/data/$comp/etc/${comp}_control stop'"
                 ;;
@@ -327,12 +317,35 @@ function domkinit {
         echo ";;"
         echo "esac"
     ) > vizgems.init
+    (
+        echo "[Unit]"
+        echo "Description=VizGEMS service"
+        echo "After=network.target"
+        echo ""
+        echo "[Service]"
+        echo "Type=simple"
+        echo "User=root"
+        echo "ExecStart=/bin/ksh $homedir/bin/vizgems_service.sh start"
+        echo "ExecStop=/bin/ksh $homedir/bin/vizgems_service.sh stop"
+        echo "RemainAfterExit=True"
+        echo ""
+        echo "[Install]"
+        echo "WantedBy = multi-user.target"
+    ) > vizgems.service
     if [[ $id == 0 ]] then
-        cp vizgems.init /etc/init.d/vizgems
-        chown root /etc/init.d/vizgems
-        chmod +x /etc/init.d/vizgems
-        ln -s -f /etc/init.d/vizgems /etc/rc3.d/S99vizgems
-        ln -s -f /etc/init.d/vizgems /etc/rc0.d/K00vizgems
+        if [[ -d /etc/systemd/system ]] then
+            cp vizgems.service /etc/systemd/system
+            chown root /etc/systemd/system/vizgems.service
+            mkdir -p $homedir/bin
+            cp vizgems.init $homedir/bin/vizgems_service.sh
+            chmod +x $homedir/bin/vizgems_service.sh
+        else
+            cp vizgems.init /etc/init.d/vizgems
+            chown root /etc/init.d/vizgems
+            chmod +x /etc/init.d/vizgems
+            ln -s -f /etc/init.d/vizgems /etc/rc3.d/S99vizgems
+            ln -s -f /etc/init.d/vizgems /etc/rc0.d/K00vizgems
+        fi
     fi
     return 0
 }
@@ -479,7 +492,7 @@ wwwport=8000
 wwwemail=swift
 wwwuseosm=n
 wwwosmserver=
-wwwswmaccess=n
+wwwswmaccess=y
 wwwswmidle=0
 wwwatteaccess=n
 wwwcloudaccess=n
@@ -671,6 +684,27 @@ for comp in ${!comps[@]}; do
             )
         fi
     fi
+    if [[ $comp == system ]] then
+        newschemaspec=
+        if [[ -f vgschema.info_override ]] then
+            newschemaspec=$PWD/vgschema.info_override
+        elif [[ -f $rootdir/sw/$comp/current.old/vgschema.info ]] then
+            newschemaspec=$rootdir/sw/$comp/current.old/vgschema.info
+        fi
+        oldschemaspec=
+        if [[ -f $rootdir/sw/$comp/current.old/vgschema.info ]] then
+            oldschemaspec=$rootdir/sw/$comp/current.old/vgschema.info
+        else
+            oldschemaspec=$rootdir/sw/$comp/current/vgschema.info
+        fi
+        if [[ $newschemaspec != '' ]] then
+            (
+                cd $rootdir/data/$comp
+                ./etc/changeschema -old $oldschemaspec -new $newschemaspec
+            )
+        fi
+        cp $rootdir/sw/$comp/current/lib/dds/vgschema.info $rootdir/sw/$comp/current
+    fi
 done
 
 mayhaveaddons=n
@@ -698,6 +732,11 @@ unset VGINSTALLSTOPPED
 for comp in ${!comps[@]}; do
     [[ ${comps[$comp]} == n ]] && continue
     [[ ! -f $rootdir/data/$comp/active ]] && continue
+    if [[ -f ${comp}_control_override ]] then
+        msg adding $comp contril override
+        cp ${comp}_control_override $rootdir/data/$comp/etc/
+        chmod u+rwx $rootdir/data/$comp/etc/${comp}_control_override
+    fi
     msg starting $comp component
     $rootdir/data/$comp/etc/${comp}_control setup
     $rootdir/data/$comp/etc/${comp}_control start
@@ -718,20 +757,27 @@ crontab - < vginstall.cron
 
 domkinit
 case $machtype in
-UWIN*)
-    if ! cmp /etc/rc.d/vizgems vizgems.init; then
-        msg ""
-        msg installed /etc/rc.d/vizgems differs from new
-        msg please compare vizgems.init and /etc/rc.d/vizgems
-        msg and make any necessary changes
-    fi
-    ;;
 *)
-    if ! cmp /etc/init.d/vizgems vizgems.init; then
-        msg ""
-        msg installed /etc/init.d/vizgems differs from new
-        msg please compare vizgems.init and /etc/init.d/vizgems
-        msg and make any necessary changes
+    if [[ ! -d /etc/systemd/system ]] then
+        if ! cmp /etc/init.d/vizgems vizgems.init; then
+            msg ""
+            msg installed /etc/init.d/vizgems differs from new
+            msg please compare vizgems.init to installed version
+            msg and make any necessary changes
+        fi
+    else
+        if ! cmp /etc/systemd/system/vizgems.service vizgems.service; then
+            msg ""
+            msg installed /etc/systemd/system/vizgems.service differs from new
+            msg please compare vizgems.service to installed version
+            msg and make any necessary changes
+        fi
+        if ! cmp $homedir/bin/vizgems_service.sh vizgems.init; then
+            msg ""
+            msg installed $homedir/bin/vizgems_service.sh differs from new
+            msg please compare vizgems.init to installed version
+            msg and make any necessary changes
+        fi
     fi
     ;;
 esac

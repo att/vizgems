@@ -41,6 +41,11 @@ probe_readonly="-R -Krodata -xMerge -Wa,-r"
 probe_shared="'' -G -b -c -shared -Wl,dll"
 probe_shared_name="-Wl,-soname= -h"
 probe_shared_nostart="-nostartfiles"
+case `gcc -v 2>&1 | egrep gcc.version` in
+*version' '7*) probe_shared_nostart= ;;
+*version' '8*) probe_shared_nostart= ;;
+*version' '9*) probe_shared_nostart= ;;
+esac
 probe_shared_registry='"-update_registry $probe_shared_registry_file"'
 probe_shared_registry_file='registry.ld'
 probe_shared_registry_path="\$(LIBDIR)/$probe_shared_registry_file"

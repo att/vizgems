@@ -554,7 +554,6 @@ static int parseidre (alarm_t *alarmp, char *str) {
     return 0;
 }
 
-
 static int addvar (alarm_t *alarmp, char *line) {
     var_t *varp;
     char *name, *value;

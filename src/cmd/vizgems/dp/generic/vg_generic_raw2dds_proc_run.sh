@@ -5,7 +5,7 @@ function vg_generic_raw2dds_proc_run {
     shift 3
     typeset dates="$@"
 
-    typeset maxjobs date year month day rest indir outdir
+    typeset maxjobs date year month day rest indir outdir undo t1 t2
     typeset ifile ofile ymd i j n doall
 
     if [[ -f $VGMAINDIR/dpfiles/config.sh ]] then
@@ -85,7 +85,6 @@ function vg_generic_raw2dds_proc_run {
                     set +x
                 fi
 
-
                 for ifile in *.${spec.name}.fwd.*; do
                     [[ ! -f $ifile ]] && continue
                     ymd=${ifile##*.fwd.}
@@ -102,7 +101,32 @@ function vg_generic_raw2dds_proc_run {
                         print -u2 MESSAGE moving $ifile to ${ymd//.//}
                         mv $ifile $noutdir/total/$ofile
                     else
-                        rm $ifile
+                        undo=n
+                        t1=${ printf '%(%#)T' "$ymd-00:00:00"; }
+                        t2=${ printf '%(%#)T'; }
+                        if [[ $ACCEPTOLDINCOMING == +([0-9])d ]] then
+                            if ((
+                                t2 - t1 < ${ACCEPTOLDINCOMING%d} * 24 * 60 * 60
+                            )) then
+                                undo=y
+                            fi
+                            mv $ifile $noutdir/total/$ofile
+                        elif [[ $ACCEPTOLDINCOMING == +([0-9])h ]] then
+                            if ((
+                                t2 - t1 < ${ACCEPTOLDINCOMING%h} * 60 * 60
+                            )) then
+                                undo=y
+                            fi
+                            mv $ifile $noutdir/total/$ofile
+                        else
+                            rm $ifile
+                        fi
+                        if [[ $undo == y ]] then
+                            touch $datadir/${ymd//.//}/notcomplete.stamp
+                            rm -f $datadir/${ymd//.//}/complete.stamp*
+                            rm -f $datadir/${ymd//.//}/../complete.stamp*
+                            rm -f $datadir/${ymd//.//}/../../complete.stamp*
+                        fi
                     fi
                 done
                 print end generic:${spec.name} processing $date $(date)

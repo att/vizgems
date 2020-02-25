@@ -345,7 +345,7 @@ function dq_main_init {
 function dq_main_parsedates {
     typeset d4='{4}([0-9])' d2='{1,2}([0-9])'
     typeset -l fdate ldate tdate
-    typeset dir fspec lspec latestymd currt ft lt t rdate lwrap n
+    typeset dir fspec lspec latestymd currt ft lt t rdate lwrap n d
 
     if [[ ${vars.date} == '' && (
         ${vars.fdate} == '' && ${vars.ldate} == ''
@@ -368,6 +368,18 @@ function dq_main_parsedates {
     latestymd=${dir##*/data/main/}
     latestymd=${latestymd%%/processed/*}
     latestymd=${latestymd//'/'/.}
+    for (( n = 0; n < 30; n++ )) do
+        d=${latestymd//.//}
+        if [[
+            -s $SWIFTDATADIR/data/main/$d/processed/total/inv-nodes.dds &&
+            -s $SWIFTDATADIR/data/main/$d/processed/total/open.alarms.dds &&
+            -s $SWIFTDATADIR/data/main/$d/processed/total/uniq.stats.dds
+        ]] then
+            break
+        fi
+        t=$(printf '%(%#)T' "$latestymd-00:00:00")
+        latestymd=$(printf '%(%Y.%m.%d)T' \#$(( t - 24 * 60 * 60 )))
+    done
 
     if [[ ${vars.fdate} == @(latest|today|yesterday|this*|last*) ]] then
         vars.ldate=
@@ -447,6 +459,10 @@ function dq_main_parsedates {
             dq_main_data.doupdate=y
         fi
         [[ ${dq_main_data.datefilter} != '' ]] && dq_main_parsedatefilters
+        {
+            print "ft=${dq_main_data.ft}"
+            print "lt=${dq_main_data.lt}"
+        } > info.lst
         return 0
     fi
 
@@ -569,6 +585,10 @@ function dq_main_parsedates {
         dq_main_data.doupdate=y
     fi
     [[ ${dq_main_data.datefilter} != '' ]] && dq_main_parsedatefilters
+    {
+        print "ft=${dq_main_data.ft}"
+        print "lt=${dq_main_data.lt}"
+    } > info.lst
     return 0
 }
 
@@ -1234,7 +1254,6 @@ function dq_main_emit_sdiv_end {
     print "</td></tr></table></td></tr></table>"
     print "</div>"
 }
-
 
 function dq_main_emit_sdivpage_begin { # $1=id $2=file $3=pagen $4=pageindex
     typeset id=$1 file=$2 pagen=$3 pagei=$4

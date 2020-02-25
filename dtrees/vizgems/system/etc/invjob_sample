@@ -35,8 +35,9 @@ export VG_DWWWDIR=SWIFT_CFG_DWWWDIR
 export VG_DSNMPDIR=SWIFT_CFG_DSNMPDIR
 
 export LC_ALL=C LANG=C
-
 PATH=$PATH:/usr/sbin:/sbin
+[[ -x SWIFT_CFG_DSYSTEMDIR/etc/local_env ]] && \
+. SWIFT_CFG_DSYSTEMDIR/etc/local_env
 
 export VGMAINDIR=SWIFT_CFG_DSYSTEMDIR
 export VGPERMDIR=SWIFT_CFG_DPSYSTEMDIR
@@ -45,3 +46,9 @@ $SHELL vg_inv_incoming
 $SHELL vg_inv_processing -maxdate $(printf '%(%Y.%m.%d)T' '1 hour hence')
 
 $SHELL $VGMAINDIR/etc/cacheactionfile
+if [[
+    SWIFT_CFG_DWWWDIR/accounts/current -nt \
+    SWIFT_CFG_DSYSTEMDIR/dpfiles/account.filter
+]] then
+    SWIFT_CFG_DWWWDIR/etc/accountdump
+fi

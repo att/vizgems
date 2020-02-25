@@ -216,7 +216,11 @@ doopen:
         sb.st_size = 0;
         sb.st_mtime = 0;
     }
-    remotefile = strchr (remotefile + 7, '/');
+    if (!(remotefile = strchr (remotefile + 7, '/'))) {
+        SUwarning (1, "getrequest", "no path specified");
+        close (fd);
+        return -1;
+    }
     if (
         sfputr (sp->fp, "GET", '\n') == -1 ||
         sfputr (sp->fp, remotefile, '\n') == -1 ||

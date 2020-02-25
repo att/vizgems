@@ -31,8 +31,8 @@ debug=
 dynamic=-G0
 flags=-OPT:Olimit=0
 fatal=1035
-ignore=1155,3421
-ldignore=15,84,85
+ignore=1685,733,1048,1155,1171,1184,1209,1343,3169,3170,3421,3433,3434
+ldignore=15,84,85,13
 optimize=
 
 case $_AST_cc_OPTIONS in
@@ -103,8 +103,8 @@ case $1 in
 		done
 		set -- ${a[@]}
 	esac
-	$cc -g3 -64 -mips4 $flags $dynamic $fatal $ldignore $ignore "$@"
+	$cc -64 -mips4 $flags $dynamic $fatal $ldignore $ignore "$@"
 	;;
-*)	$cc -g3 -n32 -mips3 $flags $dynamic $fatal $ldignore $ignore "$@"
+*)	$cc -n32 -mips3 $flags $dynamic $fatal $ldignore $ignore "$@"
 	;;
 esac

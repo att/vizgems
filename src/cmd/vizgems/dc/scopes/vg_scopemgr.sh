@@ -42,7 +42,7 @@ this will put the scope back into the pool of active scopes.
 [999:v?increases the verbosity level. May be specified multiple times.]
 '
 
-dontcareattr='si_uptime|scopeinv_uptime|si_timestamp'
+dontcareattr='si_timestamp'
 
 typeset -A costmap
 costmap[bi]=1.5
@@ -1889,7 +1889,6 @@ for cid in "${!alist[@]}"; do
             sdpjobcntl 4
         done
         wait
-
 
         print -u2 MESSAGE end - generating schedules for customer $cid
     fi

@@ -414,7 +414,6 @@ int ndfsfgetattr (
     return 0;
 }
 
-
 // data calls
 
 int ndfsopendir (const char *path, struct fuse_file_info *fip) {

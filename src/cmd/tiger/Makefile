@@ -2,9 +2,7 @@
 
 LICENSE = since=1996,author=ek
 
-if CC.HOSTTYPE != "win32.*"
 CCFLAGS += $$(CC.DLL)
-end
 
 $(INCLUDEDIR) :INSTALLDIR: tiger.h
 

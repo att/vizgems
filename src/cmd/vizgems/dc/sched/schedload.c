@@ -8,6 +8,11 @@
 #include <ctype.h>
 #include "sched.h"
 
+#ifdef FEATURE_NO64FS
+typedef off_t off64_t;
+#define stat64 stat
+#endif
+
 typedef struct n2i_s {
     char *name;
     int id;
