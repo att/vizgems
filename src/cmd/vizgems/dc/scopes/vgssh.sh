@@ -41,7 +41,7 @@ if [[ $SSHKEY != '' ]] then
 fi
 
 VGNEWSESSIONTIMEOUT=240 vgnewsession ssh \
-    -o ConnectTimeout=${SSHTIMEOUT:-15} -o ServerAliveInterval=15 \
+    -T -o ConnectTimeout=${SSHTIMEOUT:-15} -o ServerAliveInterval=15 \
     -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no $args \
 "$@"
 

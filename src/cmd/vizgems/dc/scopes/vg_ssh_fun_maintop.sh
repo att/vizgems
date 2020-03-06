@@ -5,10 +5,25 @@ function vg_ssh_fun_maintop_init {
     top.varn=0
     top.cpui=8
     top.procn=0
+    top.vmstat=0
+    top.vm_us=0
+    top.vm_sy=0
+    top.vm_id=0
+    top.mem_total=0
+    top.mem_page=0
+    top.mem_inact=0
+    top.mem_cache=0
+    top.mem_free=0
+    top.mem_count=5
     topls[memory_used._total]='Used Memory'
     topls[swap_used._total]='Used Swap'
     topls[os_nproc._total]='Number of Procs'
     topls[os_nthread._total]='Number of Threads'
+    topls[cpu_usr._total]='CPU User'
+    topls[cpu_sys._total]='CPU System'
+    topls[cpu_wait._total]='CPU I/O Wait'
+    topls[cpu_used._total]='CPU Used'
+
     return 0
 }
 
@@ -38,6 +53,9 @@ function vg_ssh_fun_maintop_send {
     case $targettype in
     *linux*)
         cmd="top -b -n1 | head -30"
+        ;;
+    *freebsd*)
+        cmd="( sysctl -a; vmstat 1 2 )"
         ;;
     *solaris*)
         cmd="(top -b -s1 || /usr/local/bin/top -b -s1 || /usr/sfw/bin/top -b -s1 || ./top -b -s1) 2> /dev/null | head -30"
@@ -145,6 +163,59 @@ function vg_ssh_fun_maintop_receive {
             topvs[swap_free._total]=${res[10]}
             U=${res[11]}B
             topus[swap_free._total]=$U
+        fi
+        ;;
+    *freebsd*)
+        set -f
+        set -A res -- $1
+        set +f
+        if [[ $1 == r*avm*fre*us*sy*id ]] then
+            top.vmstat=1
+            for (( i = 0; i < ${#res[@]}; i++ )) do
+                if [[ ${res[$i]} == us ]] then
+                    top.vm_us=$i
+                elif [[ ${res[$i]} == sy ]] then
+                    top.vm_sy=$i
+                elif [[ ${res[$i]} == id ]] then
+                    top.vm_id=$i
+                fi
+            done
+            return 0
+        fi
+        if (( top.vmstat == 0 )) then
+            case ${res[0]} in
+            "hw.physmem:")
+                top.mem_total=${res[1]}; (( top.mem_count-- ))
+                ;;
+            "hw.pagesize:")
+                top.mem_page=${res[1]}; (( top.mem_count-- ))
+                ;;
+            "vm.stats.vm.v_inactive_count:")
+                top.mem_inact=${res[1]}; (( top.mem_count-- ))
+                ;;
+            "vm.stats.vm.v_cache_count:")
+                top.mem_cache=${res[1]}; (( top.mem_count-- ))
+                ;;
+            "vm.stats.vm.v_free_count:")
+                top.mem_free=${res[1]}; (( top.mem_count-- ))
+                ;;
+            esac
+            if (( top.mem_count == 0 )) then
+                topvs[memory_used._total]=$((
+                    top.mem_total - top.mem_page * (
+                        top.mem_inact + top.mem_cache + top.mem_free
+                    )
+                ))
+                topus[memory_used._total]=B
+                top.mem_count=-1
+            fi
+        else
+            topvs[cpu_used._total]=$(( 100.0 - ${res[${top.vm_id}]} ))
+            topvs[cpu_sys._total]=${res[${top.vm_sy}]}
+            topvs[cpu_usr._total]=${res[${top.vm_us}]}
+            topus[cpu_used._total]=%
+            topus[cpu_sys._total]=%
+            topus[cpu_usr._total]=%
         fi
         ;;
     *solaris*)
@@ -320,6 +391,9 @@ function vg_ssh_fun_maintop_invsend {
     *linux*)
         cmd="top -b -n1 | head -10"
         ;;
+    *freebsd*)
+        cmd="sysctl -a"
+        ;;
     *solaris*)
         cmd="(top -b -s1 || /usr/local/bin/top -b -s1) 2> /dev/null | head -10"
         ;;
@@ -388,6 +462,21 @@ function vg_ssh_fun_maintop_invreceive {
                 print "node|o|$aid|si_sz_swap_used._total|$val"
             fi
         fi
+        ;;
+    *freebsd*)
+        set -f
+        set -A res -- $1
+        set +f
+
+        case ${res[0]} in
+        "hw.physmem:")
+            vg_unitconv "${res[1]}" "B" MB
+            val=$vg_ucnum
+            if [[ $val != '' ]] then
+                print "node|o|$aid|si_sz_memory_used._total|$val"
+            fi
+            ;;
+        esac
         ;;
     *solaris*)
         if [[ $1 == *PID* ]] then

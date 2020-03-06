@@ -125,7 +125,10 @@ function dq_dt_alarm_openinfo { # $1 = ft $2 = lt
 
     rdir=${dq_main_data.rdir}
     cfile=$rdir/open.alarms.dds
-    [[ ! -f $cfile ]] && return 1
+    if [[ ! -f $cfile ]] then
+        ddscat -is vg_alarm.schema > empty.alarms.dds
+        cfile=empty.alarms.dds
+    fi
     typeset -n file=dq_dt_alarm_data.files._$filen
     file="$cfile"
     (( filen++ ))

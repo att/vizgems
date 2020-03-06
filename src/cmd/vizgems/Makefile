@@ -17,7 +17,7 @@ CCFLAGS += $$(CC.DLL)
 .SOURCE.h: /usr/include/libxml2 /usr/local/include/libxml2
 
 if CC.HOSTTYPE == "darwin.i386*" || CC.HOSTTYPE == "freebsd12.amd64*"
-        FEATURE_NO64FS == 1
+	FEATURE_NO64FS == 1
 end
 
 /* Top Level SWIFT Tools */
@@ -277,7 +277,8 @@ vg_scopeinv_mainsynapsense vg_scopeinv_mainveris vg_scopeinv_mainwin32 \
 vg_scopeinv_mainhadoop vg_scopeinv_mainopenstack vg_scopeinv_mainsmartctl \
 vg_scopeinv_maindellswitch vg_scopeinv_mainnrpe vg_scopeinv_maincollectd \
 vg_scopeinv_mainpurestorage vg_scopeinv_maindellswitch2 \
-vg_scopeinv_mainjetstor vg_scopeinv_mainidrac vg_scopeinv_mainlinux_rcloud
+vg_scopeinv_mainjetstor vg_scopeinv_mainidrac vg_scopeinv_mainlinux_rcloud \
+vg_scopeinv_mainfreebsd
 
 $(INSTALLROOT)/scopes/scopeinv/vg_scopeinv_mainciscocat :INSTALL: \
 vg_scopeinv_maincisco

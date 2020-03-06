@@ -1,5 +1,5 @@
 #users|groups|tool|scope classes reg-ex
-||mainserver|@(mainlinux*|linux.scope|mainsolaris*|maindarwin*|mainwin32*|win32.scope)
+||mainserver|@(mainlinux*|linux.scope|mainsolaris*|maindarwin*|mainwin32*|win32.scope|mainfreebsd*)
 ||mainswitch|@(maincisco*|mainarista*|maindell*)
 ||mainstorage|@(maininfortrend*|mainsmee|mainpurestorage|mainjetstor)
 ||mainpdu|@(mainraritan*)

@@ -25,3 +25,7 @@ if [[ $(egrep 'VG_RECTIME' etc/scheduler.info) == '' ]] then
         print 'export VG_RECTIME=schedule'
     ) >> etc/scheduler.info
 fi
+
+rm -rf remotefiles/*/maindarwin*
+rm -rf remotefiles/*/mainlinux*/ksh.mainlinux*
+rm -rf remotefiles/*/mainfreebsd*/ksh.mainfreebsd*

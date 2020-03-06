@@ -63,7 +63,7 @@ function vg_ssh_fun_mainrcloud_send {
     d=${d//[!a-zA-Z0-9.]/_}
     for file in "${!rcloud[@]}"; do
         typeset -n rcloudr=rcloud[$file]
-        print -r "export TAILHOST=$VG_TARGETNAME; if [[ -x /bin/ksh ]]; then /bin/ksh ./vg/rcloud/$d.$VG_SYSNAME/run $file; else ./vg/rcloud/$d.$VG_SYSNAME/ksh.$targettype ./vg/rcloud/$d.$VG_SYSNAME/run $file; fi"
+        print -r "cd ./vg/rcloud/$d.$VG_SYSNAME && TAILHOST=$VG_TARGETNAME ./vgksh ./run $file"
     done
     return 0
 }

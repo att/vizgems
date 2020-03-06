@@ -434,7 +434,7 @@ function dq_dt_stat_run { # $1 = dt query prefix
     typeset -n infiltern=dq_dt_inv_data.invnodefiltern
     typeset -n iefiltern=dq_dt_inv_data.invedgefiltern
     typeset -n alwaysreruninv=dq_dt_stat_data.alwaysreruninv
-    typeset rdir argi filei ofiles
+    typeset rdir argi filei ofiles ufile
 
     export STATFILTERFILE=stat.filter STATFILTERSIZE=$sfiltern
     export STATFILEFILE=stat.files STATFILESIZE=$filen
@@ -528,10 +528,16 @@ function dq_dt_stat_run { # $1 = dt query prefix
         fi
     fi
 
+    ufile=$rdir/uniq.stats.dds
+    if [[ ! -f $ufile ]] then
+        ddscat -is vg_stat.schema > empty.stats.dds
+        ufile=empty.stats.dds
+    fi
+
     if [[ ${dq_dt_stat_data.runinparallel} == n ]] then
         RUNINPARALLEL=0 \
         ddsconv $UIZFLAG -os vg_dq_dt_stat.schema -cso vg_dq_dt_stat.conv.so \
-            $rdir/uniq.stats.dds \
+            $ufile \
         > stat.dds 3> statinv.filter
         if [[
             ${dq_dt_stat_data.projmode} == 1 ||
@@ -551,7 +557,7 @@ function dq_dt_stat_run { # $1 = dt query prefix
     else
         RUNINPARALLEL=1 \
         ddsconv $UIZFLAG -os vg_dq_dt_stat.schema -cso vg_dq_dt_stat.conv.so \
-            $rdir/uniq.stats.dds \
+            $ufile \
         > stat_u.dds 3> statinv.filter
         ofiles=
         for (( filei = 0; filei < filen; filei++ )) do

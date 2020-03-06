@@ -345,7 +345,7 @@ function dq_main_init {
 function dq_main_parsedates {
     typeset d4='{4}([0-9])' d2='{1,2}([0-9])'
     typeset -l fdate ldate tdate
-    typeset dir fspec lspec latestymd currt ft lt t rdate lwrap n d
+    typeset dir fspec lspec latestymd oymd havedds currt ft lt t rdate lwrap n d
 
     if [[ ${vars.date} == '' && (
         ${vars.fdate} == '' && ${vars.ldate} == ''
@@ -368,6 +368,8 @@ function dq_main_parsedates {
     latestymd=${dir##*/data/main/}
     latestymd=${latestymd%%/processed/*}
     latestymd=${latestymd//'/'/.}
+    oymd=$latestymd
+    havedds=n
     for (( n = 0; n < 30; n++ )) do
         d=${latestymd//.//}
         if [[
@@ -375,11 +377,14 @@ function dq_main_parsedates {
             -s $SWIFTDATADIR/data/main/$d/processed/total/open.alarms.dds &&
             -s $SWIFTDATADIR/data/main/$d/processed/total/uniq.stats.dds
         ]] then
+            havedds=y
             break
         fi
         t=$(printf '%(%#)T' "$latestymd-00:00:00")
         latestymd=$(printf '%(%Y.%m.%d)T' \#$(( t - 24 * 60 * 60 )))
     done
+
+    [[ $havedds != y ]] && latestymd=$oymd
 
     if [[ ${vars.fdate} == @(latest|today|yesterday|this*|last*) ]] then
         vars.ldate=

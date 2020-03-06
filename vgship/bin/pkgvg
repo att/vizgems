@@ -2,14 +2,16 @@
 
 #v=$(date -f %Y-%m-%d)
 #v=$(< version)
-v=1002.2020.02.25
+v=1002.2020.03.05
 [[ $v == '' ]] && exit
 
 print $v
 
 rm -rf vg.*.*.v$v.* # swift.v$v.*.full.tar
 
-for a in linux.i386-64; do
+archs=linux.i386-64
+
+for a in $archs; do
     ./bin/mksystem vg.system $a v$v INIT ast swift-base swift-vg
     cp -r ../terminfo vg.system.$a.v$v.sw/lib
     ./bin/mksnmp vg.snmp $a v$v
@@ -29,7 +31,7 @@ done
 
 ./bin/mktgz vg.*.*.v$v.*
 
-for a in linux.i386-64; do
+for a in $archs; do
     (
         for i in vg.*.$a.v$v.*.tgz; do
             print ";;;$i;$i"
@@ -40,6 +42,7 @@ for a in linux.i386-64; do
         print ";;;../vginstall/vgfileconfig;vgfileconfig"
         print ";;;../vginstall/vginstall;vginstall"
         print ";;;../rpms/rpms.$a;rpms"
+        print ";;;../rpms/rpms-build.$a;rpms-build"
     ) | pax -wvf vg.full.$a.v$v.tar -x tar --filter=-
 done
 

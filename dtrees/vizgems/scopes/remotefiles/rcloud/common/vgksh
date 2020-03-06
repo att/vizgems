@@ -1,0 +1,24 @@
+
+for exe in ./kshsym /bin/ksh /usr/bin/ksh $(which ksh) ./ksh.*; do
+    [[ ! -f $exe ]] && continue
+
+    if [[ \
+        $( $exe -c 'print ${.sh.version}') != \
+        *20[0-9][0-9]-[0-9][0-9]-[0-9][0-9] \
+    ]]; then
+        continue
+    fi
+
+    [[ $exe == ./kshsym ]] && break
+
+    rm -f ./kshsym
+    ln -s $exe ./kshsym
+    break
+done
+
+if [[ ! -x ./kshsym ]]; then
+    print -u2 SWIFT ERROR cannot find working ksh
+    exit 1
+fi
+
+SHELL=$PWD/kshsym ./kshsym "$@"

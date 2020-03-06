@@ -62,6 +62,7 @@ rules=(
             [46]=( tool='*ctl_mboxlist*' txt='*' )
             [47]=( tool='*pulseaudio*' txt='*' )
             [48]=( tool='dnf' txt='*' )
+            [49]=( tool='@(sendmail|sm-mta)' txt='*' )
         )
         [include]=(
             [0]=(

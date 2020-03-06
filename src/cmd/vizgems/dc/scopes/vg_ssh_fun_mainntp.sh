@@ -30,6 +30,9 @@ function vg_ssh_fun_mainntp_send {
     *linux*)
         cmd="(/usr/sbin/ntpq -p || /usr/sbin/ntpdc -c peers || /usr/bin/ntpq -p || /usr/bin/ntpdc -c peers || /usr/bin/chronyc sourcestats) 2> /dev/null"
         ;;
+    *freebsd*)
+        cmd="/usr/bin/ntpq -p"
+        ;;
     esac
     print -r "$cmd"
     return 0

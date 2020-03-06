@@ -8,15 +8,8 @@ s=$(uname -s)
 export MACHNAME=$n MACHTYPE=$s
 
 line=
-for i in run ksh.* vgtail *.sh; do
+for i in run ksh.* vgtail vgksh *.sh; do
     case $s in
-    IRIX*)
-        stat $i | egrep size | read j
-        siz=${j##*' '}
-        ;;
-    Darwin*)
-        stat $i | read j j j j j j j siz j
-        ;;
     *)
         stat $i | egrep Size: | read j siz j
         ;;
@@ -25,7 +18,6 @@ for i in run ksh.* vgtail *.sh; do
 done
 print -- $file-INFO:$line
 
-export SHELL=/bin/ksh
 $SHELL ./$file.sh 2> $file.err.$n | sed "s/^/$file-DATA:/"
 
 if [[ -s $file.err.$n ]] then

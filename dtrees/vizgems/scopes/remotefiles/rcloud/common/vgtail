@@ -12,6 +12,12 @@ function getinfo {
     fi
 
     case $s in
+    FreeBSD*)
+        eval $(stat -s $1)
+        dev=$st_dev
+        ino=$st_ino
+        siz=$st_size
+        ;;
     IRIX*)
         stat $1 | egrep size | read j
         siz=${j##*' '}
@@ -52,7 +58,7 @@ if [[ -f $stat ]] then
 else
     prev.dev=${info.dev}
     prev.ino=${info.ino}
-    prev.off=0
+    prev.off=$msiz
 fi
 
 if [[ $mdev != ${prev.dev} || $mino != ${prev.ino} ]] then
