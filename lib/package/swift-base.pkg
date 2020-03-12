@@ -1,5 +1,5 @@
 swift-base :PACKAGE: ast \
-	INITgraphviz INITswift aggr dds dotty geom gv ndfs lefty lefty0d \
+	INITgraphviz INITswift aggr dds dotty geom gv ndfs \
 	libaggr libdds libgd libgraph libgv libswift \
 	swift tiger vpm
 

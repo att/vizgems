@@ -5,7 +5,6 @@ bind-utils
 binutils
 bison
 coreutils
-cronie
 curl
 fontconfig
 gawk
@@ -14,12 +13,16 @@ glibc
 gzip
 iputils
 ksh
-less
 lftp
+libICE6
+libSM6
 libX11-6
 libXau6
+libXaw3d8
 libXext6
+libXmu6
 libXpm4
+libXt6
 libXtst6
 libbz2-1
 libdb-4_8
@@ -35,6 +38,7 @@ libopenssl1_1
 libpcre1
 libpng16-16
 libsnmp30
+libuuid1
 libxcb1
 libxml2-2
 libz1
@@ -44,11 +48,8 @@ mtools
 net-snmp
 netpbm
 openssh
-psmisc
-shadow
 smartmontools
 tar
-util-linux
 vim
 wget
 xauth

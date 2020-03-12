@@ -1,7 +1,7 @@
 ast-base :PACKAGE: \
 		ksh93 pax html proto bzip tw builtin libast libardir libcmd \
 		libdll libexpr libodelta librecsort libsum libuu libvdelta \
-		libbz libz tests coshell cpp cs mam msgcc nmake probe ss \
+		libbz libz tests 3d coshell cpp cs mam msgcc nmake probe ss \
 		libcoshell libcs libmam libpp libcodex paxlib codexlib \
 		libdss libpz dsslib libtaso
 

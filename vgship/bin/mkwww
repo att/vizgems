@@ -31,4 +31,5 @@ mkdir -p $n.$a.$v.data
 (
     cd ../dtrees/vizgems/www
     pax -ps -rw . ../../../vgship/$n.$a.$v.data
+    tw -d ../../../vgship/$n.$a.$v.data -e 'name=="keep4git"' rm
 )

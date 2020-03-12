@@ -1,5 +1,5 @@
 ast-make :PACKAGE: \
-		nmake cpp probe ksh93 coshell cs ss pax paxlib tw \
+		nmake cpp probe 3d ksh93 coshell cs ss pax paxlib tw \
 		libast libardir libcmd libsum libdll libcoshell libpp
 
 :AUXILIARY: bin/proto bin/pax
