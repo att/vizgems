@@ -304,7 +304,7 @@ main(int argc, char *argv[])
         commstringi = 0;
         commstringj = (commstringi++ + commstringl) % commstringm;
         session.community = commstrings[commstringj];
-        session.community_len = strlen (session.community);
+        session.community_len = (size_t) strlen (session.community);
     }
 
     argi = arg;

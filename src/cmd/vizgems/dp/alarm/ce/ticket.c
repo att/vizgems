@@ -199,7 +199,9 @@ static int createticket (int cci, match_t *matchp) {
         statemap[alarmp->data.s_state], modemap[alarmp->data.s_smode],
         alarmp->data.s_variables, alarmp->data.s_dateissued,
         alarmp->data.s_hourissued,
-        alarmp->data.s_timecleared, alarmp->data.s_timeissued,
+        alarmp->data.s_timecleared, (
+            alarmp->data.s_timecleared == 0
+        ) ? rootp->currtime : alarmp->data.s_timeissued,
         typemap[alarmp->data.s_type], VG_ALARM_S_SO_OVERRIDE,
         pmodemap[VG_ALARM_N_PMODE_PASSTHROUGH],
         alarmp->data.s_level1, alarmp->data.s_id1,
@@ -281,14 +283,16 @@ static int updateticket (int cci, match_t *matchp) {
         "<tp>%s</tp><so>%s</so><pm>%s</pm>"
         "<lv1>%s</lv1><id1>%s</id1><lv2>%s</lv2><id2>%s</id2>"
         "<tm>%s</tm><sev>%d</sev>"
-        "<txt>%s</txt><com>%s</com><origmsg>%s</origmsg>"
+        "<txt>%s (repeat)</txt><com>%s</com><origmsg>%s</origmsg>"
         "</alarm>\n",
         VG_S_VERSION, alarmp->data.s_scope, alarmp->data.s_alarmid,
         alarmp->data.s_ccid,
         statemap[alarmp->data.s_state], modemap[alarmp->data.s_smode],
         alarmp->data.s_variables, alarmp->data.s_dateissued,
         alarmp->data.s_hourissued,
-        alarmp->data.s_timecleared, alarmp->data.s_timeissued,
+        alarmp->data.s_timecleared, (
+            alarmp->data.s_timecleared == 0
+        ) ? rootp->currtime : alarmp->data.s_timeissued,
         typemap[alarmp->data.s_type], VG_ALARM_S_SO_OVERRIDE,
         pmodemap[VG_ALARM_N_PMODE_PASSTHROUGH],
         alarmp->data.s_level1, alarmp->data.s_id1,

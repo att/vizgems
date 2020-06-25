@@ -704,3 +704,26 @@ TMODE defer
 COMMENT Assigned PerfMon down/up rule (10min intervals)
 END
 ################################################################
+
+# up / down for IoIT devices
+BEGIN
+TEXT State:(RED) Node:$A
+ID IoT.1
+STATE down
+VARIABLE num_matchwindow 90000
+VARIABLE num_ticketdefertime 86400
+VARIABLE num_ticketupdatetime 86400
+TMODE defer
+COMMENT Rule: AP/LB (24h)
+END
+
+BEGIN
+TEXT State:(GREEN) Node:$A
+ID IoT.1
+STATE up
+VARIABLE num_matchwindow 90000
+VARIABLE num_ticketdefertime 86400
+VARIABLE num_ticketupdatetime 86400
+TMODE defer
+COMMENT Rule: AP/LB (24h)
+END

@@ -28,8 +28,6 @@ done
     pax -ps -rw . ../../../vgship/$n.$a.$v.sw
 )
 
-chgrp -Rh swift $n.$a.$v.sw
-
 if [[ $a != win32.i386 ]] then
     chmod u+s $n.$a.$v.sw/bin/probe
     chmod u+s,g+s $n.$a.$v.sw/lib/ssd

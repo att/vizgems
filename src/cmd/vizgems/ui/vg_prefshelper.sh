@@ -1045,7 +1045,7 @@ function ph_emitbodyheader { # $1=pid $2=class $3=width
                 if [[ $HTTP_COOKIE == *SWIFT_CODE* ]] then
                     img=vg_bd${img#vg_}
                 fi
-                img=$SWIFTWEBPREFIX/proj/vg/$img
+                img=$SWIFTWEBPREFIX/images/$img
             fi
             print -n "<img"
             print -n " src='$img'"

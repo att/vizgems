@@ -59,7 +59,7 @@ if FEATURE_X11 == 1
 	.SOURCE: ./ws/x11 ./ws/x11/libfilereq
 	LIBSRC += $(src.lib.x11)
 	FEATURE_XAW3D == $(PACKAGES Xaw3d:N=1:?1??)
-	if CC.HOSTTYPE == "linux.i386-64-rh[78]" || CC.HOSTTYPE == "linux.i386-64-ubuntu19"
+	if CC.HOSTTYPE != "linux.i386-64-suse"
 		FEATURE_XAW3D ==
 	end
 	if FEATURE_XAW3D == 1

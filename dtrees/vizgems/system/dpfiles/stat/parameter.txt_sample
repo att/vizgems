@@ -264,6 +264,8 @@ os|mainlinux.rcloud|mainlinux.i386|ping_loss|y|PING:raw?var=loss&count=10&ip=[[s
 os|mainlinux.rcloud|mainlinux.i386|ping_time|y|PING:raw?var=time&count=10&ip=[[si_ip]]|ms|number|||
 os|mainlinux.rcloud|mainlinux.i386|port_avail|y|PORT:raw?port=[[si_port]]&var=port_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
 os|mainlinux.rcloud|mainlinux.i386|port_time|y|PORT:raw?port=[[si_port]]&var=port_time|ms|number|||
+os|mainlinux.rcloud|mainlinux.i386|url_avail|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=[[scope_rcloudpath!X!scope_rcloudprot]]://[scope_ip]:[[scope_rcloudpath!X!scope_rcloudport]][[scope_rcloudpath]]&success=[[scope_rcloudpath!X!scope_rcloudsuccess]]&failure=[[scope_rcloudpath!X!scope_rcloudfailure]]&label=[[scope_rcloudpath!X!scope_rcloudlabel]]&var=url_avail|%|number|=0:1:1/1:1/3600:CLEAR:5:2/2||
+os|mainlinux.rcloud|mainlinux.i386|url_time|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=[[scope_rcloudpath!X!scope_rcloudprot]]://[scope_ip]:[[scope_rcloudpath!X!scope_rcloudport]][[scope_rcloudpath]]&success=[[scope_rcloudpath!X!scope_rcloudsuccess]]&failure=[[scope_rcloudpath!X!scope_rcloudfailure]]&label=[[scope_rcloudpath!X!scope_rcloudlabel]]&var=url_time|ms|number|>=2000:1:3/3:1/3600:CLEAR:5:5/5||
 os|mainlinux.rcloud|mainlinux.i386|url_avail._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_avail|%|number|=0:1:2/2:1/3600:CLEAR:5:2/2||
 os|mainlinux.rcloud|mainlinux.i386|url_time._main|y|URL:raw?user=[scope_user]&pass=[scope_pass]&url=http://[scope_ip][scope_urlpath]&var=url_time|ms|number|||
 os|mainlinux.rcloud|mainlinux.i386|cpu_sys._total|y|SSH:cooked?user=[scope_user]&pass=[scope_pass]&tool=mainproc&var=cpu_sys&inst=_total&file=stat|%|number|||

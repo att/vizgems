@@ -296,7 +296,7 @@ function domkinit {
         echo "'start')"
         echo "echo 'Starting VizGEMS'"
         for comp in ${!comps[@]}; do
-            [[ ${comps[$comp]} == n ]] && continue
+            #[[ ${comps[$comp]} == n ]] && continue
             case $machtype in
             *)
                 echo "su - $usr -c '$rootdir/data/$comp/etc/${comp}_control start'"
@@ -307,7 +307,7 @@ function domkinit {
         echo "'stop')"
         echo "echo 'Stopping VizGEMS'"
         for comp in ${!comps[@]}; do
-            [[ ${comps[$comp]} == n ]] && continue
+            #[[ ${comps[$comp]} == n ]] && continue
             case $machtype in
             *)
                 echo "su - $usr -c '$rootdir/data/$comp/etc/${comp}_control stop'"

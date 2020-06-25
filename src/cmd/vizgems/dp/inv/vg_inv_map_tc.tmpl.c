@@ -7,11 +7,13 @@ typedef struct tcmap_t {
 static tcmap_t *tcmaps[2];
 static int tcmapn[2], tcmapi[2];
 
-void vg_inv_map_tcgrow (int index, int mapj) {
+static void vg_inv_map_tcgrow (int index, int mapj) {
     int mapm;
 
     mapm = mapj + 1;
     if (mapm > tcmapn[index]) {
+        if (tcmapn[index] >= 2 * ((mapm < 32) ? 32 : mapm))
+            SUerror ("vg_inv_map_tc", "tcmaps[%d] too big", index);
         tcmapn[index] = 2 * ((mapm < 32) ? 32 : mapm);
         if (!(tcmaps[index] = vmresize (
             Vmheap, tcmaps[index], sizeof (tcmap_t) * tcmapn[index], VM_RSCOPY

@@ -40,3 +40,9 @@ if (( port >= 1024 )) then
         fi
     done
 fi
+
+for i in htdocs/proj/vg/vg*banner[0-9]*.gif; do
+    [[ ! -f $i ]] && continue
+    print -u2 moving image $i to images directory
+    mv $i htdocs/images/
+done

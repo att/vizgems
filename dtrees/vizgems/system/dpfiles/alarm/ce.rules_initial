@@ -23,3 +23,16 @@ STICKET if (active == 1 && _currtime - _tickettime > ticketupdatetime) { _result
 PRUNE if (active == 0) { _result = PRUNEMATCH; } else { _result = PRUNEALARM; _prunetime = _currtime - matchwindow; }
 EMIT { _result = FALSE; }
 END
+
+BEGIN
+ID IOT_UPDOWN
+DESCRIPTION handle up / down alarms from IoT LB and AP devices - create group when RED alarm comes in - wait for 24 hours for GREEN or create ticket - prune after 25 hours - alarm record must provide: matchwindow - match interval, ticketupdatetime - when to refresh alarm (0 to remove CC after first ticket), ticketdefertime - 24 hours
+FMATCH if (_alarm_alarmid == 'IoT.1' && _alarm_state == "down") { _result = TRUE; asset = _alarm_object; aid = _alarm_alarmid; matchwindow = _alarm_num_matchwindow; ticketdefertime = _alarm_num_ticketdefertime; ticketupdatetime = _alarm_num_ticketupdatetime; active = 1; counter = 0; }
+SMATCH if (active == 1 && _alarm_time - _lastalarmtime <= matchwindow && asset == _alarm_object && aid == _alarm_alarmid) { _result = TRUE; if (_alarm_state == "up") active = 0; else active = 1; }
+INSERT if (active == 1) { counter = counter + 1; }
+REMOVE if (active == 1) { counter = counter - 1; }
+FTICKET if (_currtime - _lastalarmtime > ticketdefertime) { _result = TRUE; if (ticketupdatetime == 0) active = 0; }
+STICKET if (active == 1 && _currtime - _tickettime > ticketupdatetime) { _result = TRUE; }
+PRUNE if (active == 0) { _result = PRUNEMATCH; } else { _result = PRUNEALARM; _prunetime = _currtime - matchwindow; }
+EMIT { _result = FALSE; }
+END

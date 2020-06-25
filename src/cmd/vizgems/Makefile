@@ -202,10 +202,12 @@ $(INSTALLROOT)/www/conf/swift :INSTALLDIR: vg.conf_sample
 $(INSTALLROOT)/www/cgi-bin :INSTALLDIR: \
 vg_swmaccess.cgi vg_atteaccess.cgi vg_help.cgi
 
+$(INSTALLROOT)/www/htdocs/images :INSTALLDIR: \
+vg_banner1.gif vg_banner2.gif vg_banner3.gif \
+vg_bdbanner1.gif vg_bdbanner2.gif vg_bdbanner3.gif
+
 $(INSTALLROOT)/www/htdocs/proj/vg :INSTALLDIR: \
 control.html vg.js vg_dq_main.js vg_prefseditor.js \
-vg_banner1.gif vg_banner2.gif vg_banner3.gif \
-vg_bdbanner1.gif vg_bdbanner2.gif vg_bdbanner3.gif \
 vg_ralxpbtn_o.gif vg_ralxpbtn_p.gif
 
 $(INSTALLROOT)/www/htdocs/proj/vg/rest :INSTALLDIR: \

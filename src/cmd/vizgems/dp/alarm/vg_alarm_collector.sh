@@ -45,7 +45,6 @@ function vg_alarm_collector {
     fi
     if [[ -f $VGMAINDIR/outgoing/noticket ]] then
         noticket=y
-        print -u2 "SWIFT MESSAGE noticket mode - deleting ticket files"
     fi
     for file in $VGMAINDIR/outgoing/ticket/tickets.[0-9]*; do
         if [[ ! -f $file || $file == *.tmp ]] then
@@ -53,6 +52,7 @@ function vg_alarm_collector {
         fi
         if [[ $noticket == y ]] then
             rm -f $file
+            print -u2 "SWIFT MESSAGE noticket mode - deleting file $file"
             continue
         fi
         print -u2 SWIFT WARNING outgoing ticket file $file

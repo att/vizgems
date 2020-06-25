@@ -27,8 +27,8 @@ libX11-6
 libX11-devel
 libXau-devel
 libXau6
-libXaw3d-devel
-libXaw3d8
+libXaw-devel
+libXaw7
 libXext-devel
 libXext6
 libXmu-devel

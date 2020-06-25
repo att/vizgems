@@ -81,8 +81,8 @@ static void json_parse (json_object *jobj, char *path, char *key) {
         npath = sfstruse (strfp);
 
         sfprintf (sfstdout, "()\n");
-        json_object_object_foreach (jobj, key, val) {
-            json_parse (val, npath, key);
+        json_object_object_foreach (jobj, keyl, vall) {
+            json_parse (vall, npath, keyl);
         }
         sfstrclose (strfp);
         break;

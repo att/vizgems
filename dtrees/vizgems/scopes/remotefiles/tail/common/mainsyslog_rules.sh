@@ -10,13 +10,13 @@ rules=(
             )
             [1]=(
                 tool='systemd*'
-                txt='*@([Ss]ession|Reloaded|Start|Stop|Created|Succeeded|slice|seat|buttons|target|Received SIGRTMIN|tmp|Temp|Service hold-off time over|Service hold-off time over|GnuPG|D-Bus|service*Killing|user|dbus|snapper|Sound|pulse|Multimedia)*'
+                txt='*@([Ss]ession|Reloaded|Start|Stop|Created|Succeeded|slice|seat|buttons|target|Received SIGRTMIN|tmp|Temp|Service hold-off time over|Service hold-off time over|GnuPG|D-Bus|service*Killing|user|dbus|snapper|Sound|pulse|Multimedia|debconf)*'
             )
             [2]=(
                 tool='sshd*'
-                txt='*@(opened|closed|Accepted|[Dd]isconnected|locate)*'
+                txt='*@(opened|closed|Accepted|[Dd]isconnected|locate|stashed)*'
             )
-            [3]=( tool='cron*' txt='*@(CMD|REPLACE|opened|closed| info )*' )
+            [3]=( tool='cron*' txt='*@(RunAsUser*ignored|CMD|REPLACE|opened|closed| info )*' )
             [4]=( tool='@(tls_prune|cyr_expire|master|ctl_cyrusdb)' txt='*' )
             [5]=( tool='dnsmasq*' txt='*' )
             [6]=( tool='ovs*' txt='*INFO*' )
@@ -63,6 +63,7 @@ rules=(
             [47]=( tool='*pulseaudio*' txt='*' )
             [48]=( tool='dnf' txt='*' )
             [49]=( tool='@(sendmail|sm-mta)' txt='*' )
+            [50]=( tool='xrdp' txt='*' )
         )
         [include]=(
             [0]=(
