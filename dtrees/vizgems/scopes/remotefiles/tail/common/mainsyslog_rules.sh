@@ -64,6 +64,7 @@ rules=(
             [48]=( tool='dnf' txt='*' )
             [49]=( tool='@(sendmail|sm-mta)' txt='*' )
             [50]=( tool='xrdp' txt='*' )
+            [51]=( tool='gvfs*' txt='*' )
         )
         [include]=(
             [0]=(

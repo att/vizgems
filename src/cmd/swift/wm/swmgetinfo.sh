@@ -1,8 +1,31 @@
 
-typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
-if [[ $REQUEST_URI == *$ill* ]] then
-    print -r -u2 "SWIFT ERROR swmgetinfo: illegal characters in REQUEST_URI"
-    exit 1
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
+if [[ $SWIFTNOFILTER != y ]] then
+    if [[ $REQUEST_URI == *$ill* ]] then
+        print -r -u2 "SWIFT ERROR swmgetinfo: illegal characters in REQUEST_URI"
+        exit 1
+    fi
+    if [[ $SWIFTWEBDOMAINS != @(|\*) ]] then
+        if [[ $HTTP_REFERER != '' || $HTTP_ORIGIN != '' ]] then
+            typeset -l ref=$HTTP_REFERER
+            [[ $HTTP_ORIGIN != '' ]] && ref=$HTTP_ORIGIN
+            if [[ $ref != http*//*.* ]] then
+                print -r -u2 "SWIFT ERROR swmgetinfo: illegal referer"
+                exit 1
+            fi
+            ref=${ref##*://}
+            ref=${ref%%/*}
+            ref=${ref%%:*}
+            while [[ $ref == *.*.* ]] do
+                ref=${ref#*.}
+            done
+
+            if [[ $ref != @($SWIFTWEBDOMAINS) ]] then
+                print -r -u2 "SWIFT ERROR swmgetinfo: illegal cross-site call"
+                exit 1
+            fi
+        fi
+    fi
 fi
 
 export SWMROOT=${SWMROOT:-${DOCUMENT_ROOT%/htdocs}}

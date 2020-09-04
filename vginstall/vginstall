@@ -158,6 +158,8 @@ function askquestions {
             ask wwwtype "protocol (http/https)" $wwwtype
             ask wwwhost "web host name" $wwwhost
             ask wwwport "web host port" $wwwport
+            msg "web allowed domains\n  specify a pipe-separated list of domains to allow requests from\n  e.g.: att.com or att.com|warnermediagroup.com\n  leave blank to allow all access\n"
+            ask wwwdomains "web allowed domains" $wwwdomains
             ask wwwemail "web errors email" $wwwemail
             ask wwwuseosm "use OSM geomaps" $wwwuseosm
             if [[ $wwwuseosm == y ]] then
@@ -489,6 +491,7 @@ nfsmode=standalone
 wwwtype=http
 wwwhost=$(hostname)
 wwwport=8000
+wwwdomains=
 wwwemail=swift
 wwwuseosm=n
 wwwosmserver=
@@ -506,7 +509,7 @@ wwwprefix=
 
 version=
 
-vars2save="sysname sysmode systz usr grp homedir rootdir nfsmode wwwtype wwwhost wwwport wwwswmaccess wwwswmidle wwwatteaccess wwwebigaccess wwwebigurl wwwcloudaccess wwwcloudurl wwwclouduser wwwbdaccess wwwcookieip wwwprefix wwwemail wwwuseosm wwwosmserver version"
+vars2save="sysname sysmode systz usr grp homedir rootdir nfsmode wwwtype wwwhost wwwport wwwdomains wwwswmaccess wwwswmidle wwwatteaccess wwwebigaccess wwwebigurl wwwcloudaccess wwwcloudurl wwwclouduser wwwbdaccess wwwcookieip wwwprefix wwwemail wwwuseosm wwwosmserver version"
 
 loadstate
 
@@ -650,6 +653,7 @@ export VGINSTALLGRP=$grp
 export VGINSTALLWTYPE=$wwwtype
 export VGINSTALLWHOST=$wwwhost
 export VGINSTALLWPORT=$wwwport
+export VGINSTALLWDOMAINS=$wwwdomains
 export VGINSTALLWEMAIL=$wwwemail
 export VGINSTALLWUSEOSM=$wwwuseosm
 export VGINSTALLWOSMSERVER=$wwwosmserver

@@ -1,7 +1,7 @@
 
 function suireadcgikv {
     typeset qs ifs k v vi i j list tmpdir
-    typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+    typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
     typeset -l vl
 
     set -f

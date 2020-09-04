@@ -115,7 +115,7 @@ gvars.infile=$infile
 gvars.outfile=ERROR
 
 params=()
-typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
 typeset -l vl
 
 name=

@@ -17,7 +17,7 @@ fi
 
 . vg_hdr
 
-typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
 
 authurl='https://www.e-access.att.com/empsvcs/hrpinmgt/pagLogin'
 if [[ $HTTPS == on ]] then

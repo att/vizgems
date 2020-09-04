@@ -70,6 +70,7 @@ for ifile in "$@"; do
         -e "s!SWIFT_CFG_WUSESSL!$_wwwssl!g" \
         -e "s!SWIFT_CFG_WHOST!$wwwhost!g" \
         -e "s!SWIFT_CFG_WPORT!$wwwport!g" \
+        -e "s!SWIFT_CFG_WDOMAINS!$wwwdomains!g" \
         -e "s!SWIFT_CFG_WEMAIL!$wwwemail!g" \
         -e "s!SWIFT_CFG_WUSEOSM!$wwwuseosm!g" \
         -e "s!SWIFT_CFG_WOSMSERVER!$wwwosmserver!g" \

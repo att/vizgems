@@ -35,7 +35,7 @@ function dq_dt_alarm_init { # $1 = dt query prefix
                 k="$param" v="${s1}"
                 ;;
             msgtxt|comment)
-                k="$param" v=".*(${s1}).*"
+                k="$param" v="${s1}"
                 ;;
             esac
             typeset -n afilter=dq_dt_alarm_data.alarmfilters._$afiltern
@@ -255,7 +255,7 @@ function dq_dt_alarm_run { # $1 = dt query prefix
     typeset -n infiltern=dq_dt_inv_data.invnodefiltern
     typeset -n iefiltern=dq_dt_inv_data.invedgefiltern
     typeset -n alwaysreruninv=dq_dt_alarm_data.alwaysreruninv
-    typeset ft lt args argi filei
+    typeset ft lt args argi filei fv
 
     export ALARMFILTERFILE=alarm.filter ALARMFILTERSIZE=$afiltern
     export ALARMFILEFILE=alarm.files ALARMFILESIZE=$filen
@@ -290,7 +290,17 @@ function dq_dt_alarm_run { # $1 = dt query prefix
 
     for (( afilteri = 0; afilteri < afiltern; afilteri++ )) do
         typeset -n afilter=dq_dt_alarm_data.alarmfilters._$afilteri
-        print -r "${afilter.t}|${afilter.k}|${afilter.v}"
+        case ${afilter.k} in
+        msgtxt|comment)
+            fv=${afilter.v}
+            [[ $fv != @(\^|\.\*)* ]] && fv='.*'$fv
+            [[ $fv != *@(\$|\.\*) ]] && fv=$fv'.*'
+            print -r "${afilter.t}|${afilter.k}|$fv"
+            ;;
+        *)
+            print -r "${afilter.t}|${afilter.k}|${afilter.v}"
+            ;;
+        esac
     done > $ALARMFILTERFILE
 
     unset UNKNOWNMODE

@@ -14,7 +14,7 @@ suireadcgikv
 
 . $SWMROOT/proj/$qs_instance/bin/${qs_instance}_env
 
-typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
 if [[ $QUERY_STRING == *$ill* ]] then
     print -r -u2 "SWIFT ERROR suiprefshow: illegal characters in QUERY_STRING"
     exit 1

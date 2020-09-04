@@ -77,7 +77,7 @@ fi
 
 suireadcgikv
 
-typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*@(\>|%3e)|\`*\`|\$*\(*\)|\$*\{*\})'
+typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
 
 if [[ $qs_mode == logout ]] then
     url=${REQUEST_URI%%[?&]*}
@@ -89,7 +89,7 @@ if [[ $qs_mode == logout ]] then
     print "Cache-Control: no-cache, no-store, must-revalidate"
     print "Pragma: no-cache"
     print "Expires: 0"
-    print "Set-Cookie: attSWMAUTH=; path=/\n"
+    print "Set-Cookie: attSWMAUTH=; path=/; SameSite=Strict\n"
     print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
     print "<html>"
     print "<head>"
@@ -150,7 +150,7 @@ if [[ $qs_mode == @(auth|showcookie) ]] then
                 print "Cache-Control: no-cache, no-store, must-revalidate"
                 print "Pragma: no-cache"
                 print "Expires: 0"
-                print "Set-Cookie: attSWMAUTH=$code; path=/\n"
+                print "Set-Cookie: attSWMAUTH=$code; path=/; SameSite=Strict\n"
                 print "attSWMAUTH=$code"
                 exit 0
             fi
@@ -158,7 +158,7 @@ if [[ $qs_mode == @(auth|showcookie) ]] then
             print "Cache-Control: no-cache, no-store, must-revalidate"
             print "Pragma: no-cache"
             print "Expires: 0"
-            print "Set-Cookie: attSWMAUTH=$code; path=/\n"
+            print "Set-Cookie: attSWMAUTH=$code; path=/; SameSite=Strict\n"
             print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
             print "<html>"
             if [[ $QUERY_STRING == *after_auth=* ]] then
