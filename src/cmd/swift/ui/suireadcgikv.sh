@@ -2,6 +2,7 @@
 function suireadcgikv {
     typeset qs ifs k v vi i j list tmpdir
     typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
+    typeset plain='+([a-zA-Z0-9_:/\.-])'
     typeset -l vl
 
     set -f
@@ -104,7 +105,7 @@ function suireadcgikv {
     esac
     set +f
 
-    if [[ $SWIFTNOFILTER != y ]] then
+    if [[ $SWIFTCGINOFILTER != y ]] then
         qslist=" $qslist "
         qsarrays=" $qsarrays "
         for i in $qslist; do
@@ -127,6 +128,12 @@ function suireadcgikv {
                         qslist=${qslist//' '$i' '/' '}
                         qsarrays=${qsarrays//' '$i' '/' '}
                         continue
+                    elif [[ $k == qs_@($SWIFTCGIPLAINKEYS) && $vl != $plain ]] then
+                        print -r -u2 "SWIFT ERROR non-plain value for key $i"
+                        unset $k
+                        qslist=${qslist//' '$i' '/' '}
+                        qsarrays=${qsarrays//' '$i' '/' '}
+                        continue
                     fi
                 done
             else
@@ -134,6 +141,12 @@ function suireadcgikv {
                 vl=${vl//+([[:space:]])/}
                 if [[ $vl == *$ill* ]] then
                     print -r -u2 "SWIFT ERROR illegal value for key $i"
+                    unset $k
+                    qslist=${qslist//' '$i' '/' '}
+                    qsarrays=${qsarrays//' '$i' '/' '}
+                    continue
+                elif [[ $k == qs_@($SWIFTCGIPLAINKEYS) && $vl != $plain ]] then
+                    print -r -u2 "SWIFT ERROR non-plain value for key $i"
                     unset $k
                     qslist=${qslist//' '$i' '/' '}
                     qsarrays=${qsarrays//' '$i' '/' '}

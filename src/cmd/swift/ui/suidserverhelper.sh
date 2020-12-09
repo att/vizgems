@@ -116,6 +116,7 @@ gvars.outfile=ERROR
 
 params=()
 typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
+typeset plain='+([a-zA-Z0-9_:/\.-])'
 typeset -l vl
 
 name=
@@ -155,6 +156,9 @@ if [[ ${gvars.infile} == *\&* ]] then
                 if [[ $vl == *$ill* ]] then
                     print -r -u2 "SWIFT ERROR illegal value for key $k"
                     continue
+                elif [[ $k == @($SWIFTCGIPLAINKEYS) && $vl != $plain ]] then
+                    print -r -u2 "SWIFT ERROR non-plain value for key $k"
+                    continue
                 fi
                 pn[${#pn[@]}]=${vi#*=}
             done
@@ -166,6 +170,9 @@ if [[ ${gvars.infile} == *\&* ]] then
             vl=${vl//+([[:space:]])/}
             if [[ $vl == *$ill* ]] then
                 print -r -u2 "SWIFT ERROR illegal value for key $k"
+                continue
+            elif [[ $k == @($SWIFTCGIPLAINKEYS) && $vl != $plain ]] then
+                print -r -u2 "SWIFT ERROR non-plain value for key $k"
                 continue
             fi
             pn[${#pn[@]}]="$v"

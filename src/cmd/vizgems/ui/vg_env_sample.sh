@@ -11,6 +11,7 @@ export SWIFTDSERVERHELPER=vg_dserverhelper
 export SWIFTWEBSERVER='SWIFT_CFG_WTYPE://SWIFT_CFG_WHOST:SWIFT_CFG_WPORT'
 export SWIFTWEBHOME=SWIFT_CFG_DWWWDIR
 export SWIFTWEBPREFIX='SWIFT_CFG_WPREFIX'
+export SWIFTCGIPLAINKEYS='query|qid|kind|pid|tryasid|winw|winh|name|secret|prev|updaterate|reruninv|tzoverride|update|statdisp|statgroup|alarm_severity|alarm_tmode'
 
 export SWIFTLLTILESERVER='SWIFT_CFG_WOSMSERVER'
 export SWIFTLLTILEATTR='Data CC BY-SA by <a href="http://openstreetmap.org">OpenStreetMap</a>'

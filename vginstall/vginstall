@@ -159,11 +159,11 @@ function askquestions {
             ask wwwhost "web host name" $wwwhost
             ask wwwport "web host port" $wwwport
             msg "web allowed domains\n  specify a pipe-separated list of domains to allow requests from\n  e.g.: att.com or att.com|warnermediagroup.com\n  leave blank to allow all access\n"
-            ask wwwdomains "web allowed domains" $wwwdomains
-            ask wwwemail "web errors email" $wwwemail
+            ask wwwdomains "web allowed domains" "$wwwdomains"
+            ask wwwemail "web errors email" "$wwwemail"
             ask wwwuseosm "use OSM geomaps" $wwwuseosm
             if [[ $wwwuseosm == y ]] then
-                ask wwwosmserver "full URL of OSM tile server" $wwwosmserver
+                ask wwwosmserver "full URL of OSM tile server" "$wwwosmserver"
             else
                 wwwosmserver=
             fi
@@ -517,7 +517,7 @@ if [[ $1 == -auto ]] then
     automode=y
     for v in allpkgs $vars2save; do
         typeset -n vr=$v
-        if [[ $vr == '' && $v != @(wwwprefix|wwwcloudurl|wwwclouduser|wwwebigurl|wwwosmserver|version) ]] then
+        if [[ $vr == '' && $v != @(wwwprefix|wwwcloudurl|wwwclouduser|wwwebigurl|wwwosmserver|version|wwwdomains) ]] then
             automode=n
             msg WARNING cannot use auto mode because $v is not set 
         fi

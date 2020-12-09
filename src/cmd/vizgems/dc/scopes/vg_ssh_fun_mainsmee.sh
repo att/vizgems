@@ -117,7 +117,7 @@ function vg_ssh_fun_mainsmee_receive {
         if [[ ${smee.state} == 'STANDARD VIRTUAL DISKS1' ]] then
             if [[ $1 == *(' ')+([0-9])+(' ')*+(' ')+([0-9,.])' '@([A-Z]B)+(' ')*Disk*Group* ]] then
                 set -f
-                set -A res -- "${.sh.match[@]}"
+                set -A res -- $1
                 set +f
                 v=${1##+(' ')}; v=${v##+([0-9])+(' ')}
                 v=${v%%+(' ')+([0-9,.])' '[A-Z]B*}
@@ -130,7 +130,7 @@ function vg_ssh_fun_mainsmee_receive {
                     vref.type=ALARM
                     vref.tech=''
                     vref.cond=''
-                    vref.txt="Lun ${res[12]} not optimal: $v"
+                    vref.txt="Lun ${res[0]} not optimal: ${res[3]}"
                 fi
             fi
         fi

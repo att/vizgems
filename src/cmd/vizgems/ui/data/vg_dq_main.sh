@@ -551,6 +551,8 @@ function dq_main_parsedates {
         lt=$(TZ=$PHTZ printf '%(%#)T' "0 year ago")
         (( lt-- ))
     else
+        dq_main_data.fdate=$latestymd
+        dq_main_data.ldate=$latestymd
         lt=$(TZ=$PHTZ printf '%(%#)T' "$latestymd-23:59:59")
         ft=$(TZ=$PHTZ printf '%(%#)T' "$latestymd-00:00:00")
     fi

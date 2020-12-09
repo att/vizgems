@@ -1,6 +1,6 @@
 
 typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
-if [[ $SWIFTNOFILTER != y ]] then
+if [[ $SWIFTCGINOFILTER != y ]] then
     if [[ $REQUEST_URI == *$ill* ]] then
         print -r -u2 "SWIFT ERROR swmgetinfo: illegal characters in REQUEST_URI"
         exit 1
