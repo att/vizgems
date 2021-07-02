@@ -293,6 +293,7 @@ function dq_dt_alarm_run { # $1 = dt query prefix
         case ${afilter.k} in
         msgtxt|comment)
             fv=${afilter.v}
+            [[ $fv == *[!\\]'|'* ]] && fv="($fv)"
             [[ $fv != @(\^|\.\*)* ]] && fv='.*'$fv
             [[ $fv != *@(\$|\.\*) ]] && fv=$fv'.*'
             print -r "${afilter.t}|${afilter.k}|$fv"

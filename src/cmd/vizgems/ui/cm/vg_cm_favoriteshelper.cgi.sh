@@ -42,6 +42,7 @@ cd $dir || exit 1
 
 print "Content-type: text/xml\n"
 print "<response>"
+qs_url=${qs_url#$SWIFTWEBPREFIX}
 if [[ $qs_name == '' || $qs_url == '' ]] then
     print "<r>ERROR|the name and URL fields are mandatory</r>"
 elif [[ $qs_url != /cgi-bin-vg-members/vg_dserverhelper.cgi*query=* ]] then

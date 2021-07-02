@@ -71,10 +71,6 @@ fi
 . vg_prefshelper
 . $SWIFTDATADIR/dpfiles/config.sh
 
-if [[ $SWMWSWMACCESS != y ]] then
-    exit 0
-fi
-
 suireadcgikv
 
 typeset ill='+(@(\<|%3c)@([a-z][a-z0-9]|a)*|\`*\`|\$*\(*\)|\$*\{*\})'
@@ -96,6 +92,10 @@ if [[ $qs_mode == logout ]] then
     print "<meta http-equiv='refresh' content='0; URL=$url' />"
     print "</head>"
     print "</html>"
+    exit 0
+fi
+
+if [[ $SWMWSWMACCESS != y ]] then
     exit 0
 fi
 

@@ -222,6 +222,11 @@ sname)
             $SHELL vg_dq_invhelper 'o' "$idre" | egrep '^D.*\|(si|scopeinv)_' \
             | while read -r t lv id k v; do
                 attrs[$k]=$v
+                if [[ $k == scopeinv* ]] then
+                    k=${k//scopeinv_size_/si_sz_}
+                    k=${k//scopeinv_/si_}
+                    attrs[$k]=$v
+                fi
             done
         fi
         print "Content-type: text/xml"
