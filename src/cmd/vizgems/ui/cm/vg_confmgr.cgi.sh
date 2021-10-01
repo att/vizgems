@@ -18,7 +18,7 @@ fi
 
 cm_data=(
     pid=''
-    bannermenu='link|home||Home|reload this home page|link|back||Back|go back one page|list|favorites||Favorites|run a favorite query|list|tools|p:c|Tools|tools|list|help|userguide:confmgrpage|Help|documentation'
+    bannermenu='link|home||Home|reload this home page|link|back||Back|go back one page|list|favorites||Favorites|run a favorite query|list|tools|p:c|Tools|tools|list|help|userguide:confmgrpage|Help|documentation|link|logout||Logout|terminate this session'
 )
 
 function cm_init {

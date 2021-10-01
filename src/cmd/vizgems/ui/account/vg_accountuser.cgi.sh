@@ -18,7 +18,7 @@ fi
 
 account_data=(
     pid=''
-    bannermenu='link|home||Home|return to the home page|link|back||Back|go back one page|list|tools|p:c|Tools|tools|list|help|userguide:accountuserpage|Help|documentation'
+    bannermenu='link|home||Home|return to the home page|link|back||Back|go back one page|list|tools|p:c|Tools|tools|list|help|userguide:accountuserpage|Help|documentation|link|logout||Logout|terminate this session'
 )
 
 function account_init {

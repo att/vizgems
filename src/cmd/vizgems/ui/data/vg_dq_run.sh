@@ -19,7 +19,7 @@ function fs2gd {
     print ${1%pt}
 }
 
-bannermenu="link|home||Home|return to the home page|link|back||Back|go back one page|list|favorites||Favorites|run a favorite query|list|tools|x:m:u:p:c|Tools|tools|list|help|userguide:dqpage|Help|documentation"
+bannermenu="link|home||Home|return to the home page|link|back||Back|go back one page|list|favorites||Favorites|run a favorite query|list|tools|x:m:u:p:c|Tools|tools|list|help|userguide:dqpage|Help|documentation|link|logout||Logout|terminate this session"
 
 dqmode=${DQMODE:-default}
 
