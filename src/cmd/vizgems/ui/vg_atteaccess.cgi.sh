@@ -43,6 +43,6 @@ print "Expires: 0\n"
 print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 TRANSITIONAL//EN">'
 print "<html>"
 print "<head>"
-print "<meta http-equiv='refresh' content='0; URL=$$authurl?retURL=$homeurl&sysName=VizGEMS' />"
+print "<meta http-equiv='refresh' content='0; URL=$authurl?retURL=$homeurl&sysName=VizGEMS' />"
 print "</head>"
 print "</html>"
