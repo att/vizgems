@@ -1,0 +1,2 @@
+./bin/package make
+./bin/package write base binary INIT ast swift swift-base swift-vg version=$(date -f %Y-%m-%d)

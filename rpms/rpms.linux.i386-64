@@ -12,6 +12,7 @@ gcc
 glibc
 gzip
 iputils
+java-11-openjdk-headless
 ksh
 lftp
 libICE6
@@ -25,17 +26,15 @@ libXpm4
 libXt6
 libXtst6
 libbz2-1
+libcrypt1
 libdb-4_8
 libexpat1
 libfreetype6
 libfuse2
-libglib-2_0-0
-libgts-0_7-5
 libjpeg62
 libjson-c3
 liblzma5
 libopenssl1_1
-libpcre1
 libpng16-16
 libsnmp30
 libuuid1
@@ -47,7 +46,9 @@ mariadb-client
 mtools
 net-snmp
 netpbm
-openssh
+nodejs-common
+openssh-clients
+openssh-common
 smartmontools
 tar
 vim

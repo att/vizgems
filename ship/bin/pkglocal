@@ -1,0 +1,16 @@
+#!/bin/ksh
+
+#v=$(date -f %Y-%m-%d)
+#v=$(< version)
+v=2021-09-30
+[[ $v == '' ]] && exit
+
+print $v
+
+rm -f swift.v$v.*tgz swift.v$v.*.full.tar
+
+archs=$(egrep ssh: ../lib/package/admin/admin.db | sed 's/[ 	].*$//')
+
+for a in $archs; do
+    ./bin/mksw $a swift.v$v INIT ast swift
+done

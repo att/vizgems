@@ -1,0 +1,116 @@
+#!/bin/ksh
+
+userpm=y
+usedpkg=n
+usepkg=n
+
+if [[ $(egrep NAME /etc/os-release 2> /dev/null) == *[Uu]buntu* ]] then
+    userpm=n
+    usedpkg=y
+elif [[ $(uname -a) == *FreeBSD* ]] then
+    userpm=n
+    usepkg=y
+fi
+
+function getpkg {
+    typeset f=$1 p r
+
+    [[ -d $f ]] && return
+    if [[ $userpm == y ]] then
+        rpm -qf "$f" --qf '%{NAME}\n' 2> /dev/null | egrep -v 'is not owned'
+        if [[ $f == /lib* ]] then
+            rpm -qf "/usr$f" --qf '%{NAME}\n' 2> /dev/null \
+            | egrep -v 'is not owned'
+        fi
+    elif [[ $usedpkg == y ]] then
+        dpkg -S "*$f" 2> /dev/null | egrep -v 'diversion by ' | sed 's/:.*$//'
+    elif [[ $usepkg == y ]] then
+        p=$(pkg which "$f" | egrep -v 'not found' | sed 's/^.* //')
+        if [[ $p != '' ]] then
+            pkg query '%n' "$p"
+        fi
+    fi | tail -1 | read r
+    if [[ $r != '' || ! -L $f ]] then
+        print -- $r
+        return
+    fi
+    r=$(realpath "$f")
+    [[ $r != */* ]] && return
+    f=$r
+    [[ -d $f ]] && return
+    if [[ $userpm == y ]] then
+        rpm -qf "$f" --qf '%{NAME}\n' 2> /dev/null | egrep -v 'is not owned'
+        if [[ $f == /lib* ]] then
+            rpm -qf "/usr$f" --qf '%{NAME}\n' 2> /dev/null \
+            | egrep -v 'is not owned'
+        fi  
+    elif [[ $usedpkg == y ]] then
+        dpkg -S "$f" 2> /dev/null | egrep -v 'diversion by ' | sed 's/:.*$//'
+    elif [[ $usepkg == y ]] then
+        p=$(pkg which "$f" | egrep -v 'not found' | sed 's/^.* //')
+        if [[ $p != '' ]] then
+            pkg query '%n' "$p"
+        fi  
+    fi | tail -1 | read r
+    if [[ $r != '' ]] then
+        print -- $r
+    fi
+}
+
+gmode=n
+[[ $1 == -g ]] && gmode=y
+
+if [[ ! -d arch ]] then
+    print -u2 ERROR no arch directory
+    exit 1
+fi
+
+archs=
+for dir in arch/*; do
+    [[ ! -d $dir || ! -d $dir/bin ]] && continue
+    archs+=" ${dir##*/}"
+done
+
+for arch in $archs; do
+    case $gmode in
+    n) name=rpms.$arch ;;
+    *) name=rpms-build.$arch ;;
+    esac
+    (
+        cd arch/$arch
+        tw -e 'type != DIR' file | egrep 'script' | sed 's/:.*$//' \
+        | while read i; do
+            cp $i a.sh
+            ksh -R a.A a.sh 2> /dev/null
+            egrep -v '^p;' a.A | egrep ';p;' | awk -F';' '{ print $3 }'
+            rm a.sh a.A
+        done | sort -u | while read i; do
+            p=$(whence "$i" 2> /dev/null)
+            [[ $p == '' ]] && continue
+            getpkg "$p"
+        done
+    
+        find /usr -name "mod_ssl.so" 2> /dev/null | read p
+        if [[ $p != '' ]] then
+            getpkg "$p"
+        fi
+    
+        tw -e 'type != DIR' -e 'action: printf ("%s %s\n", mode, path)' \
+        | egrep ^-rwx | while read m f; do
+            ldd $f 2> /dev/null
+        done | egrep '=>' | sed 's/^.*=> //' | sed 's/^	//' | sed 's/ (.*//' \
+        | sort -u | while read f; do
+            [[ $f == '' ]] && continue
+            getpkg "$f"
+            if [[ $gmode == y && $f == *.so* ]] then
+                getpkg "${f%.so*}.a"
+                getpkg "${f%.so*}.so"
+            fi
+        done
+    
+        getpkg /bin/ksh
+        getpkg /usr/bin/cc
+        getpkg /usr/bin/yacc
+        getpkg /usr/bin/bison
+    ) | sort -u > ~/$name
+done

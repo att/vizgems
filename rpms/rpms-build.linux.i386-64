@@ -12,11 +12,11 @@ freetype2-devel
 fuse-devel
 gawk
 gcc
-glib2-devel
 glibc
 glibc-devel
 gzip
 iputils
+java-11-openjdk-headless
 ksh
 lftp
 libICE-devel
@@ -41,13 +41,12 @@ libXtst-devel
 libXtst6
 libbz2-1
 libbz2-devel
+libcrypt1
 libdb-4_8
 libexpat-devel
 libexpat1
 libfreetype6
 libfuse2
-libglib-2_0-0
-libgts-0_7-5
 libjpeg62
 libjpeg62-devel
 libjson-c-devel
@@ -55,7 +54,6 @@ libjson-c3
 liblzma5
 libopenssl-1_1-devel
 libopenssl1_1
-libpcre1
 libpng16-16
 libpng16-devel
 libsnmp30
@@ -63,6 +61,7 @@ libuuid-devel
 libuuid1
 libxcb-devel
 libxcb1
+libxcrypt-devel
 libxml2-2
 libxml2-devel
 libz1
@@ -72,8 +71,9 @@ mtools
 net-snmp
 net-snmp-devel
 netpbm
-openssh
-pcre-devel
+nodejs-common
+openssh-clients
+openssh-common
 smartmontools
 tar
 vim

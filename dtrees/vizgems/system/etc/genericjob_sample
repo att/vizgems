@@ -48,6 +48,8 @@ function loadspecs {
     typeset -A seen
 
     for generici in $VGMAINDIR/generic/*.sh; do
+        [[ ! -f $generici ]] && continue
+
         export GENERICSPEC=${generici##*/}
         GENERICSPEC=${GENERICSPEC%.sh}
         export GENERICPATH=${generics[$GENERICSPEC]}

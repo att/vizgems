@@ -10,10 +10,10 @@ PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH
 add2path SWIFT_CFG_SWWWDIR/current
 add2path SWIFT_CFG_DWWWDIR
 
-export WWW_HTTPDFILELOCS='/usr/sbin/httpd-prefork /usr/sbin/httpd /usr/sbin/httpd2'
+export WWW_HTTPDFILELOCS='/usr/sbin/httpd-prefork /usr/sbin/httpd /usr/sbin/httpd2 /usr/sbin/apache2'
 export WWW_HTPASSWDFILELOCS='/usr/bin/htpasswd /usr/bin/htpasswd2'
 if [[ $(uname -a) == *x86_64* ]] then
-    export WWW_MODULEDIRLOCS='/usr/lib64/apache2-prefork /usr/lib64/httpd/modules /usr/lib64/apache2'
+    export WWW_MODULEDIRLOCS='/usr/lib64/apache2-prefork /usr/lib64/httpd/modules /usr/lib64/apache2 /usr/lib/apache2/modules'
 else
     export WWW_MODULEDIRLOCS='/usr/lib/httpd/modules /usr/lib/apache2-prefork /usr/lib/apache2'
 fi

@@ -15,7 +15,7 @@ gd 1.0 :LIBRARY: gd.c gd_gd.c gd_gd2.c gd_gif_in.c gd_gif_out.c gd_io.c \
 	gdfont9.c gdfont10.c gdfont11.c gdfont12.c gdfont13.c gdfont14.c \
 	gdfont15.c gdfont16.c gdfont17.c gdfont18.c gdfont19.c gdfont20.c \
 	gdft.c gdfx.c gdhelpers.c gdkanji.c gdtables.c gdxpm.c wbmp.c gd.ign \
-	-lX11 -lXpm -ljpeg -lpng -lttf -lz -lm
+	-lfreetype -lX11 -lXpm -ljpeg -lpng -lttf -lz -lm
 
 $(INCLUDEDIR) :INSTALLDIR: \
 gd.h gd_io.h gdfx.h gdfontg.h gdfontl.h gdfontmb.h gdfonts.h gdfontt.h \

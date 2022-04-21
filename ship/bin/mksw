@@ -1,0 +1,24 @@
+#!/bin/ksh
+
+if [[ $1 == '' || $2 == '' || $3 == '' ]] then
+    print -u2 "usage: pkgsw <arch> <version> <pkg1> ..."
+    exit
+fi
+a=$2
+v=$1
+shift 2
+
+rm -rf $a.$v.sw
+mkdir -p $a.$v.sw
+exp='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+for i in "$@"; do
+    (
+        cd $a.$v.sw
+        tgz=$(ls -1 ../../lib/package/tgz/$i.$exp.$v.tgz | tail -1)
+        pax -ps -rf $tgz -s ",^arch/$v/,,"
+    )
+done
+chgrp -Rh swift $a.$v.sw
+chmod u+s $a.$v.sw/bin/probe
+chmod u+s,g+s $a.$v.sw/lib/ssd
+chmod u+s $a.$v.sw/lib/probe/probe
